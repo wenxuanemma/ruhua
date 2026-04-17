@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useGenerate } from '../hooks/useGenerate';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -499,7 +500,7 @@ function FigureScreen({ painting, imgs, onSelect, onBack }) {
 
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
-function SelfieScreen({ painting, figure, imgs, onConfirm, onBack }) {
+function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onBack }) {
   const [camState, setCamState] = useState('starting'); // starting | live | counting | flash | done | error
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(null);
@@ -559,6 +560,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onBack }) {
           const img = canvasRef.current?.toDataURL('image/jpeg', 0.92);
           setCapturedImg(img);
           setCamState('done');
+          if (img) onCaptured?.(img);  // pass selfie up to root
           // Stop stream to save battery
           streamRef.current?.getTracks().forEach(t => t.stop());
         }, 380);
@@ -810,7 +812,7 @@ const STEPS = [
   { zh:'合成最终画作', en:'Compositing into the scroll' },
 ];
 
-function ProcessingScreen({ step, painting, imgs }) {
+function ProcessingScreen({ step, painting, imgs, error }) {
   const imgUrl = imgs?.[painting?.id];
   return (
     <div style={{
@@ -822,8 +824,22 @@ function ProcessingScreen({ step, painting, imgs }) {
       {/* Dark overlay */}
       <div style={{ position:'absolute', inset:0, background:'rgba(12,9,4,.74)' }} />
 
+      {/* Error state */}
+      {error && (
+        <div style={{ position:'relative', zIndex:1, textAlign:'center', padding:'0 24px' }}>
+          <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
+          <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:8 }}>生成失败</div>
+          <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.7 }}>
+            {error}
+          </div>
+          <div style={{ fontFamily:F.latin, fontSize:11, color:C.silkFaint, marginTop:8 }}>
+            Returning to selfie screen…
+          </div>
+        </div>
+      )}
+
       {/* Ink bloom rings */}
-      {[0,1,2].map(i => (
+      {!error && [0,1,2].map(i => (
         <div key={i} style={{
           position:'absolute', top:'50%', left:'50%',
           width:80, height:80, borderRadius:'50%',
@@ -833,7 +849,7 @@ function ProcessingScreen({ step, painting, imgs }) {
         }} />
       ))}
 
-      <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:320, textAlign:'center' }}>
+      {!error && <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:320, textAlign:'center' }}>
         <div style={{ fontFamily:F.brush, fontSize:30, color:C.silk, marginBottom:3 }}>
           {painting?.title}
         </div>
@@ -896,20 +912,20 @@ function ProcessingScreen({ step, painting, imgs }) {
             );
           })}
         </div>
-      </div>
+      </div>}
     </div>
   );
 }
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, onReset, onNew }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) {
   const [tab, setTab] = useState('scene');
-  const imgUrl = imgs?.[painting?.id];
+  const imgUrl = generatedUrl || imgs?.[painting?.id];  // prefer generated, fall back to painting
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
-      {/* Hero painting */}
+      {/* Hero — shows generated output if available, otherwise the painting */}
       <div style={{
         background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
         position:'relative', paddingTop:'62%', overflow:'hidden',
@@ -1207,8 +1223,14 @@ export default function RuHua() {
   const [screen, setScreen] = useState('home');
   const [painting, setPainting] = useState(null);
   const [figure, setFigure] = useState(null);
-  const [procStep, setProcStep] = useState(0);
+  const [selfie, setSelfie] = useState(null);
   const [imgs, setImgs] = useState({});
+
+  const { generate, status, outputUrl, error, reset: resetGen } = useGenerate();
+
+  // Map Replicate status → processing step number for ProcessingScreen
+  const STEP_FOR_STATUS = { submitting:1, starting:1, processing:3, succeeded:4, failed:0 };
+  const procStep = STEP_FOR_STATUS[status] ?? 1;
 
   // Fetch real painting thumbnails from Wikipedia API on mount
   useEffect(() => {
@@ -1223,14 +1245,19 @@ export default function RuHua() {
     });
   }, []);
 
+  // Navigate when generation finishes or fails
   useEffect(() => {
-    if (screen !== 'processing') return;
-    setProcStep(0);
-    [950, 2100, 3300, 4600].forEach((ms, i) => setTimeout(() => setProcStep(i + 1), ms));
-    setTimeout(() => setScreen('result'), 6000);
-  }, [screen]);
+    if (status === 'succeeded') setScreen('result');
+    if (status === 'failed')    setScreen('selfie');
+  }, [status]);
 
-  const reset = () => { setScreen('home'); setPainting(null); setFigure(null); setProcStep(0); };
+  const reset = () => {
+    setScreen('home');
+    setPainting(null);
+    setFigure(null);
+    setSelfie(null);
+    resetGen();
+  };
 
   return (
     <div style={{ background:C.bg, minHeight:'100vh', display:'flex', justifyContent:'center' }}>
@@ -1244,12 +1271,21 @@ export default function RuHua() {
                                       onSelect={f => { setFigure(f); setScreen('selfie'); }}
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
-                                      onConfirm={() => setScreen('processing')}
+                                      onCaptured={img => setSelfie(img)}
+                                      onConfirm={() => {
+                                        setScreen('processing');
+                                        generate({
+                                          selfie,
+                                          painting,
+                                          styleImageUrl: imgs[painting.id],
+                                        });
+                                      }}
                                       onBack={() => setScreen('figure')} />}
-        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} />}
+        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} error={error} />}
         {screen === 'result'     && <ResultScreen painting={painting} figure={figure} imgs={imgs}
+                                      generatedUrl={outputUrl}
                                       onReset={reset}
-                                      onNew={() => { setScreen('gallery'); setPainting(null); setFigure(null); }} />}
+                                      onNew={() => { setScreen('gallery'); setPainting(null); setFigure(null); resetGen(); }} />}
       </div>
     </div>
   );
