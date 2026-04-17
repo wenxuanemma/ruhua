@@ -921,54 +921,57 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
 
 function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) {
   const [tab, setTab] = useState('scene');
-  const imgUrl = generatedUrl || imgs?.[painting?.id];  // prefer generated, fall back to painting
+  const imgUrl = generatedUrl || imgs?.[painting?.id];
+  const region = figure?.faceRegion;
+
+  // CSS to zoom the composited image to the face region for profile crops
+  // background-position offsets to center the face, background-size scales to fill
+  function faceZoomStyle(containerPx) {
+    if (!region || !imgUrl) return {
+      background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
+    };
+    // scale so that the face region fills the container
+    const scale = Math.min(1 / region.w, 1 / region.h) * 0.72;
+    const bgSize = `${scale * 100}%`;
+    // center the face within the container
+    const faceCenterX = region.x + region.w / 2;
+    const faceCenterY = region.y + region.h / 2;
+    const bgPosX = `${(0.5 - faceCenterX * scale) * containerPx}px`;
+    const bgPosY = `${(0.5 - faceCenterY * scale) * containerPx}px`;
+    return {
+      backgroundImage: `url(${imgUrl})`,
+      backgroundSize: bgSize,
+      backgroundPosition: `${bgPosX} ${bgPosY}`,
+      backgroundRepeat: 'no-repeat',
+    };
+  }
+
+  // Dynamic "you are here" position based on faceRegion center
+  const markerLeft = region ? `${(region.x + region.w / 2) * 100}%` : '50%';
+  const markerTop  = region ? `${(region.y + region.h / 2) * 100}%` : '38%';
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
-      {/* Hero — shows generated output if available, otherwise the painting */}
+      {/* Hero — full composited painting */}
       <div style={{
         background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
         position:'relative', paddingTop:'62%', overflow:'hidden',
         transition:'background .4s ease',
       }}>
         <div style={{ position:'absolute', inset:0 }}>
-          {/* Decorative ink landscape */}
-          <svg viewBox="0 0 400 248" style={{ width:'100%', height:'100%' }} preserveAspectRatio="xMidYMid slice">
-            <defs>
-              <radialGradient id="figGlow" cx="50%" cy="50%" r="50%">
-                <stop offset="0%" stopColor="#c9a84c" stopOpacity=".5" />
-                <stop offset="100%" stopColor="#c9a84c" stopOpacity="0" />
-              </radialGradient>
-            </defs>
-            {/* Landscape ink strokes */}
-            <path d="M0 170 Q80 130 160 148 Q240 105 320 132 Q360 118 400 138 L400 248 L0 248 Z"
-              fill="rgba(242,226,192,.05)" />
-            <path d="M0 200 Q70 176 140 190 Q210 165 280 180 Q340 170 400 185 L400 248 L0 248 Z"
-              fill="rgba(242,226,192,.07)" />
-            {/* Brushstroke mountains */}
-            <path d="M280 135 Q310 90 340 110 Q360 75 390 100 L400 140 Z" fill="rgba(242,226,192,.06)" />
-            <path d="M40 145 Q65 100 90 120 Q110 85 135 115 L150 160 Z" fill="rgba(242,226,192,.06)" />
-            {/* Tree lines */}
-            <line x1="185" y1="248" x2="185" y2="175" stroke="rgba(242,226,192,.15)" strokeWidth="1"/>
-            <line x1="230" y1="248" x2="230" y2="182" stroke="rgba(242,226,192,.12)" strokeWidth="1"/>
-            {/* "You" figure */}
-            <g transform="translate(200, 165)">
-              <circle cx="0" cy="0" r="22" fill="url(#figGlow)" />
-              <ellipse cx="0" cy="-12" rx="9" ry="10" fill={C.vermillion} opacity=".75" />
-              <path d="M-9,-4 Q-12,10 -10,24 L10,24 Q12,10 9,-4 Z" fill={C.vermillion} opacity=".65" />
-            </g>
-            {/* Calligraphy-style dots */}
-            {[[60,90],[340,80],[100,200],[320,210]].map(([x,y],i) => (
-              <circle key={i} cx={x} cy={y} r="2" fill="rgba(242,226,192,.2)" />
-            ))}
-          </svg>
-
-          {/* Gradient overlay */}
+          {/* Gradient overlay bottom only — don't obscure the painting */}
           <div style={{ position:'absolute', inset:0,
-            background:'linear-gradient(to bottom, rgba(12,9,4,.1) 0%, rgba(12,9,4,.65) 100%)' }} />
+            background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
-          {/* "You are here" label */}
-          <div style={{ position:'absolute', top:'38%', left:'50%', transform:'translate(-50%,-50%)', textAlign:'center' }}>
+          {/* Dynamic "你在此处" marker at actual face position */}
+          <div style={{
+            position:'absolute',
+            left: markerLeft,
+            top: markerTop,
+            transform:'translate(-50%, -100%)',
+            textAlign:'center',
+            pointerEvents:'none',
+          }}>
             <div style={{
               background:C.vermillion, color:'#f5e8c4',
               fontFamily:F.serif, fontSize:10,
@@ -977,43 +980,39 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
             }}>
               你在此处
             </div>
-            <div style={{ width:1.5, height:18, background:C.vermillion, margin:'0 auto', opacity:.8 }} />
+            <div style={{ width:1.5, height:16, background:C.vermillion, margin:'0 auto', opacity:.85 }} />
           </div>
         </div>
 
-        {/* Title in bottom-left */}
+        {/* Title bottom-left */}
         <div style={{ position:'absolute', bottom:0, left:0, right:0, padding:'14px 20px 16px' }}>
-          <div style={{ fontFamily:F.brush, fontSize:28, color:C.silk, marginBottom:2 }}>
+          <div style={{ fontFamily:F.brush, fontSize:26, color:C.silk, marginBottom:2 }}>
             {painting?.title}
           </div>
-          <div style={{ fontFamily:F.latin, fontSize:11, color:C.silkDim, letterSpacing:'.15em' }}>
+          <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim }}>
             {painting?.dynastyFull}
           </div>
         </div>
 
-        {/* Small seal on painting */}
         <div style={{ position:'absolute', top:14, right:14 }}>
           <Seal text={painting?.dynasty || '宋'} size={38} />
         </div>
       </div>
 
-      {/* Tab bar */}
+      {/* Tab bar — Chinese only, clean */}
       <div style={{ display:'flex', background:C.card, borderBottom:`1px solid ${C.border}` }}>
         {[
-          { id:'scene',   zh:'场景', en:'Scene'   },
-          { id:'crop',    zh:'头像', en:'Profile' },
-          { id:'history', zh:'历史', en:'History' },
+          { id:'scene',   label:'场景' },
+          { id:'crop',    label:'头像' },
+          { id:'history', label:'背景' },
         ].map(t => (
           <button key={t.id} onClick={() => setTab(t.id)} className="tab-btn" style={{
-            flex:1, padding:'11px 0',
+            flex:1, padding:'13px 0',
             borderBottom:`2px solid ${tab === t.id ? C.vermillion : 'transparent'}`,
             background: tab === t.id ? 'rgba(201,168,76,.05)' : 'transparent',
           }}>
-            <div style={{ fontFamily:F.brush, fontSize:17, color: tab === t.id ? C.silk : C.silkFaint }}>
-              {t.zh}
-            </div>
-            <div style={{ fontFamily:F.latin, fontSize:9, color: tab === t.id ? C.silkDim : C.silkFaint, letterSpacing:'.15em' }}>
-              {t.en}
+            <div style={{ fontFamily:F.brush, fontSize:18, color: tab === t.id ? C.silk : C.silkFaint }}>
+              {t.label}
             </div>
           </button>
         ))}
@@ -1022,19 +1021,19 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
       {/* Tab content */}
       <div style={{ padding:'20px 20px 32px' }}>
 
-        {/* ── Scene tab ── */}
+        {/* ── 场景 tab ── */}
         {tab === 'scene' && (
           <div className="fade-a">
             <div style={{ fontFamily:F.brush, fontSize:24, color:C.silk, marginBottom:5 }}>
-              {figure?.name} · {figure?.en}
+              {figure?.name}
+              <span style={{ fontFamily:F.serif, fontSize:14, color:C.silkDim, marginLeft:10, fontWeight:300 }}>
+                {figure?.en}
+              </span>
             </div>
             <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.85, marginBottom:18 }}>
               {painting?.scene}
             </div>
-            <div style={{
-              background:C.card, border:`1px solid ${C.border}`,
-              padding:'13px 15px', marginBottom:20,
-            }}>
+            <div style={{ background:C.card, border:`1px solid ${C.border}`, padding:'13px 15px' }}>
               <div style={{ fontFamily:F.serif, fontSize:11, color:C.gold, marginBottom:7 }}>
                 {painting?.artistFull}
               </div>
@@ -1043,7 +1042,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
                   background:C.vermillion, color:'#f5e8c4',
                   fontFamily:F.serif, fontSize:10, padding:'2px 9px',
                 }}>
-                  {painting?.tagZh} · {painting?.tagEn}
+                  {painting?.tagZh}
                 </div>
                 <div style={{
                   border:`1px solid ${C.border}`, color:C.silkDim,
@@ -1056,95 +1055,78 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
           </div>
         )}
 
-        {/* ── Profile crop tab ── */}
+        {/* ── 头像 tab ── */}
         {tab === 'crop' && (
           <div className="fade-a" style={{ display:'flex', flexDirection:'column', alignItems:'center' }}>
-            <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:16 }}>
-              社交头像
+            <div style={{ fontFamily:F.brush, fontSize:18, color:C.silk, marginBottom:4 }}>社交头像</div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
+              可用于微信、微博、小红书
             </div>
 
-            {/* Circle crop */}
+            {/* Circle crop — zoomed to face */}
             <div style={{
               width:196, height:196, borderRadius:'50%',
-              background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
+              ...faceZoomStyle(196),
               border:`3px solid ${C.gold}`,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              marginBottom:14, overflow:'hidden', position:'relative',
+              marginBottom:12, overflow:'hidden', position:'relative',
               boxShadow:`0 0 48px rgba(201,168,76,.22)`,
+              flexShrink:0,
             }}>
-              {/* dark vignette overlay */}
               <div style={{ position:'absolute', inset:0,
-                background:'radial-gradient(circle, transparent 38%, rgba(12,9,4,.62) 100%)',
+                background:'radial-gradient(circle, transparent 55%, rgba(12,9,4,.55) 100%)',
                 pointerEvents:'none' }} />
-              {/* "You" marker */}
-              <div style={{ position:'relative', textAlign:'center', zIndex:2 }}>
-                <svg width="38" height="46" viewBox="0 0 38 46">
-                  <ellipse cx="19" cy="15" rx="12" ry="13" fill={C.vermillion} opacity=".85" />
-                  <path d="M7 37 Q7 27 19 27 Q31 27 31 37 L31 46 L7 46 Z" fill={C.vermillion} opacity=".75" />
-                </svg>
-              </div>
             </div>
 
-            <div style={{ fontFamily:F.latin, fontSize:10, color:C.silkFaint, marginBottom:18, letterSpacing:'.1em' }}>
-              Circle — WeChat · Weibo · KakaoTalk
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:20 }}>
+              圆形头像 · 微信 · 微博
             </div>
 
-            {/* Square crop */}
+            {/* Square crop — zoomed to face */}
             <div style={{
-              width:172, height:172,
-              background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
+              width:180, height:180,
+              ...faceZoomStyle(180),
               border:`2px solid ${C.border}`,
-              display:'flex', alignItems:'center', justifyContent:'center',
-              position:'relative', overflow:'hidden', marginBottom:10,
+              position:'relative', overflow:'hidden', marginBottom:8,
+              flexShrink:0,
             }}>
-              {/* dark vignette */}
               <div style={{ position:'absolute', inset:0,
-                background:'radial-gradient(circle, transparent 35%, rgba(12,9,4,.55) 100%)',
+                background:'radial-gradient(circle, transparent 50%, rgba(12,9,4,.45) 100%)',
                 pointerEvents:'none' }} />
-              {/* You marker */}
-              <div style={{ position:'relative', zIndex:2, textAlign:'center' }}>
-                <svg width="32" height="38" viewBox="0 0 32 38">
-                  <ellipse cx="16" cy="13" rx="10" ry="11" fill={C.vermillion} opacity=".88" />
-                  <path d="M6 30 Q6 22 16 22 Q26 22 26 30 L26 38 L6 38 Z" fill={C.vermillion} opacity=".78" />
-                </svg>
-              </div>
-              {/* Red seal on image */}
               <div style={{
                 position:'absolute', bottom:8, right:8,
-                width:30, height:30, background:C.vermillion,
+                width:28, height:28, background:C.vermillion,
                 color:'#f5e8c4', fontFamily:F.brush, fontSize:9,
                 display:'flex', alignItems:'center', justifyContent:'center',
-                writingMode:'vertical-rl', opacity:.88,
+                writingMode:'vertical-rl', opacity:.9,
               }}>
                 入画
               </div>
             </div>
 
-            <div style={{ fontFamily:F.latin, fontSize:10, color:C.silkFaint, letterSpacing:'.1em' }}>
-              Square — Instagram · Xiaohongshu
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint }}>
+              方形头像 · Instagram · 小红书
             </div>
           </div>
         )}
 
-        {/* ── History tab ── */}
+        {/* ── 背景 tab ── */}
         {tab === 'history' && (
           <div className="fade-a">
             <div style={{ fontFamily:F.brush, fontSize:24, color:C.silk, marginBottom:3 }}>
               历史背景
             </div>
-            <div style={{ fontFamily:F.latin, fontSize:11, color:C.gold, letterSpacing:'.18em', marginBottom:16 }}>
-              Historical Context
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.gold, marginBottom:16 }}>
+              {painting?.sub}
             </div>
 
-            {/* Main context card */}
             <div style={{ background:C.card, border:`1px solid ${C.border}`, padding:16, marginBottom:14 }}>
               <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
                 <div>
                   <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk }}>{painting?.title}</div>
-                  <div style={{ fontFamily:F.latin, fontSize:11, color:C.silkDim, letterSpacing:'.08em' }}>{painting?.sub}</div>
+                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim }}>{painting?.artistFull}</div>
                 </div>
                 <div style={{
-                  width:38, height:38, background:C.vermillion,
+                  width:36, height:36, background:C.vermillion,
                   color:'#f5e8c4', fontFamily:F.brush, fontSize:11,
                   display:'flex', alignItems:'center', justifyContent:'center',
                   writingMode:'vertical-rl', flexShrink:0, marginLeft:10,
@@ -1152,9 +1134,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
                   {painting?.dynasty}
                 </div>
               </div>
-
               <div style={{ height:1, background:C.border, marginBottom:12 }} />
-
               <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
                 <div>
                   <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginBottom:3 }}>朝代</div>
@@ -1165,20 +1145,17 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
                   <div style={{ fontFamily:F.serif, fontSize:12, color:C.silk }}>{painting?.artistFull}</div>
                 </div>
               </div>
-
               <div style={{ height:1, background:C.border, marginBottom:12 }} />
-
               <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.8 }}>
                 {painting?.context}
               </div>
             </div>
 
-            {/* Role card */}
             <div style={{ background:'rgba(191,36,41,.07)', border:`1px solid rgba(191,36,41,.28)`, padding:'14px 16px' }}>
               <div style={{ fontFamily:F.serif, fontSize:10, color:C.vermillion, letterSpacing:'.1em', marginBottom:6 }}>
-                你扮演的角色 · Your Role
+                你扮演的角色
               </div>
-              <div style={{ fontFamily:F.brush, fontSize:21, color:C.silk, marginBottom:7 }}>
+              <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:6 }}>
                 {painting?.youAre}
               </div>
               <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.75 }}>
@@ -1195,18 +1172,18 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
             fontFamily:F.brush, fontSize:19, padding:'14px', letterSpacing:'.38em',
             boxShadow:`0 4px 22px rgba(191,36,41,.32)`,
           }}>
-            分享 · Share
+            分享
           </button>
           <div style={{ display:'flex', gap:10 }}>
             <button onClick={onNew} className="btn" style={{
               flex:1, border:`1px solid ${C.border}`,
-              color:C.silkDim, fontFamily:F.serif, fontSize:13, padding:'12px',
+              color:C.silkDim, fontFamily:F.brush, fontSize:15, padding:'12px',
             }}>
               换幅画
             </button>
             <button onClick={onReset} className="btn" style={{
               flex:1, border:`1px solid ${C.border}`,
-              color:C.silkDim, fontFamily:F.serif, fontSize:13, padding:'12px',
+              color:C.silkDim, fontFamily:F.brush, fontSize:15, padding:'12px',
             }}>
               重新开始
             </button>
