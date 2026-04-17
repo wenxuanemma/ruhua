@@ -25,13 +25,13 @@ const FACE_REGIONS = {
     boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
   },
   hanxizai: {
-    guest:  { x:0.68, y:0.18, w:0.09, h:0.22, angle:5  },
-    host:   { x:0.11, y:0.18, w:0.10, h:0.22, angle:-3 },
-    dancer: { x:0.46, y:0.22, w:0.08, h:0.20, angle:-5 },
+    guest:  { x:0.76, y:0.01, w:0.11, h:0.16, angle:5  },
+    host:   { x:0.35, y:0.27, w:0.11, h:0.18, angle:-3 },
+    dancer: { x:0.47, y:0.25, w:0.08, h:0.15, angle:-5 },
   },
   bunianta: {
-    official: { x:0.46, y:0.18, w:0.09, h:0.28, angle:3  },
-    envoy:    { x:0.32, y:0.20, w:0.09, h:0.28, angle:-5 },
+    official: { x:0.34, y:0.34, w:0.07, h:0.15, angle:3  },
+    envoy:    { 0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
   },
   qianli: {
     hermit:    { x:0.28, y:0.58, w:0.03, h:0.08, angle:0   },
