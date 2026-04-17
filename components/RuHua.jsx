@@ -88,9 +88,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#2e200e 0%,#6a5228 22%,#b09060 48%,#7a6038 74%,#2e200e 100%)',
     color: '#b09060',
     figures: [
-      { id:'scholar',  name:'行路客',  en:'Traveling Scholar',   pose:'Near-frontal', rec:true  },
-      { id:'merchant', name:'市井商人', en:'Market Merchant',     pose:'3/4 turn',     rec:false },
-      { id:'boatman',  name:'船夫',    en:'River Boatman',       pose:'Profile',      rec:false },
+      { id:'scholar',  name:'行路客',  en:'Traveling Scholar',  pose:'Near-frontal', rec:true,  faceRegion:{ x:0.53, y:0.35, w:0.04, h:0.30, angle:0  } },
+      { id:'merchant', name:'市井商人', en:'Market Merchant',    pose:'3/4 turn',     rec:false, faceRegion:{ x:0.62, y:0.32, w:0.04, h:0.30, angle:5  } },
+      { id:'boatman',  name:'船夫',    en:'River Boatman',      pose:'Profile',      rec:false, faceRegion:{ x:0.44, y:0.40, w:0.04, h:0.28, angle:-8 } },
     ],
     youAre: '行路客 · Traveling Scholar',
     context: 'You stand in Bianjing (modern Kaifeng), the Northern Song capital at its glittering peak, on the eve of Qingming Festival. Silk merchants, fortune tellers, and children with kites crowd the banks of the Grand Canal. This 5-meter scroll is the most studied artwork in Chinese history.',
@@ -110,9 +110,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#10060300 0%,#100603 0%,#3a100a 24%,#6a2c16 50%,#4a1e0e 74%,#100603 100%)',
     color: '#8a4020',
     figures: [
-      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true  },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true  },
-      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false },
+      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.68, y:0.18, w:0.09, h:0.22, angle:5  } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.11, y:0.18, w:0.10, h:0.22, angle:-3 } },
+      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.46, y:0.22, w:0.08, h:0.20, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
@@ -132,8 +132,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1c1006 0%,#5a3818 24%,#a87040 50%,#7a5028 74%,#1c1006 100%)',
     color: '#a87040',
     figures: [
-      { id:'official', name:'唐朝官员', en:'Tang Court Official', pose:'Near-frontal', rec:true  },
-      { id:'envoy',    name:'吐蕃使节', en:'Tibetan Envoy',       pose:'3/4 turn',    rec:false },
+      { id:'official', name:'唐朝官员', en:'Tang Court Official', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.46, y:0.18, w:0.09, h:0.28, angle:3  } },
+      { id:'envoy',    name:'吐蕃使节', en:'Tibetan Envoy',       pose:'3/4 turn',     rec:false, faceRegion:{ x:0.32, y:0.20, w:0.09, h:0.28, angle:-5 } },
     ],
     youAre: '唐朝官员 · Imperial Official',
     context: 'Emperor Taizong receives Ludongzan, envoy of Tibetan king Songtsen Gampo, to negotiate the marriage of Princess Wencheng — a union that would shape Sino-Tibetan relations for centuries.',
@@ -153,8 +153,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#040f18 0%,#082a48 24%,#105878 50%,#0a3e30 74%,#040f18 100%)',
     color: '#105878',
     figures: [
-      { id:'hermit',    name:'山中隐士', en:'Mountain Hermit',  pose:'Near-frontal', rec:true  },
-      { id:'fisherman', name:'江上渔夫', en:'River Fisherman',  pose:'Profile',      rec:false },
+      { id:'hermit',    name:'山中隐士', en:'Mountain Hermit',  pose:'Near-frontal', rec:true,  faceRegion:{ x:0.28, y:0.58, w:0.03, h:0.08, angle:0   } },
+      { id:'fisherman', name:'江上渔夫', en:'River Fisherman',  pose:'Profile',      rec:false, faceRegion:{ x:0.65, y:0.62, w:0.03, h:0.07, angle:-10 } },
     ],
     youAre: '山中隐士 · Mountain Hermit',
     context: 'Painted by Wang Ximeng at 18 using precious azurite and malachite — his only surviving work. This 11-meter scroll depicts the entire Chinese empire in imagined blue-green splendor. Wang died before turning 20.',
@@ -174,8 +174,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#101622 0%,#263050 24%,#506888 50%,#384862 74%,#101622 100%)',
     color: '#506888',
     figures: [
-      { id:'attendant', name:'随行侍从', en:"Poet's Attendant", pose:'Near-frontal', rec:true  },
-      { id:'cao',       name:'曹植',     en:'Poet Cao Zhi',     pose:'3/4 turn',    rec:false },
+      { id:'attendant', name:'随行侍从', en:"Poet's Attendant", pose:'Near-frontal', rec:true,  faceRegion:{ x:0.76, y:0.32, w:0.07, h:0.18, angle:-2 } },
+      { id:'cao',       name:'曹植',     en:'Poet Cao Zhi',     pose:'3/4 turn',     rec:false, faceRegion:{ x:0.86, y:0.34, w:0.08, h:0.20, angle:-5 } },
     ],
     youAre: "随行侍从 · The Poet's Companion",
     context: "Based on Cao Zhi's poem of impossible love for the Luo River goddess. The scroll follows his encounter with Luo Zhen — ethereal beauty that cannot be held. One of China's oldest surviving narrative scrolls.",
@@ -195,9 +195,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a0814 0%,#562040 24%,#925068 50%,#6a3850 74%,#1a0814 100%)',
     color: '#925068',
     figures: [
-      { id:'listener', name:'听乐仕女', en:'Lady of the Court',    pose:'Near-frontal', rec:true  },
-      { id:'musician', name:'琵琶仕女', en:'Pipa Musician',        pose:'3/4 turn',     rec:false },
-      { id:'serving',  name:'侍女',     en:'Serving Attendant',    pose:'Near-frontal', rec:true  },
+      { id:'listener', name:'听乐仕女', en:'Lady of the Court',  pose:'Near-frontal', rec:true,  faceRegion:{ x:0.10, y:0.30, w:0.13, h:0.28, angle:0  } },
+      { id:'musician', name:'琵琶仕女', en:'Pipa Musician',      pose:'3/4 turn',     rec:false, faceRegion:{ x:0.46, y:0.14, w:0.11, h:0.24, angle:-8 } },
+      { id:'serving',  name:'侍女',     en:'Serving Attendant',  pose:'Near-frontal', rec:true,  faceRegion:{ x:0.85, y:0.28, w:0.10, h:0.24, angle:2  } },
     ],
     youAre: '听乐仕女 · Lady of the Tang Court',
     context: 'Ten Tang dynasty court ladies gather at a lacquered table — playing pipa, zither, and flute, or simply listening. Their full-figured forms and elaborate hairstyles embody the cosmopolitan aesthetic of Tang at its height.',
@@ -806,14 +806,14 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onBack })
 // ─── Processing Screen ───────────────────────────────────────────────────────
 
 const STEPS = [
-  { zh:'分析面部特征', en:'Analyzing facial structure' },
+  { zh:'分析面部特征', en:'Analyzing facial structure'   },
   { zh:'学习笔墨风格', en:'Learning brushstroke language' },
-  { zh:'风格迁移渲染', en:'Applying style transfer' },
-  { zh:'合成最终画作', en:'Compositing into the scroll' },
+  { zh:'风格迁移渲染', en:'Applying style transfer'       },
+  { zh:'合成入画',     en:'Compositing into the scroll'  },
 ];
 
-function ProcessingScreen({ step, painting, imgs, error }) {
-  const imgUrl = imgs?.[painting?.id];
+function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
+  const imgUrl = styledUrl || imgs?.[painting?.id];
   return (
     <div style={{
       minHeight:'100vh',
@@ -1226,10 +1226,10 @@ export default function RuHua() {
   const [selfie, setSelfie] = useState(null);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, error, reset: resetGen } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, error, reset: resetGen } = useGenerate();
 
-  // Map Replicate status → processing step number for ProcessingScreen
-  const STEP_FOR_STATUS = { submitting:1, starting:1, processing:3, succeeded:4, failed:0 };
+  // Map status → processing step
+  const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
   const procStep = STEP_FOR_STATUS[status] ?? 1;
 
   // Fetch real painting thumbnails from Wikipedia API on mount
@@ -1277,11 +1277,12 @@ export default function RuHua() {
                                         generate({
                                           selfie,
                                           painting,
+                                          figure,
                                           styleImageUrl: imgs[painting.id],
                                         });
                                       }}
                                       onBack={() => setScreen('figure')} />}
-        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} error={error} />}
+        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} />}
         {screen === 'result'     && <ResultScreen painting={painting} figure={figure} imgs={imgs}
                                       generatedUrl={outputUrl}
                                       onReset={reset}
