@@ -16,6 +16,7 @@ export function useGenerate() {
   const [status, setStatus]       = useState('idle');
   const [outputUrl, setOutputUrl] = useState(null);
   const [styledUrl, setStyledUrl] = useState(null);
+  const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]         = useState(null);
   const pollRef   = useRef(null);
   const pollCount = useRef(0);
@@ -74,6 +75,7 @@ export function useGenerate() {
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Compositing failed');
+    if (data.profileUrl) setProfileUrl(data.profileUrl);
     if (data.outputUrl) return data.outputUrl;
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
@@ -83,6 +85,7 @@ export function useGenerate() {
     setStatus('submitting');
     setOutputUrl(null);
     setStyledUrl(null);
+    setProfileUrl(null);
     setError(null);
 
     try {
@@ -113,8 +116,9 @@ export function useGenerate() {
     setStatus('idle');
     setOutputUrl(null);
     setStyledUrl(null);
+    setProfileUrl(null);
     setError(null);
   }, []);
 
-  return { generate, status, outputUrl, styledUrl, error, reset };
+  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset };
 }

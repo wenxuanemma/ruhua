@@ -919,34 +919,35 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onReset, onNew }) {
   const [tab, setTab] = useState('scene');
   const imgUrl = generatedUrl || imgs?.[painting?.id];
   const region = figure?.faceRegion;
 
-  // CSS to zoom the composited image to the face region for profile crops
-  // background-position offsets to center the face, background-size scales to fill
-  function faceZoomStyle(containerPx) {
+  // Profile crop background — use server-side cropped image if available,
+  // otherwise fall back to CSS zoom of the full composited image
+  function profileBg(containerPx) {
+    if (profileUrl) return {
+      backgroundImage: `url(${profileUrl})`,
+      backgroundSize: 'cover',
+      backgroundPosition: 'center',
+    };
+    // Fallback: CSS zoom (less reliable but better than nothing)
     if (!region || !imgUrl) return {
       background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
     };
-    // scale so that the face region fills the container
     const scale = Math.min(1 / region.w, 1 / region.h) * 0.72;
-    const bgSize = `${scale * 100}%`;
-    // center the face within the container
     const faceCenterX = region.x + region.w / 2;
     const faceCenterY = region.y + region.h / 2;
-    const bgPosX = `${(0.5 - faceCenterX * scale) * containerPx}px`;
-    const bgPosY = `${(0.5 - faceCenterY * scale) * containerPx}px`;
     return {
       backgroundImage: `url(${imgUrl})`,
-      backgroundSize: bgSize,
-      backgroundPosition: `${bgPosX} ${bgPosY}`,
+      backgroundSize: `${scale * 100}%`,
+      backgroundPosition: `${(0.5 - faceCenterX * scale) * containerPx}px ${(0.5 - faceCenterY * scale) * containerPx}px`,
       backgroundRepeat: 'no-repeat',
     };
   }
 
-  // Dynamic "you are here" position based on faceRegion center
+  // Dynamic "你在此处" position
   const markerLeft = region ? `${(region.x + region.w / 2) * 100}%` : '50%';
   const markerTop  = region ? `${(region.y + region.h / 2) * 100}%` : '38%';
 
@@ -1063,10 +1064,10 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
               可用于微信、微博、小红书
             </div>
 
-            {/* Circle crop — zoomed to face */}
+            {/* Circle crop — server-side cropped to face */}
             <div style={{
               width:196, height:196, borderRadius:'50%',
-              ...faceZoomStyle(196),
+              ...profileBg(196),
               border:`3px solid ${C.gold}`,
               marginBottom:12, overflow:'hidden', position:'relative',
               boxShadow:`0 0 48px rgba(201,168,76,.22)`,
@@ -1081,10 +1082,10 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, onReset, onNew }) 
               圆形头像 · 微信 · 微博
             </div>
 
-            {/* Square crop — zoomed to face */}
+            {/* Square crop — server-side cropped to face */}
             <div style={{
               width:180, height:180,
-              ...faceZoomStyle(180),
+              ...profileBg(180),
               border:`2px solid ${C.border}`,
               position:'relative', overflow:'hidden', marginBottom:8,
               flexShrink:0,
@@ -1203,7 +1204,7 @@ export default function RuHua() {
   const [selfie, setSelfie] = useState(null);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, error, reset: resetGen } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen } = useGenerate();
 
   // Map status → processing step
   const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
@@ -1262,6 +1263,7 @@ export default function RuHua() {
         {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} />}
         {screen === 'result'     && <ResultScreen painting={painting} figure={figure} imgs={imgs}
                                       generatedUrl={outputUrl}
+                                      profileUrl={profileUrl}
                                       onReset={reset}
                                       onNew={() => { setScreen('gallery'); setPainting(null); setFigure(null); resetGen(); }} />}
       </div>
