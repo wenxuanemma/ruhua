@@ -118,9 +118,9 @@ async function paintifyFace({ faceUrl, dynasty }) {
         'oil painting', 'western portrait', 'dark', 'high contrast',
         'blurry', 'distorted', 'bad anatomy',
       ].join(', '),
-      prompt_strength:     0.62,   // raised from 0.45 — enough to fully repaint texture
+      prompt_strength:     0.50,   // reduced from 0.62 — was stripping too much color/making face ghost-white
       num_inference_steps: 35,
-      guidance_scale:      8.0,    // higher guidance = stronger style adherence
+      guidance_scale:      7.5,
       width:               640,
       height:              640,
     },

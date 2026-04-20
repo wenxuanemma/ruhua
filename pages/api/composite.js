@@ -93,10 +93,10 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Reduce saturation — ancient silk paintings are highly desaturated
-    // compared to any AI face output. This is the single biggest visual mismatch.
+    // Reduce saturation to match aged silk palette
+    // 0.72 (was 0.55 — too aggressive, caused ghost-white face)
     const desaturatedFace = await sharp(facePng)
-      .modulate({ saturation: 0.55 })  // 0.55 = 45% saturation reduction
+      .modulate({ saturation: 0.72 })
       .toBuffer();
 
     // Sample painting's average color in the face region for color matching
@@ -163,8 +163,23 @@ export default async function handler(req, res) {
       .resize(targetW, targetH)
       .toBuffer();
 
-    const faceFinal = await sharp(colorMatchedFace)
-      .composite([{ input: ovalMask, blend: 'dest-in' }])
+    // Fix halo: extract the painting region and use it as background behind the face.
+    // This means feathered edges fade into the actual painting pixels, not white.
+    const paintingRegionBuf = await sharp(paintingBuf)
+      .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
+      .resize(targetW, targetH, { fit: 'fill' })
+      .png()
+      .toBuffer();
+
+    // Composite: painting region as base, then color-matched face on top with mask
+    const faceFinal = await sharp(paintingRegionBuf)
+      .composite([{
+        input: await sharp(colorMatchedFace)
+          .composite([{ input: ovalMask, blend: 'dest-in' }])
+          .png()
+          .toBuffer(),
+        blend: 'over',
+      }])
       .png()
       .toBuffer();
 
