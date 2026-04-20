@@ -1,109 +1,158 @@
-// pages/api/generate.js  (Next.js pages router)
-// or: app/api/generate/route.js  (App router — see bottom of file)
+// pages/api/generate.js
 //
-// Required env vars:
-//   REPLICATE_API_TOKEN=r8_...
+// Two-stage face pipeline:
+//   Stage 1 — InstantID: preserve face identity, apply loose style
+//   Stage 2 — paintify: img2img at 0.45 strength to make face look genuinely painted
 //
-// POST body:
-//   { selfie: "data:image/jpeg;base64,...", paintingId, styleImageUrl, paintingTitle, dynasty }
-//
-// Returns:
-//   { predictionId }   — on acceptance
-//   { error }          — on failure
+// Returns { outputUrl } — the painted face, ready for compositing
 
-// Increase body size limit — base64 images can be 1.5–3MB
 export const config = {
-  api: {
-    bodyParser: {
-      sizeLimit: '10mb',
-    },
-  },
+  api: { bodyParser: { sizeLimit: '10mb' } },
 };
 
+const DYNASTY_STYLE = {
+  '北宋': 'Northern Song dynasty court painting, gongbi fine brushwork, ink and mineral pigments on silk, warm ochre tones, Palace Museum Beijing',
+  '五代': 'Five Dynasties period court painting, fine brushwork, muted warm palette, ink on silk',
+  '唐':   'Tang dynasty figure painting, mineral pigments on silk, rich warm court colors, flowing robes',
+  '东晋': 'Eastern Jin dynasty handscroll, flowing ink line work, muted silk tones, gossamer drapery',
+};
+
+async function callReplicate(body) {
+  const response = await fetch('https://api.replicate.com/v1/predictions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'wait',
+    },
+    body: JSON.stringify(body),
+  });
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Replicate error: ${err}`);
+  }
+  return response.json();
+}
+
+async function pollUntilDone(predictionId, maxWaitMs = 90000) {
+  const start = Date.now();
+  while (Date.now() - start < maxWaitMs) {
+    await new Promise(r => setTimeout(r, 2500));
+    const res = await fetch(`https://api.replicate.com/v1/predictions/${predictionId}`, {
+      headers: { 'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}` },
+    });
+    const data = await res.json();
+    if (data.status === 'succeeded') {
+      return Array.isArray(data.output) ? data.output[0] : data.output;
+    }
+    if (data.status === 'failed') throw new Error(data.error || 'Prediction failed');
+  }
+  throw new Error('Prediction timed out');
+}
+
+async function getPredictionOutput(prediction) {
+  if (prediction.status === 'succeeded') {
+    return Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+  }
+  if (prediction.id) return pollUntilDone(prediction.id);
+  throw new Error('No prediction ID or output');
+}
+
+// ── Stage 1: InstantID — identity-preserving style transfer ──────────────────
+async function runInstantID({ selfie, styleImageUrl, dynasty }) {
+  const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, ink on silk';
+
+  const prediction = await callReplicate({
+    version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
+    input: {
+      image:               selfie,
+      prompt: [
+        styleDesc,
+        'portrait figure in traditional court robes',
+        'fine line brushwork, Chinese court aesthetic',
+        'warm ochre and vermillion palette',
+        'masterwork Chinese figure painting',
+      ].join(', '),
+      negative_prompt: [
+        'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
+        'photorealistic photograph', 'DSLR', 'modern clothing',
+        'oil painting', 'western art', '3d render',
+        'blurry', 'watermark', 'text', 'bad anatomy',
+      ].join(', '),
+      ip_adapter_image:    styleImageUrl,
+      ip_adapter_scale:    0.85,
+      sdxl_weights:        'juggernaut-xl-v8',
+      guidance_scale:      7,
+      num_inference_steps: 35,
+      width:               640,
+      height:              640,
+    },
+  });
+
+  return getPredictionOutput(prediction);
+}
+
+// ── Stage 2: Paintify — transform photorealistic face into painted face ────────
+// Strength 0.62: strong enough to fully repaint skin texture and lighting,
+// while preserving enough facial structure for identity recognition.
+async function paintifyFace({ faceUrl, dynasty }) {
+  const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, ink on silk';
+
+  const prediction = await callReplicate({
+    version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+    input: {
+      image:   faceUrl,
+      prompt: [
+        styleDesc,
+        'face painted in classical Chinese gongbi style',
+        'matte silk painting texture on skin',
+        'flat traditional lighting, no photographic shadows',
+        'warm ochre skin tone, aged pigment',
+        'ink outline defining facial features',
+        'same face identity, painted not photographed',
+      ].join(', '),
+      negative_prompt: [
+        'photorealistic', 'photograph', 'DSLR', 'sharp photo', 'glossy skin',
+        'dramatic lighting', 'shadows', 'highlights', 'subsurface scattering',
+        'modern', 'japanese', 'anime', 'manga',
+        'oil painting', 'western portrait', 'dark', 'high contrast',
+        'blurry', 'distorted', 'bad anatomy',
+      ].join(', '),
+      prompt_strength:     0.62,   // raised from 0.45 — enough to fully repaint texture
+      num_inference_steps: 35,
+      guidance_scale:      8.0,    // higher guidance = stronger style adherence
+      width:               640,
+      height:              640,
+    },
+  });
+
+  return getPredictionOutput(prediction);
+}
+
+// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { selfie, paintingId, styleImageUrl, paintingTitle, dynasty } = req.body;
-
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
-  // ── Build the style prompt ──────────────────────────────────────────────────
-  const prompt = [
-    `classical Chinese court painting`,
-    `${dynasty} dynasty gongbi brushwork`,
-    `portrait figure in hanfu silk robes`,
-    `mineral pigment on silk scroll`,
-    `Tang or Song dynasty palace figure`,
-    `fine line brushwork, Chinese court aesthetic`,
-    `warm ochre and vermillion palette`,
-    `Beijing Palace Museum collection style`,
-    `masterwork Chinese figure painting`,
-  ].join(', ');
-
-  const negativePrompt = [
-    // Explicitly reject Japanese aesthetics — critical for cultural accuracy
-    'japanese', 'japan', 'anime', 'manga', 'ukiyo-e', 'woodblock print',
-    'torii gate', 'kimono', 'geisha', 'samurai', 'sakura', 'fuji',
-    'jrpg', 'kawaii',
-    // General quality negatives
-    'photorealistic', 'photograph', 'DSLR', 'modern',
-    'oil painting', 'watercolor', 'western art', '3d render',
-    'blurry', 'lowres', 'watermark', 'signature', 'text',
-    'bad anatomy', 'ugly', 'deformed', 'extra limbs',
-  ].join(', ');
-
-  // ── Call Replicate ──────────────────────────────────────────────────────────
-  // dreamshaper-xl is an artistic base model — produces painterly results
-  // vs protovision-xl-high-fidel which is photorealistic (old setting)
-  const body = {
-    version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
-    input: {
-      image:                selfie,
-      prompt,
-      negative_prompt:      negativePrompt,
-      ip_adapter_image:     styleImageUrl,
-      ip_adapter_scale:     0.8,
-      sdxl_weights:         'juggernaut-xl-v8',  // less anime bias than dreamshaper-xl
-      guidance_scale:       7,                 // slightly higher for stronger style adherence
-      num_inference_steps:  40,                // more steps = more refined brushwork texture
-      width:                640,
-      height:               640,
-    },
-  };
-
   try {
-    const response = await fetch('https://api.replicate.com/v1/predictions', {
-      method: 'POST',
-      headers: {
-        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
-        'Content-Type': 'application/json',
-        'Prefer': 'wait',
-      },
-      body: JSON.stringify(body),
-    });
+    // Stage 1: InstantID — get face in loose painting style
+    const styledFaceUrl = await runInstantID({ selfie, styleImageUrl, dynasty });
 
-    if (!response.ok) {
-      const err = await response.text();
-      console.error('Replicate error:', err);
-      return res.status(502).json({ error: 'Replicate request failed', detail: err });
+    // Stage 2: Paintify — push it all the way to looking painted
+    let paintedFaceUrl;
+    try {
+      paintedFaceUrl = await paintifyFace({ faceUrl: styledFaceUrl, dynasty });
+    } catch (paintErr) {
+      console.warn('Paintify failed, falling back to styled face:', paintErr.message);
+      paintedFaceUrl = styledFaceUrl; // graceful fallback
     }
 
-    const prediction = await response.json();
-    // Return predictionId — client polls /api/status?id=... for result
-    return res.status(200).json({ predictionId: prediction.id });
+    return res.status(200).json({ outputUrl: paintedFaceUrl });
 
   } catch (err) {
     console.error('Generate error:', err);
-    return res.status(500).json({ error: 'Internal server error' });
+    return res.status(500).json({ error: err.message || 'Internal server error' });
   }
 }
-
-
-// ── App Router version ────────────────────────────────────────────────────────
-// If you're using Next.js 13+ App Router, replace the above with:
-//
-// export async function POST(request) {
-//   const { selfie, styleImageUrl, paintingTitle, dynasty } = await request.json();
-//   // ... same logic ...
-//   return Response.json({ predictionId: prediction.id });
-// }

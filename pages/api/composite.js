@@ -93,6 +93,12 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // Reduce saturation — ancient silk paintings are highly desaturated
+    // compared to any AI face output. This is the single biggest visual mismatch.
+    const desaturatedFace = await sharp(facePng)
+      .modulate({ saturation: 0.55 })  // 0.55 = 45% saturation reduction
+      .toBuffer();
+
     // Sample painting's average color in the face region for color matching
     const safeX = Math.max(0, targetX);
     const safeY = Math.max(0, targetY);
@@ -113,8 +119,8 @@ export default async function handler(req, res) {
     }
     const pR = rSum/pixels, pG = gSum/pixels, pB = bSum/pixels;
 
-    // Sample face average color
-    const faceCropSmall = await sharp(facePng)
+    // Sample face average color (from desaturated version)
+    const faceCropSmall = await sharp(desaturatedFace)
       .resize(8, 8)
       .removeAlpha()
       .raw()
@@ -125,13 +131,14 @@ export default async function handler(req, res) {
       fR += faceCropSmall[i]; fG += faceCropSmall[i+1]; fB += faceCropSmall[i+2];
     }
 
-    // Tint face 35% toward painting's color palette
-    const t = 0.35;
+    // Tint face 55% toward painting's color palette (raised from 35%)
+    // The face coming from paintify can still be too saturated/dark vs aged silk
+    const t = 0.55;
     const tR = Math.round((pR - fR/fp) * t);
     const tG = Math.round((pG - fG/fp) * t);
     const tB = Math.round((pB - fB/fp) * t);
 
-    const colorMatchedFace = await sharp(facePng)
+    const colorMatchedFace = await sharp(desaturatedFace)
       .tint({ r: 128 + tR, g: 128 + tG, b: 128 + tB })
       .png()
       .toBuffer();
