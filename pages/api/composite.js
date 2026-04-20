@@ -93,15 +93,7 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Reduce saturation to match aged silk palette
-    const desaturatedFace = await sharp(facePng)
-      .modulate({
-        saturation: 0.72,
-        brightness: 0.82,  // darken to match the painting's dark overall tone
-      })
-      .toBuffer();
-
-    // Sample painting's average color in the face region for color matching
+    // ── Sample painting color at face region ──────────────────────────────────
     const safeX = Math.max(0, targetX);
     const safeY = Math.max(0, targetY);
     const safeW = Math.min(targetW, PW - safeX);
@@ -121,8 +113,8 @@ export default async function handler(req, res) {
     }
     const pR = rSum/pixels, pG = gSum/pixels, pB = bSum/pixels;
 
-    // Sample face average color (from desaturated version)
-    const faceCropSmall = await sharp(desaturatedFace)
+    // ── Sample raw face color ─────────────────────────────────────────────────
+    const faceCropSmall = await sharp(facePng)
       .resize(8, 8)
       .removeAlpha()
       .raw()
@@ -133,14 +125,24 @@ export default async function handler(req, res) {
       fR += faceCropSmall[i]; fG += faceCropSmall[i+1]; fB += faceCropSmall[i+2];
     }
 
-    // Tint face 55% toward painting's color palette (raised from 35%)
-    // The face coming from paintify can still be too saturated/dark vs aged silk
+    // ── Calculate adaptive brightness to match painting region ────────────────
+    // Each painting has a different brightness level — this generalizes automatically:
+    // 韩熙载夜宴图 → dark (0.3–0.4), 千里江山图 → bright (0.6–0.7), 宫乐图 → warm mid (0.5)
+    const paintingBrightness = (pR + pG + pB) / 3 / 255;
+    const faceBrightness     = ((fR + fG + fB) / 3) / fp / 255;
+    const targetBrightness   = faceBrightness + (paintingBrightness - faceBrightness) * 0.60;
+    const brightnessRatio    = faceBrightness > 0.01
+      ? Math.max(0.4, Math.min(1.5, targetBrightness / faceBrightness))
+      : 1.0;
+
+    // ── Apply saturation + adaptive brightness + color tint in one step ───────
     const t = 0.55;
     const tR = Math.round((pR - fR/fp) * t);
     const tG = Math.round((pG - fG/fp) * t);
     const tB = Math.round((pB - fB/fp) * t);
 
-    const colorMatchedFace = await sharp(desaturatedFace)
+    const colorMatchedFace = await sharp(facePng)
+      .modulate({ saturation: 0.72, brightness: brightnessRatio })
       .tint({ r: 128 + tR, g: 128 + tG, b: 128 + tB })
       .png()
       .toBuffer();
