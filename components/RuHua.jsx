@@ -948,8 +948,23 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
   }
 
   // Dynamic "你在此处" position
-  const markerLeft = region ? `${(region.x + region.w / 2) * 100}%` : '50%';
-  const markerTop  = region ? `${(region.y + region.h / 2) * 100}%` : '38%';
+  // The hero uses background: center/cover on a 62% paddingTop container.
+  // Wide paintings (like scrolls) get cropped horizontally — need to remap x coordinate.
+  // We assume the displayed window is roughly 62% tall of the image height,
+  // centered horizontally. So we remap region coords into the visible crop.
+  const heroAspect = 1 / 0.62; // width/height of the hero container
+  const regionCenterX = region ? region.x + region.w / 2 : 0.5;
+  const regionCenterY = region ? region.y + region.h / 2 : 0.38;
+
+  // Estimate how much of the painting is visible horizontally with center/cover
+  // Paintings wider than heroAspect get cropped; we remap the x coordinate
+  const estimatedPaintingAspect = 2.8; // most scrolls are ~3:1, displayed in ~1.6:1 container
+  const visibleFraction = heroAspect / estimatedPaintingAspect;
+  const xOffset = (1 - visibleFraction) / 2; // left edge of visible area as fraction
+  const markerLeft = visibleFraction > 0
+    ? `${Math.max(5, Math.min(95, ((regionCenterX - xOffset) / visibleFraction) * 100))}%`
+    : '50%';
+  const markerTop = region ? `${regionCenterY * 100}%` : '38%';
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>

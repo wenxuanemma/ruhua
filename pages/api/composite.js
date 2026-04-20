@@ -74,12 +74,12 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Crop face from center of the painted face output
-    // InstantID + paintify both keep face centered in the 640x640 output
-    const cropX = Math.round(FW * 0.18);
-    const cropY = Math.round(FH * 0.03);
-    const cropW = Math.round(FW * 0.64);
-    const cropH = Math.round(FH * 0.72);
+    // Crop face tighter — SDXL background bleeds into feather edges causing white halo
+    // Use 55% width / 65% height (was 64%/72%) to exclude more background
+    const cropX = Math.round(FW * 0.225);
+    const cropY = Math.round(FH * 0.04);
+    const cropW = Math.round(FW * 0.55);
+    const cropH = Math.round(FH * 0.65);
 
     let faceImg = sharp(faceBuf)
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
@@ -94,9 +94,11 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // Reduce saturation to match aged silk palette
-    // 0.72 (was 0.55 — too aggressive, caused ghost-white face)
     const desaturatedFace = await sharp(facePng)
-      .modulate({ saturation: 0.72 })
+      .modulate({
+        saturation: 0.72,
+        brightness: 0.82,  // darken to match the painting's dark overall tone
+      })
       .toBuffer();
 
     // Sample painting's average color in the face region for color matching
@@ -143,19 +145,19 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Soft feathered oval mask — wide transition zone for natural blend
+    // Tight oval mask — fast falloff to eliminate white halo from SDXL background
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="43%" rx="50%" ry="50%">
-          <stop offset="40%" stop-color="white" stop-opacity="1"/>
-          <stop offset="65%" stop-color="white" stop-opacity="0.9"/>
-          <stop offset="82%" stop-color="white" stop-opacity="0.4"/>
-          <stop offset="93%" stop-color="white" stop-opacity="0.1"/>
+          <stop offset="50%" stop-color="white" stop-opacity="1"/>
+          <stop offset="70%" stop-color="white" stop-opacity="0.85"/>
+          <stop offset="85%" stop-color="white" stop-opacity="0.3"/>
+          <stop offset="95%" stop-color="white" stop-opacity="0.05"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
       <ellipse cx="${targetW*0.50}" cy="${targetH*0.43}"
-               rx="${targetW*0.46}" ry="${targetH*0.46}"
+               rx="${targetW*0.44}" ry="${targetH*0.44}"
                fill="url(#g)"/>
     </svg>`;
 
