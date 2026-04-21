@@ -111,7 +111,7 @@ const PAINTINGS = [
     color: '#8a4020',
     figures: [
       { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.68, y:0.18, w:0.09, h:0.22, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.33, y:0.20, w:0.12, h:0.20, angle:-3 } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.30, y:0.30, w:0.13, h:0.22, angle:-3 } },
       { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.46, y:0.22, w:0.08, h:0.20, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',
@@ -990,10 +990,10 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
   const faceYPct = region ? `${Math.round((region.y + region.h / 2) * 100)}%` : 'center';
   const heroBgPos = `${faceXPct} ${faceYPct}`;
 
-  // With background centered on face, the marker is always near center horizontally
-  // Vertical position maps the face center within the hero's paddingTop:62% container
+  // With background-position centered on the face, the face renders near the
+  // center of the hero container — so the marker goes at center too
   const markerLeft = '50%';
-  const markerTop  = region ? `${Math.round((region.y + region.h / 2) * 100)}%` : '38%';
+  const markerTop  = '45%';  // slightly above center looks natural
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>

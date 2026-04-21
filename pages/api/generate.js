@@ -94,26 +94,24 @@ async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
   const prediction = await callReplicate({
     version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
     input: {
-      image:               faceImage,
+      image:   faceImage,
       prompt: [
+        'full color portrait, warm natural skin tones',
         styleDesc,
-        'colored portrait, warm ochre skin tone, flesh colored face',
-        'traditional Chinese court robes, hanfu',
-        'mineral pigment color painting on silk',
-        'soft flat lighting, painted skin texture',
+        'traditional Chinese court hanfu robes, warm ochre complexion',
+        'mineral pigment color on silk, soft painted texture',
         'fine brushwork, masterwork quality',
       ].join(', '),
       negative_prompt: [
-        'black and white', 'grayscale', 'monochrome', 'ink wash', 'sumi-e',
-        'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
+        'black and white', 'grayscale', 'monochrome', 'desaturated', 'colorless',
+        'ink wash', 'sumi-e', 'ink painting',
+        'japanese', 'japan', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
         'photorealistic', 'photograph', 'DSLR', 'modern clothing',
-        'oil painting', 'western art', '3d render',
-        'blurry', 'watermark', 'text', 'bad anatomy',
+        'western art', '3d render', 'blurry', 'watermark', 'bad anatomy',
       ].join(', '),
-      ip_adapter_image:    styleImageUrl,
-      ip_adapter_scale:    0.35,  // lowered from 0.85 — high scale was pulling face color toward painting's muted palette causing gray output
-      sdxl_weights:        'juggernaut-xl-v8',
-      guidance_scale:      7.5,
+      // No ip_adapter_image — painting thumbnail was pulling colors toward muted palette causing gray
+      sdxl_weights:        'dreamshaper-xl',   // produces colored output reliably
+      guidance_scale:      8.0,
       num_inference_steps: 35,
       width:               640,
       height:              640,

@@ -20,7 +20,7 @@ const FACE_REGIONS = {
   },
   hanxizai: {
     guest:  { x:0.76, y:0.01, w:0.11, h:0.16, angle:5  },
-    host:   { x:0.33, y:0.20, w:0.12, h:0.20, angle:-3 },  // adjusted: slightly left, higher
+    host:   { x:0.30, y:0.30, w:0.13, h:0.22, angle:-3 },  // Han Xizai seated, left area, middle height
     dancer: { x:0.47, y:0.25, w:0.08, h:0.15, angle:-5 },
   },
   bunianta: {
@@ -96,8 +96,13 @@ export default async function handler(req, res) {
     let faceImg = sharp(faceBuf)
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
 
+    // Rotate to match figure's head angle in the painting
+    // Use 'cover' background fill so rotation doesn't introduce transparent corners
+    // that would create artifacts when composited
     if (region.angle !== 0) {
-      faceImg = faceImg.rotate(region.angle, { background: { r:0, g:0, b:0, alpha:0 } });
+      faceImg = faceImg.rotate(region.angle, {
+        background: { r: 128, g: 100, b: 70, alpha: 1 }, // warm neutral fill for corners
+      });
     }
 
     const facePng = await faceImg
