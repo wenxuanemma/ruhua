@@ -19,12 +19,12 @@ const FACE_REGIONS = {
     boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
   },
   hanxizai: {
-    guest:  { x:0.72, y:0.00, w:0.15, h:0.22, angle:5  },
-    host:   { x:0.26, y:0.26, w:0.16, h:0.26, angle:-3 },
-    dancer: { x:0.43, y:0.22, w:0.12, h:0.20, angle:-5 },
+    guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5 },
+    host:   { x:0.35, y:0.28, w:0.10, h:0.16, angle:-3 },
+    dancer: { x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 },
   },
   bunianta: {
-    official: { x:0.34, y:0.34, w:0.07, h:0.15, angle:3  },
+    official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3 },
     envoy:    { x:0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
   },
   qianli: {
@@ -147,23 +147,19 @@ export default async function handler(req, res) {
     // 韩熙载夜宴图 → dark (0.3–0.4), 千里江山图 → bright (0.6–0.7), 宫乐图 → warm mid (0.5)
     const paintingBrightness = (pR + pG + pB) / 3 / 255;
     const faceBrightness     = ((fR + fG + fB) / 3) / fp / 255;
-    const targetBrightness   = faceBrightness + (paintingBrightness - faceBrightness) * 0.60;
+    const targetBrightness   = faceBrightness + (paintingBrightness - faceBrightness) * 0.40;  // 40%, was 60%
     const brightnessRatio    = faceBrightness > 0.01
       ? Math.max(0.4, Math.min(1.5, targetBrightness / faceBrightness))
       : 1.0;
 
-    // ── Apply saturation + adaptive brightness + color tint in one step ───────
-    const t = 0.55;
-    const tR = Math.round((pR - fR/fp) * t);
-    const tG = Math.round((pG - fG/fp) * t);
-    const tB = Math.round((pB - fB/fp) * t);
-
+    // ── Apply brightness only — remove tint which was causing desaturation ──────
+    // Sharp's tint() replaces ALL chroma with the tint color (near-gray for dark paintings)
+    // causing the gray face issue. Brightness matching alone is sufficient.
     const colorMatchedFace = await sharp(facePng)
       .modulate({
-        saturation: 0.88,  // mild reduction only — paintify now handles color rendering
+        saturation: 0.92,          // very mild reduction
         brightness: brightnessRatio,
       })
-      .tint({ r: 128 + tR, g: 128 + tG, b: 128 + tB })
       .png()
       .toBuffer();
 
