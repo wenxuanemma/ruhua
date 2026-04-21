@@ -20,7 +20,7 @@ const FACE_REGIONS = {
   },
   hanxizai: {
     guest:  { x:0.76, y:0.01, w:0.11, h:0.16, angle:5  },
-    host:   { x:0.35, y:0.27, w:0.11, h:0.18, angle:-3 },
+    host:   { x:0.33, y:0.20, w:0.12, h:0.20, angle:-3 },  // adjusted: slightly left, higher
     dancer: { x:0.47, y:0.25, w:0.08, h:0.15, angle:-5 },
   },
   bunianta: {

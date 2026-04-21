@@ -111,7 +111,7 @@ async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
         'blurry', 'watermark', 'text', 'bad anatomy',
       ].join(', '),
       ip_adapter_image:    styleImageUrl,
-      ip_adapter_scale:    0.85,
+      ip_adapter_scale:    0.35,  // lowered from 0.85 — high scale was pulling face color toward painting's muted palette causing gray output
       sdxl_weights:        'juggernaut-xl-v8',
       guidance_scale:      7.5,
       num_inference_steps: 35,
