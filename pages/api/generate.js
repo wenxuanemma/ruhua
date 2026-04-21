@@ -96,21 +96,19 @@ async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
     input: {
       image:   faceImage,
       prompt: [
-        'full color portrait, warm natural skin tones',
-        styleDesc,
-        'traditional Chinese court hanfu robes, warm ochre complexion',
-        'mineral pigment color on silk, soft painted texture',
-        'fine brushwork, masterwork quality',
+        'portrait of a person, warm natural skin tones, full color',
+        'traditional Chinese court costume, hanfu silk robes',
+        'soft warm lighting, gentle expression',
+        'elegant court figure, detailed face',
       ].join(', '),
       negative_prompt: [
-        'black and white', 'grayscale', 'monochrome', 'desaturated', 'colorless',
-        'ink wash', 'sumi-e', 'ink painting',
-        'japanese', 'japan', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
-        'photorealistic', 'photograph', 'DSLR', 'modern clothing',
-        'western art', '3d render', 'blurry', 'watermark', 'bad anatomy',
+        'black and white', 'grayscale', 'monochrome', 'desaturated',
+        'ink wash', 'sumi-e', 'sketch', 'drawing',
+        'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
+        'photorealistic background', 'modern clothing', 'western',
+        'blurry', 'watermark', 'bad anatomy', 'disfigured',
       ].join(', '),
-      // No ip_adapter_image — painting thumbnail was pulling colors toward muted palette causing gray
-      sdxl_weights:        'dreamshaper-xl',   // produces colored output reliably
+      sdxl_weights:        'protovision-xl-high-fidel',  // produces color reliably; dreamshaper-xl goes gray with painting prompts
       guidance_scale:      8.0,
       num_inference_steps: 35,
       width:               640,

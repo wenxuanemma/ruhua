@@ -19,9 +19,9 @@ const FACE_REGIONS = {
     boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
   },
   hanxizai: {
-    guest:  { x:0.76, y:0.01, w:0.11, h:0.16, angle:5  },
-    host:   { x:0.30, y:0.30, w:0.13, h:0.22, angle:-3 },  // Han Xizai seated, left area, middle height
-    dancer: { x:0.47, y:0.25, w:0.08, h:0.15, angle:-5 },
+    guest:  { x:0.72, y:0.00, w:0.15, h:0.22, angle:5  },
+    host:   { x:0.26, y:0.26, w:0.16, h:0.26, angle:-3 },
+    dancer: { x:0.43, y:0.22, w:0.12, h:0.20, angle:-5 },
   },
   bunianta: {
     official: { x:0.34, y:0.34, w:0.07, h:0.15, angle:3  },

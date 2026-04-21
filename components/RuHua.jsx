@@ -111,7 +111,7 @@ const PAINTINGS = [
     color: '#8a4020',
     figures: [
       { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.68, y:0.18, w:0.09, h:0.22, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.30, y:0.30, w:0.13, h:0.22, angle:-3 } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.26, y:0.26, w:0.16, h:0.26, angle:-3 } },
       { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.46, y:0.22, w:0.08, h:0.20, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',
@@ -984,35 +984,32 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
     };
   }
 
-  // Center the hero image on the face region so it's always visible
-  // For wide scrolls (background: cover), default center crops out faces at edges
-  const faceXPct = region ? `${Math.round((region.x + region.w / 2) * 100)}%` : 'center';
-  const faceYPct = region ? `${Math.round((region.y + region.h / 2) * 100)}%` : 'center';
-  const heroBgPos = `${faceXPct} ${faceYPct}`;
-
-  // With background-position centered on the face, the face renders near the
-  // center of the hero container — so the marker goes at center too
-  const markerLeft = '50%';
-  const markerTop  = '45%';  // slightly above center looks natural
+  // Face position for object-position and marker
+  const faceXPct = region ? `${Math.round((region.x + region.w / 2) * 100)}%` : '50%';
+  const faceYPct = region ? `${Math.round((region.y + region.h / 2) * 100)}%` : '45%';
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
-      {/* Hero — full composited painting, centered on face */}
-      <div style={{
-        background: imgUrl ? `url(${imgUrl}) ${heroBgPos}/cover` : painting?.grad,
-        position:'relative', paddingTop:'62%', overflow:'hidden',
-        transition:'background .4s ease',
-      }}>
+      {/* Hero — img with object-position correctly centers on face region */}
+      <div style={{ position:'relative', paddingTop:'62%', overflow:'hidden' }}>
+        {imgUrl
+          ? <img src={imgUrl} alt={painting?.title} style={{
+              position:'absolute', inset:0, width:'100%', height:'100%',
+              objectFit:'cover',
+              objectPosition:`${faceXPct} ${faceYPct}`,
+            }} />
+          : <div style={{ position:'absolute', inset:0, background:painting?.grad }} />
+        }
         <div style={{ position:'absolute', inset:0 }}>
-          {/* Gradient overlay bottom only — don't obscure the painting */}
+          {/* Gradient overlay */}
           <div style={{ position:'absolute', inset:0,
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
-          {/* Dynamic "你在此处" marker at actual face position */}
+          {/* 你在此处 marker — at same position as object-position so it lands on the face */}
           <div style={{
             position:'absolute',
-            left: markerLeft,
-            top: markerTop,
+            left: faceXPct,
+            top:  faceYPct,
             transform:'translate(-50%, -100%)',
             textAlign:'center',
             pointerEvents:'none',
