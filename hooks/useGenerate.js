@@ -43,7 +43,7 @@ export function useGenerate() {
     }, POLL_INTERVAL_MS);
   }), []);
 
-  const runStyleTransfer = useCallback(async ({ selfie, painting, styleImageUrl }) => {
+  const runStyleTransfer = useCallback(async ({ selfie, painting, styleImageUrl, faceBounds }) => {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -53,6 +53,7 @@ export function useGenerate() {
         styleImageUrl,
         paintingTitle: painting.title,
         dynasty:       painting.dynasty,
+        faceBounds,    // detected face region in the selfie (may be null)
       }),
     });
     const data = await res.json();
@@ -61,7 +62,7 @@ export function useGenerate() {
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
 
-  const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl }) => {
+  const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
     const res = await fetch('/api/composite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -71,6 +72,7 @@ export function useGenerate() {
         figureId:        figure.id,
         paintingImageUrl,
         dynasty:         painting.dynasty,
+        faceBounds,
       }),
     });
     const data = await res.json();
@@ -80,7 +82,7 @@ export function useGenerate() {
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
 
-  const generate = useCallback(async ({ selfie, painting, figure, styleImageUrl }) => {
+  const generate = useCallback(async ({ selfie, painting, figure, styleImageUrl, faceBounds }) => {
     stopPolling();
     setStatus('submitting');
     setOutputUrl(null);
@@ -90,7 +92,7 @@ export function useGenerate() {
 
     try {
       setStatus('styling');
-      const styled = await runStyleTransfer({ selfie, painting, styleImageUrl });
+      const styled = await runStyleTransfer({ selfie, painting, styleImageUrl, faceBounds });
       setStyledUrl(styled);
 
       setStatus('compositing');
@@ -99,6 +101,7 @@ export function useGenerate() {
         painting,
         figure,
         paintingImageUrl: styleImageUrl,
+        faceBounds,
       });
 
       setOutputUrl(composite);

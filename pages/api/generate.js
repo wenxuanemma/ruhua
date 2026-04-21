@@ -58,31 +58,62 @@ async function getPredictionOutput(prediction) {
   throw new Error('No prediction ID or output');
 }
 
-// ── Stage 1: InstantID — identity-preserving style transfer ──────────────────
-async function runInstantID({ selfie, styleImageUrl, dynasty }) {
+async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, ink on silk';
+
+  // If face bounds detected, crop selfie to face region before sending to InstantID
+  // This focuses the model on the actual face regardless of where in frame it was
+  let faceImage = selfie;
+  if (faceBounds) {
+    try {
+      const sharp = (await import('sharp')).default;
+      const base64 = selfie.split(',')[1];
+      const buf = Buffer.from(base64, 'base64');
+      const meta = await sharp(buf).metadata();
+      const iw = meta.width, ih = meta.height;
+      const left   = Math.round(faceBounds.x * iw);
+      const top    = Math.round(faceBounds.y * ih);
+      const width  = Math.round(faceBounds.w * iw);
+      const height = Math.round(faceBounds.h * ih);
+      const cropped = await sharp(buf)
+        .extract({
+          left:   Math.max(0, left),
+          top:    Math.max(0, top),
+          width:  Math.min(width, iw - left),
+          height: Math.min(height, ih - top),
+        })
+        .resize(640, 640, { fit: 'cover', position: 'centre' })
+        .jpeg({ quality: 92 })
+        .toBuffer();
+      faceImage = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+    } catch (e) {
+      console.warn('Face crop failed, using full selfie:', e.message);
+    }
+  }
 
   const prediction = await callReplicate({
     version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
     input: {
-      image:               selfie,
+      image:               faceImage,
       prompt: [
         styleDesc,
-        'portrait figure in traditional court robes',
-        'fine line brushwork, Chinese court aesthetic',
-        'warm ochre and vermillion palette',
-        'masterwork Chinese figure painting',
+        'colored portrait, warm ochre skin tone, flesh colored face',
+        'traditional Chinese court robes, hanfu',
+        'mineral pigment color painting on silk',
+        'soft flat lighting, painted skin texture',
+        'fine brushwork, masterwork quality',
       ].join(', '),
       negative_prompt: [
+        'black and white', 'grayscale', 'monochrome', 'ink wash', 'sumi-e',
         'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
-        'photorealistic photograph', 'DSLR', 'modern clothing',
+        'photorealistic', 'photograph', 'DSLR', 'modern clothing',
         'oil painting', 'western art', '3d render',
         'blurry', 'watermark', 'text', 'bad anatomy',
       ].join(', '),
       ip_adapter_image:    styleImageUrl,
       ip_adapter_scale:    0.85,
       sdxl_weights:        'juggernaut-xl-v8',
-      guidance_scale:      7,
+      guidance_scale:      7.5,
       num_inference_steps: 35,
       width:               640,
       height:              640,
@@ -132,25 +163,16 @@ async function paintifyFace({ faceUrl, dynasty }) {
 
 // ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'selfie is required' });
 
-  const { selfie, paintingId, styleImageUrl, paintingTitle, dynasty } = req.body;
+  const { selfie, paintingId, styleImageUrl, paintingTitle, dynasty, faceBounds } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
   try {
-    // Stage 1: InstantID — get face in loose painting style
-    const styledFaceUrl = await runInstantID({ selfie, styleImageUrl, dynasty });
-
-    // Stage 2: Paintify — push it all the way to looking painted
-    let paintedFaceUrl;
-    try {
-      paintedFaceUrl = await paintifyFace({ faceUrl: styledFaceUrl, dynasty });
-    } catch (paintErr) {
-      console.warn('Paintify failed, falling back to styled face:', paintErr.message);
-      paintedFaceUrl = styledFaceUrl; // graceful fallback
-    }
-
-    return res.status(200).json({ outputUrl: paintedFaceUrl });
+    // If face bounds were detected client-side, pass them to InstantID
+    // so it focuses on the actual face region rather than the full selfie frame
+    const outputUrl = await runInstantID({ selfie, styleImageUrl, dynasty, faceBounds });
+    return res.status(200).json({ outputUrl });
 
   } catch (err) {
     console.error('Generate error:', err);

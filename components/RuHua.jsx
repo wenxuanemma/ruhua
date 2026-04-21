@@ -550,19 +550,55 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onBack })
           canvas.width = video.videoWidth || 720;
           canvas.height = video.videoHeight || 960;
           const ctx = canvas.getContext('2d');
-          // Mirror horizontally (selfie convention)
           ctx.translate(canvas.width, 0);
           ctx.scale(-1, 1);
           ctx.drawImage(video, 0, 0);
         }
         setCamState('flash');
-        setTimeout(() => {
+        setTimeout(async () => {
           const img = canvasRef.current?.toDataURL('image/jpeg', 0.92);
           setCapturedImg(img);
           setCamState('done');
-          if (img) onCaptured?.(img);  // pass selfie up to root
-          // Stop stream to save battery
           streamRef.current?.getTracks().forEach(t => t.stop());
+
+          if (!img) return;
+
+          // Detect face bounds using browser's FaceDetector API (fast, free, no library)
+          // Falls back gracefully if not supported
+          let faceBounds = null;
+          try {
+            if ('FaceDetector' in window) {
+              const detector = new window.FaceDetector({ fastMode: true });
+              const blob = await (await fetch(img)).blob();
+              const bitmap = await createImageBitmap(blob);
+              const faces = await detector.detect(bitmap);
+              if (faces.length > 0) {
+                // Take the largest face
+                const face = faces.reduce((a, b) =>
+                  (b.boundingBox.width * b.boundingBox.height) >
+                  (a.boundingBox.width * a.boundingBox.height) ? b : a
+                );
+                const iw = bitmap.width, ih = bitmap.height;
+                // Add 25% padding around detected face so we include forehead/chin/ears
+                const pad = 0.25;
+                const fx = face.boundingBox.x / iw;
+                const fy = face.boundingBox.y / ih;
+                const fw = face.boundingBox.width / iw;
+                const fh = face.boundingBox.height / ih;
+                faceBounds = {
+                  x: Math.max(0, fx - fw * pad),
+                  y: Math.max(0, fy - fh * pad),
+                  w: Math.min(1, fw * (1 + pad * 2)),
+                  h: Math.min(1, fh * (1 + pad * 2.5)), // extra vertical for chin
+                };
+              }
+            }
+          } catch (e) {
+            // FaceDetector not available — composite.js will use full-height fallback
+            console.log('FaceDetector unavailable, using fallback crop');
+          }
+
+          onCaptured?.(img, faceBounds);
         }, 380);
       }, 700);
       return () => clearTimeout(t);
@@ -1217,6 +1253,7 @@ export default function RuHua() {
   const [painting, setPainting] = useState(null);
   const [figure, setFigure] = useState(null);
   const [selfie, setSelfie] = useState(null);
+  const [faceBounds, setFaceBounds] = useState(null);
   const [imgs, setImgs] = useState({});
 
   const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen } = useGenerate();
@@ -1249,6 +1286,7 @@ export default function RuHua() {
     setPainting(null);
     setFigure(null);
     setSelfie(null);
+    setFaceBounds(null);
     resetGen();
   };
 
@@ -1264,7 +1302,7 @@ export default function RuHua() {
                                       onSelect={f => { setFigure(f); setScreen('selfie'); }}
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
-                                      onCaptured={img => setSelfie(img)}
+                                      onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
                                       onConfirm={() => {
                                         setScreen('processing');
                                         generate({
@@ -1272,6 +1310,7 @@ export default function RuHua() {
                                           painting,
                                           figure,
                                           styleImageUrl: imgs[painting.id],
+                                          faceBounds,
                                         });
                                       }}
                                       onBack={() => setScreen('figure')} />}

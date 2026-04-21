@@ -51,7 +51,7 @@ async function fetchImageBuffer(url) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { styledFaceUrl, paintingImageUrl, paintingId, figureId } = req.body;
+  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds } = req.body;
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
@@ -74,12 +74,24 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Crop face tighter — SDXL background bleeds into feather edges causing white halo
-    // Use 55% width / 65% height (was 64%/72%) to exclude more background
-    const cropX = Math.round(FW * 0.225);
-    const cropY = Math.round(FH * 0.04);
-    const cropW = Math.round(FW * 0.55);
-    const cropH = Math.round(FH * 0.65);
+    // Crop face from InstantID output
+    // If faceBounds were detected client-side, use them for precise crop
+    // Otherwise fall back to full-frame crop (oval mask defines the blend boundary)
+    let cropX, cropY, cropW, cropH;
+    if (faceBounds) {
+      // InstantID was given the pre-cropped face image, so the output fills the frame
+      // Use a generous center crop since the face fills most of the 640x640
+      cropX = Math.round(FW * 0.10);
+      cropY = Math.round(FH * 0.05);
+      cropW = Math.round(FW * 0.80);
+      cropH = Math.round(FH * 0.90);
+    } else {
+      // No detection — use full width, full height so chin is never cut
+      cropX = Math.round(FW * 0.15);
+      cropY = 0;
+      cropW = Math.round(FW * 0.70);
+      cropH = FH;
+    }
 
     let faceImg = sharp(faceBuf)
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
@@ -142,24 +154,29 @@ export default async function handler(req, res) {
     const tB = Math.round((pB - fB/fp) * t);
 
     const colorMatchedFace = await sharp(facePng)
-      .modulate({ saturation: 0.72, brightness: brightnessRatio })
+      .modulate({
+        saturation: 0.88,  // mild reduction only — paintify now handles color rendering
+        brightness: brightnessRatio,
+      })
       .tint({ r: 128 + tR, g: 128 + tG, b: 128 + tB })
       .png()
       .toBuffer();
 
-    // Tight oval mask — fast falloff to eliminate white halo from SDXL background
+    // Oval mask — covers forehead to chin
+    // Center at 42% vertically (face center in a full-height crop is upper half)
+    // Taller than wide to match face proportions
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="43%" rx="50%" ry="50%">
-          <stop offset="50%" stop-color="white" stop-opacity="1"/>
-          <stop offset="70%" stop-color="white" stop-opacity="0.85"/>
-          <stop offset="85%" stop-color="white" stop-opacity="0.3"/>
-          <stop offset="95%" stop-color="white" stop-opacity="0.05"/>
+        <radialGradient id="g" cx="50%" cy="40%" rx="50%" ry="50%">
+          <stop offset="45%" stop-color="white" stop-opacity="1"/>
+          <stop offset="65%" stop-color="white" stop-opacity="0.85"/>
+          <stop offset="82%" stop-color="white" stop-opacity="0.3"/>
+          <stop offset="93%" stop-color="white" stop-opacity="0.05"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.43}"
-               rx="${targetW*0.44}" ry="${targetH*0.44}"
+      <ellipse cx="${targetW*0.50}" cy="${targetH*0.40}"
+               rx="${targetW*0.46}" ry="${targetH*0.50}"
                fill="url(#g)"/>
     </svg>`;
 
