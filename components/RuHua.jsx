@@ -110,9 +110,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#10060300 0%,#100603 0%,#3a100a 24%,#6a2c16 50%,#4a1e0e 74%,#100603 100%)',
     color: '#8a4020',
     figures: [
-      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.68, y:0.18, w:0.09, h:0.22, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.26, y:0.26, w:0.16, h:0.26, angle:-3 } },
-      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.46, y:0.22, w:0.08, h:0.20, angle:-5 } },
+      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.77, y:0.01, w:0.10, h:0.18, angle:5  } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.35, y:0.28, w:0.10, h:0.16, angle:-3 } },
+      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
@@ -132,7 +132,7 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1c1006 0%,#5a3818 24%,#a87040 50%,#7a5028 74%,#1c1006 100%)',
     color: '#a87040',
     figures: [
-      { id:'official', name:'唐朝官员', en:'Tang Court Official', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.46, y:0.18, w:0.09, h:0.28, angle:3  } },
+      { id:'official', name:'唐朝官员', en:'Tang Court Official', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.35, y:0.35, w:0.06, h:0.14, angle:3  } },
       { id:'envoy',    name:'吐蕃使节', en:'Tibetan Envoy',       pose:'3/4 turn',     rec:false, faceRegion:{ x:0.32, y:0.20, w:0.09, h:0.28, angle:-5 } },
     ],
     youAre: '唐朝官员 · Imperial Official',
@@ -406,7 +406,7 @@ function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
 
 // ─── Figure Screen ───────────────────────────────────────────────────────────
 
-function FigureScreen({ painting, imgs, onSelect, onBack }) {
+function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
   if (!painting) return null;
   const imgUrl = imgs?.[painting.id];
   return (
@@ -489,8 +489,9 @@ function FigureScreen({ painting, imgs, onSelect, onBack }) {
         <div className="r6" style={{ marginTop:20, padding:'12px 14px',
           border:`1px solid ${C.borderSub}`, background:'rgba(201,168,76,.04)' }}>
           <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
-            💡 Near-frontal figures yield the most faithful style transfer.
-            Profile figures may require a slight head tilt to match.
+            {hasCachedSelfie
+              ? '✓ 使用上次自拍 · 直接入画，无需重新拍照'
+              : '💡 Near-frontal figures yield the most faithful style transfer.'}
           </div>
         </div>
       </div>
@@ -1295,7 +1296,23 @@ export default function RuHua() {
                                       onSelect={p => { setPainting(p); setScreen('figure'); }}
                                       onBack={() => setScreen('home')} />}
         {screen === 'figure'     && <FigureScreen painting={painting} imgs={imgs}
-                                      onSelect={f => { setFigure(f); setScreen('selfie'); }}
+                                      hasCachedSelfie={!!styledUrl}
+                                      onSelect={f => {
+                                        setFigure(f);
+                                        if (styledUrl) {
+                                          // Selfie already styled — skip selfie screen, go straight to processing
+                                          setScreen('processing');
+                                          generate({
+                                            selfie,
+                                            painting,
+                                            figure: f,
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
+                                        } else {
+                                          setScreen('selfie');
+                                        }
+                                      }}
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}

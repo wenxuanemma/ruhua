@@ -108,8 +108,12 @@ async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
         'photorealistic background', 'modern clothing', 'western',
         'blurry', 'watermark', 'bad anatomy', 'disfigured',
       ].join(', '),
-      sdxl_weights:        'protovision-xl-high-fidel',  // produces color reliably; dreamshaper-xl goes gray with painting prompts
-      guidance_scale:      8.0,
+      // ip_adapter at 0.3 provides painting background/composition context
+      // without pulling face color toward muted palette (0.85 caused gray)
+      ip_adapter_image:    styleImageUrl,
+      ip_adapter_scale:    0.30,
+      sdxl_weights:        'protovision-xl-high-fidel',
+      guidance_scale:      7.5,
       num_inference_steps: 35,
       width:               640,
       height:              640,

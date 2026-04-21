@@ -19,12 +19,12 @@ const FACE_REGIONS = {
     boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
   },
   hanxizai: {
-    guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5 },
+    guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5  },
     host:   { x:0.35, y:0.28, w:0.10, h:0.16, angle:-3 },
     dancer: { x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 },
   },
   bunianta: {
-    official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3 },
+    official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3  },
     envoy:    { x:0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
   },
   qianli: {
@@ -106,7 +106,7 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'fill' })
+      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
       .png()
       .toBuffer();
 
@@ -211,10 +211,9 @@ export default async function handler(req, res) {
       .jpeg({ quality: 92 })
       .toBuffer();
 
-    // Also produce a square profile crop centered on the face region
-    // Expand the region slightly so it includes neck/shoulders
-    const padX = Math.round(targetW * 0.5);
-    const padY = Math.round(targetH * 0.4);
+    // Profile crop — generous padding around face region
+    const padX = Math.round(targetW * 0.8);
+    const padY = Math.round(targetH * 0.7);
     const cropLeft   = Math.max(0, targetX - padX);
     const cropTop    = Math.max(0, targetY - padY);
     const cropRight  = Math.min(PW, targetX + targetW + padX);
