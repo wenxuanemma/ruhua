@@ -77,20 +77,24 @@ export default async function handler(req, res) {
     // Crop face from InstantID output
     // If faceBounds were detected client-side, use them for precise crop
     // Otherwise fall back to full-frame crop (oval mask defines the blend boundary)
+    // Crop the InstantID output to just the head/face area.
+    // InstantID centers the face in the 640x640 output.
+    // Cropping tightly eliminates the SDXL-generated background (green/gray tones)
+    // that bleeds through the oval feather edges — especially visible for large face regions.
     let cropX, cropY, cropW, cropH;
     if (faceBounds) {
-      // InstantID was given the pre-cropped face image, so the output fills the frame
-      // Use a generous center crop since the face fills most of the 640x640
-      cropX = Math.round(FW * 0.10);
-      cropY = Math.round(FH * 0.05);
-      cropW = Math.round(FW * 0.80);
-      cropH = Math.round(FH * 0.90);
+      // Face was pre-cropped before InstantID, so it fills most of the frame.
+      // Crop to center 65% width, top 65% height — captures head+neck, excludes background below.
+      cropX = Math.round(FW * 0.175);
+      cropY = Math.round(FH * 0.03);
+      cropW = Math.round(FW * 0.65);
+      cropH = Math.round(FH * 0.65);
     } else {
-      // No detection — use full width, full height so chin is never cut
+      // No detection — face may be anywhere in frame; use generous crop
       cropX = Math.round(FW * 0.15);
       cropY = 0;
       cropW = Math.round(FW * 0.70);
-      cropH = FH;
+      cropH = Math.round(FH * 0.72); // was full height — caused green background to show
     }
 
     let faceImg = sharp(faceBuf)
@@ -163,12 +167,10 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Oval mask — covers forehead to chin
-    // Center at 42% vertically (face center in a full-height crop is upper half)
-    // Taller than wide to match face proportions
+    // Oval mask — face is in upper portion of the tighter crop
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="40%" rx="50%" ry="50%">
+        <radialGradient id="g" cx="50%" cy="38%" rx="50%" ry="50%">
           <stop offset="45%" stop-color="white" stop-opacity="1"/>
           <stop offset="65%" stop-color="white" stop-opacity="0.85"/>
           <stop offset="82%" stop-color="white" stop-opacity="0.3"/>
@@ -176,8 +178,8 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.40}"
-               rx="${targetW*0.46}" ry="${targetH*0.50}"
+      <ellipse cx="${targetW*0.50}" cy="${targetH*0.38}"
+               rx="${targetW*0.46}" ry="${targetH*0.46}"
                fill="url(#g)"/>
     </svg>`;
 
