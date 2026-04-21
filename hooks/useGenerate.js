@@ -1,23 +1,40 @@
 // hooks/useGenerate.js
 //
-// Two-stage pipeline:
-//   Stage 1 — InstantID style transfer  → styledFaceUrl
-//   Stage 2 — Inpainting composite      → outputUrl (face in painting)
+// Two-stage pipeline with selfie caching:
+//   Stage 1 — InstantID style transfer  → styledFaceUrl (cached per selfie)
+//   Stage 2 — Sharp composite           → outputUrl + profileUrl
 //
-// status values:
-//   'idle' | 'submitting' | 'styling' | 'compositing' | 'succeeded' | 'failed'
+// Caching: if the same selfie is reused (switching painting/figure),
+// Stage 1 is skipped and only Stage 2 reruns (~3s instead of ~35s).
+//
+// status: 'idle' | 'submitting' | 'styling' | 'compositing' | 'succeeded' | 'failed'
 
 import { useState, useRef, useCallback } from 'react';
 
 const POLL_INTERVAL_MS = 2500;
 const MAX_POLLS = 48;
 
+// Simple hash of a string — used as cache key for the selfie
+function quickHash(str) {
+  let h = 0;
+  for (let i = 0; i < Math.min(str.length, 2000); i++) {
+    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  }
+  return h.toString(36);
+}
+
 export function useGenerate() {
-  const [status, setStatus]       = useState('idle');
-  const [outputUrl, setOutputUrl] = useState(null);
-  const [styledUrl, setStyledUrl] = useState(null);
+  const [status, setStatus]         = useState('idle');
+  const [outputUrl, setOutputUrl]   = useState(null);
+  const [styledUrl, setStyledUrl]   = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
-  const [error, setError]         = useState(null);
+  const [error, setError]           = useState(null);
+
+  // Cache: selfieHash → styledFaceUrl
+  // Persists across painting/figure switches within the same session
+  const styledCache = useRef({});
+  const currentSelfieHash = useRef(null);
+
   const pollRef   = useRef(null);
   const pollCount = useRef(0);
 
@@ -53,7 +70,7 @@ export function useGenerate() {
         styleImageUrl,
         paintingTitle: painting.title,
         dynasty:       painting.dynasty,
-        faceBounds,    // detected face region in the selfie (may be null)
+        faceBounds,
       }),
     });
     const data = await res.json();
@@ -86,16 +103,34 @@ export function useGenerate() {
     stopPolling();
     setStatus('submitting');
     setOutputUrl(null);
-    setStyledUrl(null);
     setProfileUrl(null);
     setError(null);
 
-    try {
-      setStatus('styling');
-      const styled = await runStyleTransfer({ selfie, painting, styleImageUrl, faceBounds });
-      setStyledUrl(styled);
+    const selfieHash = quickHash(selfie);
+    const cachedStyled = styledCache.current[selfieHash];
+    const isSameSelfie = cachedStyled != null;
 
-      setStatus('compositing');
+    try {
+      let styled;
+
+      if (isSameSelfie) {
+        // Same selfie — skip InstantID, reuse cached styled face
+        console.log('Reusing cached styled face for selfie', selfieHash);
+        styled = cachedStyled;
+        setStyledUrl(styled);
+        // Jump straight to compositing
+        setStatus('compositing');
+      } else {
+        // New selfie — run InstantID
+        setStatus('styling');
+        styled = await runStyleTransfer({ selfie, painting, styleImageUrl, faceBounds });
+        // Cache for this session
+        styledCache.current[selfieHash] = styled;
+        currentSelfieHash.current = selfieHash;
+        setStyledUrl(styled);
+        setStatus('compositing');
+      }
+
       const composite = await runComposite({
         styledFaceUrl:    styled,
         painting,
@@ -114,6 +149,13 @@ export function useGenerate() {
     }
   }, [runStyleTransfer, runComposite]);
 
+  // clearSelfieCache: call this when user explicitly takes a new selfie
+  const clearSelfieCache = useCallback(() => {
+    styledCache.current = {};
+    currentSelfieHash.current = null;
+    setStyledUrl(null);
+  }, []);
+
   const reset = useCallback(() => {
     stopPolling();
     setStatus('idle');
@@ -121,7 +163,14 @@ export function useGenerate() {
     setStyledUrl(null);
     setProfileUrl(null);
     setError(null);
+    // Note: intentionally NOT clearing styledCache on reset
+    // so switching paintings from result screen is still fast
   }, []);
 
-  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset };
+  const fullReset = useCallback(() => {
+    reset();
+    clearSelfieCache();
+  }, [reset, clearSelfieCache]);
+
+  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache };
 }

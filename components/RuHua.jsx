@@ -500,7 +500,7 @@ function FigureScreen({ painting, imgs, onSelect, onBack }) {
 
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
-function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onBack }) {
+function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake, onBack }) {
   const [camState, setCamState] = useState('starting'); // starting | live | counting | flash | done | error
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(null);
@@ -615,6 +615,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onBack })
     setCapturedImg(null);
     setCount(3);
     setCamState('starting');
+    onRetake?.();  // clear styled face cache — new selfie = new generation
     try {
       const stream = await navigator.mediaDevices.getUserMedia({
         video: { facingMode: 'user', width: { ideal: 720 }, height: { ideal: 960 } },
@@ -955,7 +956,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onReset, onNew }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const imgUrl = generatedUrl || imgs?.[painting?.id];
   const region = figure?.faceRegion;
@@ -1233,13 +1234,19 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
             }}>
               换幅画
             </button>
-            <button onClick={onReset} className="btn" style={{
+            <button onClick={onChangeFigure} className="btn" style={{
               flex:1, border:`1px solid ${C.border}`,
               color:C.silkDim, fontFamily:F.brush, fontSize:15, padding:'12px',
             }}>
-              重新开始
+              换角色
             </button>
           </div>
+          <button onClick={onReset} className="btn" style={{
+            border:`1px solid rgba(201,168,76,0.15)`,
+            color:'rgba(242,226,192,0.3)', fontFamily:F.serif, fontSize:13, padding:'10px',
+          }}>
+            重新拍照
+          </button>
         </div>
       </div>
     </div>
@@ -1256,7 +1263,7 @@ export default function RuHua() {
   const [faceBounds, setFaceBounds] = useState(null);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache } = useGenerate();
 
   // Map status → processing step
   const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
@@ -1287,7 +1294,7 @@ export default function RuHua() {
     setFigure(null);
     setSelfie(null);
     setFaceBounds(null);
-    resetGen();
+    fullReset();  // clears styled cache too — new selfie required
   };
 
   return (
@@ -1303,6 +1310,7 @@ export default function RuHua() {
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
+                                      onRetake={() => clearSelfieCache()}
                                       onConfirm={() => {
                                         setScreen('processing');
                                         generate({
@@ -1319,7 +1327,18 @@ export default function RuHua() {
                                       generatedUrl={outputUrl}
                                       profileUrl={profileUrl}
                                       onReset={reset}
-                                      onNew={() => { setScreen('gallery'); setPainting(null); setFigure(null); resetGen(); }} />}
+                                      onChangeFigure={() => {
+                                        // Keep styled face cache — only rerun compositing
+                                        resetGen();
+                                        setScreen('figure');
+                                      }}
+                                      onNew={() => {
+                                        // Keep styled face cache — switch painting, rerun compositing
+                                        resetGen();
+                                        setPainting(null);
+                                        setFigure(null);
+                                        setScreen('gallery');
+                                      }} />}
       </div>
     </div>
   );
