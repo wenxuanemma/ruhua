@@ -111,7 +111,7 @@ const PAINTINGS = [
     color: '#8a4020',
     figures: [
       { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.77, y:0.01, w:0.10, h:0.18, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.35, y:0.28, w:0.10, h:0.16, angle:-3 } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.30, y:0.22, w:0.18, h:0.28, angle:-3 } },
       { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',
@@ -1253,7 +1253,7 @@ export default function RuHua() {
   const [faceBounds, setFaceBounds] = useState(null);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step
   const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
@@ -1296,11 +1296,10 @@ export default function RuHua() {
                                       onSelect={p => { setPainting(p); setScreen('figure'); }}
                                       onBack={() => setScreen('home')} />}
         {screen === 'figure'     && <FigureScreen painting={painting} imgs={imgs}
-                                      hasCachedSelfie={!!styledUrl}
+                                      hasCachedSelfie={hasCachedSelfie(selfie)}
                                       onSelect={f => {
                                         setFigure(f);
-                                        if (styledUrl) {
-                                          // Selfie already styled — skip selfie screen, go straight to processing
+                                        if (hasCachedSelfie(selfie)) {
                                           setScreen('processing');
                                           generate({
                                             selfie,

@@ -156,6 +156,14 @@ export function useGenerate() {
     setStyledUrl(null);
   }, []);
 
+  // hasCachedSelfie: true if we have a styled face ready to reuse
+  // Checks the cache directly, not styledUrl state (which gets cleared by resetGen)
+  const hasCachedSelfie = useCallback((selfieData) => {
+    if (!selfieData) return false;
+    const hash = quickHash(selfieData);
+    return !!styledCache.current[hash];
+  }, []);
+
   const reset = useCallback(() => {
     stopPolling();
     setStatus('idle');
@@ -172,5 +180,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache };
+  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache, hasCachedSelfie };
 }
