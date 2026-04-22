@@ -142,6 +142,7 @@ const PAINTINGS = [
   {
     id: 'guoguo',
     wikiTitle: "Lady_Guoguo's_Spring_Outing",
+    directImageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/b/b5/%E5%94%90_%E5%BC%A0%E8%90%B1_%E8%99%A2%E5%9B%BD%E5%A4%AB%E4%BA%BA%E6%B8%B8%E6%98%A5%E5%9B%BE.jpg/1280px-%E5%94%90_%E5%BC%A0%E8%90%B1_%E8%99%A2%E5%9B%BD%E5%A4%AB%E4%BA%BA%E6%B8%B8%E6%98%A5%E5%9B%BE.jpg',
     title: '虢国夫人游春图',
     sub: "Lady Guoguo's Spring Outing",
     dynasty: '唐',
@@ -185,6 +186,7 @@ const PAINTINGS = [
   {
     id: 'gongle',
     wikiTitle: 'Court_Ladies_Playing_Double_Sixes',
+    directImageUrl: 'https://upload.wikimedia.org/wikipedia/commons/thumb/6/6b/Tang_dynasty_court_ladies_on_a_spring_outing.jpg/1280px-Tang_dynasty_court_ladies_on_a_spring_outing.jpg',
     title: '宫乐图',
     sub: 'Court Ladies Making Music',
     dynasty: '唐',
@@ -1263,9 +1265,14 @@ export default function RuHua() {
   const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
   const procStep = STEP_FOR_STATUS[status] ?? 1;
 
-  // Fetch real painting thumbnails from Wikipedia API on mount
+  // Fetch real painting thumbnails on mount
   useEffect(() => {
     PAINTINGS.forEach(p => {
+      // Use direct URL if provided (for paintings without Wikipedia article)
+      if (p.directImageUrl) {
+        setImgs(prev => ({ ...prev, [p.id]: p.directImageUrl }));
+        return;
+      }
       fetch(`https://en.wikipedia.org/api/rest_v1/page/summary/${p.wikiTitle}`)
         .then(r => r.json())
         .then(d => {
