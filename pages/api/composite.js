@@ -75,11 +75,23 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // With face-swap approach, styledFaceUrl is already a 512×512 crop of the
-    // painting figure with the user's face swapped in.
-    // No need to crop — just resize to the target region dimensions.
-    // Rotation is also not needed since the face-swap preserves the original pose.
-    const facePng = await sharp(faceBuf)
+    // Crop face from InstantID output — face is centered in 640x640 frame
+    // Use full height so chin is never cut; oval mask defines the blend boundary
+    const cropX = Math.round(FW * 0.15);
+    const cropY = 0;
+    const cropW = Math.round(FW * 0.70);
+    const cropH = FH;
+
+    let faceImg = sharp(faceBuf)
+      .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
+
+    if (region.angle !== 0) {
+      faceImg = faceImg.rotate(region.angle, {
+        background: { r: 128, g: 100, b: 70, alpha: 1 },
+      });
+    }
+
+    const facePng = await faceImg
       .resize(targetW, targetH, { fit: 'fill' })
       .png()
       .toBuffer();

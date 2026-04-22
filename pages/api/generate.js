@@ -96,8 +96,9 @@ export default async function handler(req, res) {
           'soft warm lighting, elegant court figure',
         ].join(', '),
         negative_prompt: [
-          // Remove glasses — historical figures didn't wear them
+          // Remove glasses and jewelry — historical male figures didn't wear these
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
+          'earrings', 'jewelry', 'necklace', 'accessories', 'piercings',
           // Anti-gray
           'black and white', 'grayscale', 'monochrome', 'desaturated',
           'ink wash', 'sumi-e', 'sketch',
