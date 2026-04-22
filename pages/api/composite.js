@@ -92,7 +92,7 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'fill' })
+      .resize(targetW, targetH, { fit: 'cover', position: 'top' })  // cover preserves aspect ratio; top keeps forehead
       .png()
       .toBuffer();
 
