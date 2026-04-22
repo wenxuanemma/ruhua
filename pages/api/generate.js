@@ -114,8 +114,8 @@ export default async function handler(req, res) {
       body: JSON.stringify({
         version: '278a81e7ebb22db98bcba54de985d22cc1abeead2754eb1f2af717247be69b34',
         input: {
-          swap_image:   selfie,      // source: user's selfie face
-          target_image: figureB64,   // target: painted figure — face will be swapped here
+          swap_image:  selfie,      // source: user's selfie face
+          input_image: figureB64,   // target: painted figure crop (model field is input_image)
         },
       }),
     });
