@@ -77,18 +77,18 @@ export default async function handler(req, res) {
     // Crop face from InstantID output
     // If faceBounds were detected client-side, use them for precise crop
     // Otherwise fall back to full-frame crop (oval mask defines the blend boundary)
-    // Crop to head+neck — 80% height from top captures full face without too much background
+    // Crop to 88% height — captures full face including chin without too much background
     let cropX, cropY, cropW, cropH;
     if (faceBounds) {
       cropX = Math.round(FW * 0.15);
       cropY = 0;
       cropW = Math.round(FW * 0.70);
-      cropH = Math.round(FH * 0.80);
+      cropH = Math.round(FH * 0.88);
     } else {
       cropX = Math.round(FW * 0.15);
       cropY = 0;
       cropW = Math.round(FW * 0.70);
-      cropH = Math.round(FH * 0.80);
+      cropH = Math.round(FH * 0.88);
     }
 
     let faceImg = sharp(faceBuf)
@@ -161,19 +161,19 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Oval mask — face is in upper portion of the tighter crop
+    // Oval mask — centered at 46% to include chin fully
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="38%" rx="50%" ry="50%">
-          <stop offset="45%" stop-color="white" stop-opacity="1"/>
-          <stop offset="65%" stop-color="white" stop-opacity="0.85"/>
-          <stop offset="82%" stop-color="white" stop-opacity="0.3"/>
-          <stop offset="93%" stop-color="white" stop-opacity="0.05"/>
+        <radialGradient id="g" cx="50%" cy="46%" rx="50%" ry="50%">
+          <stop offset="42%" stop-color="white" stop-opacity="1"/>
+          <stop offset="63%" stop-color="white" stop-opacity="0.85"/>
+          <stop offset="80%" stop-color="white" stop-opacity="0.3"/>
+          <stop offset="92%" stop-color="white" stop-opacity="0.05"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.38}"
-               rx="${targetW*0.46}" ry="${targetH*0.46}"
+      <ellipse cx="${targetW*0.50}" cy="${targetH*0.46}"
+               rx="${targetW*0.46}" ry="${targetH*0.50}"
                fill="url(#g)"/>
     </svg>`;
 
