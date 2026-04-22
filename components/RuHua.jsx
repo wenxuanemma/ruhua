@@ -111,7 +111,7 @@ const PAINTINGS = [
     color: '#8a4020',
     figures: [
       { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.77, y:0.01, w:0.10, h:0.18, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.30, y:0.22, w:0.18, h:0.28, angle:-3 } },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.32, y:0.24, w:0.12, h:0.20, angle:-3 } },
       { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 } },
     ],
     youAre: '宾客 · Honored Guest',

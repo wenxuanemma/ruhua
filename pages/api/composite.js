@@ -20,7 +20,7 @@ const FACE_REGIONS = {
   },
   hanxizai: {
     guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5  },
-    host:   { x:0.30, y:0.22, w:0.18, h:0.28, angle:-3 },
+    host:   { x:0.32, y:0.24, w:0.12, h:0.20, angle:-3 },
     dancer: { x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 },
   },
   bunianta: {
@@ -149,14 +149,14 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Tight oval — sharp falloff minimizes halo from SDXL background
+    // Tight oval — hard falloff to minimize halo from SDXL background
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="46%" rx="50%" ry="50%">
-          <stop offset="58%" stop-color="white" stop-opacity="1"/>
-          <stop offset="75%" stop-color="white" stop-opacity="0.75"/>
-          <stop offset="88%" stop-color="white" stop-opacity="0.2"/>
-          <stop offset="96%" stop-color="white" stop-opacity="0.03"/>
+          <stop offset="62%" stop-color="white" stop-opacity="1"/>
+          <stop offset="78%" stop-color="white" stop-opacity="0.6"/>
+          <stop offset="90%" stop-color="white" stop-opacity="0.1"/>
+          <stop offset="97%" stop-color="white" stop-opacity="0.02"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
