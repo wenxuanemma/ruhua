@@ -161,14 +161,14 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Oval mask — centered at 46% to include chin fully
+    // Sharper oval falloff — reduces halo bleed from vivid painting backgrounds (red screens etc.)
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="46%" rx="50%" ry="50%">
-          <stop offset="42%" stop-color="white" stop-opacity="1"/>
-          <stop offset="63%" stop-color="white" stop-opacity="0.85"/>
-          <stop offset="80%" stop-color="white" stop-opacity="0.3"/>
-          <stop offset="92%" stop-color="white" stop-opacity="0.05"/>
+          <stop offset="55%" stop-color="white" stop-opacity="1"/>
+          <stop offset="72%" stop-color="white" stop-opacity="0.9"/>
+          <stop offset="85%" stop-color="white" stop-opacity="0.4"/>
+          <stop offset="94%" stop-color="white" stop-opacity="0.08"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
@@ -207,9 +207,11 @@ export default async function handler(req, res) {
       .jpeg({ quality: 92 })
       .toBuffer();
 
-    // Profile crop — generous padding around face region
-    const padX = Math.round(targetW * 0.8);
-    const padY = Math.round(targetH * 0.7);
+    // Profile crop — padding scales inversely with face region size
+    // Small regions (bunianta w:0.06) need less padding than large ones (host w:0.18)
+    const sizeScale = Math.max(0.3, Math.min(1.0, 0.12 / region.w)); // normalize around w=0.12
+    const padX = Math.round(targetW * 0.5 * sizeScale);
+    const padY = Math.round(targetH * 0.4 * sizeScale);
     const cropLeft   = Math.max(0, targetX - padX);
     const cropTop    = Math.max(0, targetY - padY);
     const cropRight  = Math.min(PW, targetX + targetW + padX);
