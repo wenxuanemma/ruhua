@@ -77,24 +77,18 @@ export default async function handler(req, res) {
     // Crop face from InstantID output
     // If faceBounds were detected client-side, use them for precise crop
     // Otherwise fall back to full-frame crop (oval mask defines the blend boundary)
-    // Crop the InstantID output to just the head/face area.
-    // InstantID centers the face in the 640x640 output.
-    // Cropping tightly eliminates the SDXL-generated background (green/gray tones)
-    // that bleeds through the oval feather edges — especially visible for large face regions.
+    // Crop to head+neck — 80% height from top captures full face without too much background
     let cropX, cropY, cropW, cropH;
     if (faceBounds) {
-      // Face was pre-cropped before InstantID, so it fills most of the frame.
-      // Crop to center 65% width, top 65% height — captures head+neck, excludes background below.
-      cropX = Math.round(FW * 0.175);
-      cropY = Math.round(FH * 0.03);
-      cropW = Math.round(FW * 0.65);
-      cropH = Math.round(FH * 0.65);
-    } else {
-      // No detection — face may be anywhere in frame; use generous crop
       cropX = Math.round(FW * 0.15);
       cropY = 0;
       cropW = Math.round(FW * 0.70);
-      cropH = Math.round(FH * 0.72); // was full height — caused green background to show
+      cropH = Math.round(FH * 0.80);
+    } else {
+      cropX = Math.round(FW * 0.15);
+      cropY = 0;
+      cropW = Math.round(FW * 0.70);
+      cropH = Math.round(FH * 0.80);
     }
 
     let faceImg = sharp(faceBuf)
@@ -187,23 +181,28 @@ export default async function handler(req, res) {
       .resize(targetW, targetH)
       .toBuffer();
 
-    // Fix halo: extract the painting region and use it as background behind the face.
-    // This means feathered edges fade into the actual painting pixels, not white.
+    // Extract painting region at face target size — used as background for blending
     const paintingRegionBuf = await sharp(paintingBuf)
       .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
       .resize(targetW, targetH, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // Composite: painting region as base, then color-matched face on top with mask
-    const faceFinal = await sharp(paintingRegionBuf)
-      .composite([{
-        input: await sharp(colorMatchedFace)
-          .composite([{ input: ovalMask, blend: 'dest-in' }])
-          .png()
-          .toBuffer(),
-        blend: 'over',
-      }])
+    // ── Fix background bleed ───────────────────────────────────────────────────
+    // Problem: oval mask semi-transparent edges carry SDXL background color (green/gray)
+    // Fix: composite face onto painting region background FIRST, then mask the result
+    // This way feather edges transition painting→face instead of SDXLbg→face
+
+    // Step 1: stamp face onto painting background (SDXL background now hidden)
+    const faceOnPaintingBg = await sharp(paintingRegionBuf)
+      .composite([{ input: colorMatchedFace, blend: 'over' }])
+      .png()
+      .toBuffer();
+
+    // Step 2: apply oval mask to the painting-backed composite
+    // Edge pixels now blend painting color → face, never SDXL green
+    const faceFinal = await sharp(faceOnPaintingBg)
+      .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
