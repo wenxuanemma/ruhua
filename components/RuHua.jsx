@@ -141,7 +141,6 @@ const PAINTINGS = [
   },
   {
     id: 'guoguo',
-    placeholder: true,  // needs calibration via localhost:3000/calibrate
     wikiTitle: "Lady_Guoguo's_Spring_Outing",
     title: '虢国夫人游春图',
     sub: "Lady Guoguo's Spring Outing",
@@ -185,7 +184,6 @@ const PAINTINGS = [
   },
   {
     id: 'gongle',
-    placeholder: true,  // needs calibration via localhost:3000/calibrate
     wikiTitle: 'Court_Ladies_Playing_Double_Sixes',
     title: '宫乐图',
     sub: 'Court Ladies Making Music',
@@ -348,7 +346,7 @@ function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
       </div>
 
       <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
-        {paintings.filter(p => !p.placeholder).map((p, i) => (
+        {paintings.map((p, i) => (
           <div key={p.id} className={`card-h r${Math.min(i + 2, 6)}`} onClick={() => onSelect(p)}
             style={{
               borderRadius:5, overflow:'hidden',
