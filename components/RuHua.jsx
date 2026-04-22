@@ -991,9 +991,18 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
     };
   }
 
-  // Face position for object-position and marker
-  const faceXPct = region ? `${Math.round((region.x + region.w / 2) * 100)}%` : '50%';
-  const faceYPct = region ? `${Math.round((region.y + region.h / 2) * 100)}%` : '45%';
+  // Smart marker positioning — places the label away from the face
+  // to avoid overlapping, especially when face is at edges/corners
+  const faceX = region ? region.x + region.w / 2 : 0.5;
+  const faceY = region ? region.y + region.h / 2 : 0.45;
+
+  // Position marker above face if face is in lower half, below if upper half
+  // Add offset so the pin line points toward the face without covering it
+  const markerAbove = faceY > 0.35; // face in lower half → label above
+  const markerLeft = `${Math.round(faceX * 100)}%`;
+  const markerTop  = markerAbove
+    ? `${Math.max(5, Math.round((faceY - 0.18) * 100))}%`  // above face
+    : `${Math.min(85, Math.round((faceY + 0.18) * 100))}%`; // below face
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
@@ -1003,7 +1012,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
           ? <img src={imgUrl} alt={painting?.title} style={{
               position:'absolute', inset:0, width:'100%', height:'100%',
               objectFit:'cover',
-              objectPosition:`${faceXPct} ${faceYPct}`,
+              objectPosition:`${Math.round(faceX * 100)}% ${Math.round(faceY * 100)}%`,
             }} />
           : <div style={{ position:'absolute', inset:0, background:painting?.grad }} />
         }
@@ -1012,12 +1021,12 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
           <div style={{ position:'absolute', inset:0,
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
-          {/* 你在此处 marker — at same position as object-position so it lands on the face */}
+          {/* 你在此处 marker — offset from face to avoid overlap */}
           <div style={{
             position:'absolute',
-            left: faceXPct,
-            top:  faceYPct,
-            transform:'translate(-50%, -100%)',
+            left: markerLeft,
+            top:  markerTop,
+            transform:'translate(-50%, -50%)',
             textAlign:'center',
             pointerEvents:'none',
           }}>
@@ -1025,11 +1034,15 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
               background:C.vermillion, color:'#f5e8c4',
               fontFamily:F.serif, fontSize:10,
               padding:'2px 9px', letterSpacing:'.1em', whiteSpace:'nowrap',
-              marginBottom:4,
+              marginBottom: markerAbove ? 4 : 0,
+              marginTop:    markerAbove ? 0 : 4,
             }}>
               你在此处
             </div>
-            <div style={{ width:1.5, height:16, background:C.vermillion, margin:'0 auto', opacity:.85 }} />
+            <div style={{
+              width:1.5, height:16, background:C.vermillion, margin:'0 auto', opacity:.85,
+              order: markerAbove ? 1 : -1,
+            }} />
           </div>
         </div>
 

@@ -149,14 +149,14 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Sharper oval falloff — reduces halo bleed from vivid painting backgrounds (red screens etc.)
+    // Tight oval — sharp falloff minimizes halo from SDXL background
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="46%" rx="50%" ry="50%">
-          <stop offset="55%" stop-color="white" stop-opacity="1"/>
-          <stop offset="72%" stop-color="white" stop-opacity="0.9"/>
-          <stop offset="85%" stop-color="white" stop-opacity="0.4"/>
-          <stop offset="94%" stop-color="white" stop-opacity="0.08"/>
+          <stop offset="58%" stop-color="white" stop-opacity="1"/>
+          <stop offset="75%" stop-color="white" stop-opacity="0.75"/>
+          <stop offset="88%" stop-color="white" stop-opacity="0.2"/>
+          <stop offset="96%" stop-color="white" stop-opacity="0.03"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
