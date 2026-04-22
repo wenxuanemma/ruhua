@@ -851,7 +851,7 @@ const STEPS = [
   { zh:'合成入画',     en:'Compositing into the scroll'  },
 ];
 
-function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
+function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
   const imgUrl = styledUrl || imgs?.[painting?.id];
   return (
     <div style={{
@@ -868,12 +868,15 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error }) {
         <div style={{ position:'relative', zIndex:1, textAlign:'center', padding:'0 24px' }}>
           <div style={{ fontSize:32, marginBottom:12 }}>⚠️</div>
           <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:8 }}>生成失败</div>
-          <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.7 }}>
+          <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.7, marginBottom:24 }}>
             {error}
           </div>
-          <div style={{ fontFamily:F.latin, fontSize:11, color:C.silkFaint, marginTop:8 }}>
-            Returning to selfie screen…
-          </div>
+          <button onClick={onRetry} className="btn" style={{
+            border:`1px solid ${C.border}`, color:C.silkDim,
+            fontFamily:F.brush, fontSize:16, padding:'12px 28px',
+          }}>
+            返回重试
+          </button>
         </div>
       )}
 
@@ -1276,7 +1279,8 @@ export default function RuHua() {
   // Navigate when generation finishes or fails
   useEffect(() => {
     if (status === 'succeeded') setScreen('result');
-    if (status === 'failed')    setScreen('selfie');
+    // On failure: stay on processing screen where error message is shown
+    // Don't bounce back to selfie — confusing and loses context
   }, [status]);
 
   const reset = () => {
@@ -1328,7 +1332,7 @@ export default function RuHua() {
                                         });
                                       }}
                                       onBack={() => setScreen('figure')} />}
-        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} />}
+        {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} onRetry={() => setScreen('selfie')} />}
         {screen === 'result'     && <ResultScreen painting={painting} figure={figure} imgs={imgs}
                                       generatedUrl={outputUrl}
                                       profileUrl={profileUrl}
