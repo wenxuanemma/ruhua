@@ -52,7 +52,41 @@ async function getPredictionOutput(prediction) {
   throw new Error('No prediction output');
 }
 
-export default async function handler(req, res) {
+async function paintifyFace(faceUrl) {
+  // Convert photorealistic InstantID output into a painted-looking face
+  // KEY: avoid ALL Chinese painting vocabulary — SDXL maps those to monochrome
+  // Use generic "digital painting / concept art" vocabulary instead
+  const prediction = await callReplicate({
+    version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
+    input: {
+      image:   faceUrl,
+      prompt: [
+        'digital painting, painterly portrait, concept art',
+        'warm skin tones, natural face color, full color',
+        'soft brush strokes on skin, painted texture',
+        'flat even lighting, matte finish, no photographic shadows',
+        'traditional costume, elegant figure',
+      ].join(', '),
+      negative_prompt: [
+        // CRITICAL: no Chinese painting terms — they trigger monochrome output
+        'ink wash', 'sumi-e', 'chinese painting', 'watercolor', 'sketch',
+        'black and white', 'grayscale', 'monochrome', 'desaturated',
+        'photorealistic', 'photograph', 'DSLR', 'sharp photo',
+        'subsurface scattering', 'specular highlights', 'photographic lighting',
+        'japanese', 'anime', 'manga',
+        'blurry', 'distorted', 'bad anatomy',
+      ].join(', '),
+      prompt_strength:     0.35,  // moderate — adds paint texture without losing identity
+      num_inference_steps: 30,
+      guidance_scale:      7.5,
+      width:               640,
+      height:              640,
+    },
+  });
+  return getPredictionOutput(prediction);
+}
+
+
 
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
@@ -86,6 +120,7 @@ export default async function handler(req, res) {
   }
 
   try {
+    // Stage 1: InstantID — identity-preserving face generation
     const prediction = await callReplicate({
       version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
@@ -118,7 +153,19 @@ export default async function handler(req, res) {
       },
     });
 
-    const outputUrl = await getPredictionOutput(prediction);
+    const instantIdUrl = await getPredictionOutput(prediction);
+
+    // Stage 2: Paintify — convert photorealistic face to painted look
+    // Uses generic "concept art / digital painting" vocabulary, NOT Chinese painting terms
+    // Chinese painting terms trigger SDXL monochrome/gray output
+    let outputUrl;
+    try {
+      outputUrl = await paintifyFace(instantIdUrl);
+    } catch (e) {
+      console.warn('Paintify failed, using InstantID output:', e.message);
+      outputUrl = instantIdUrl;  // graceful fallback
+    }
+
     return res.status(200).json({ outputUrl });
 
   } catch (err) {
