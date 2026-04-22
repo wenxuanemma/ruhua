@@ -1,40 +1,64 @@
 // pages/api/generate.js
 //
-// Two-stage face pipeline:
-//   Stage 1 — InstantID: preserve face identity, apply loose style
-//   Stage 2 — paintify: img2img at 0.45 strength to make face look genuinely painted
+// Face swap pipeline using codeplugtech/face-swap on Replicate.
 //
-// Returns { outputUrl } — the painted face, ready for compositing
+// New approach vs InstantID:
+//   - Takes selfie + painting figure crop as target
+//   - Swaps the selfie face INTO the painting figure
+//   - Result looks painted because the TARGET is a painting
+//   - No style transfer needed — painting style comes from the target
+//   - Naturally removes glasses, changes lighting to match painting
+//
+// Pipeline:
+//   1. Fetch painting thumbnail
+//   2. Crop to the figure's faceRegion (the actual painted face)
+//   3. Call face-swap: swap selfie face onto the painted figure crop
+//   4. Return the swapped figure crop → composite.js places it back
+
+import sharp from 'sharp';
 
 export const config = {
   api: { bodyParser: { sizeLimit: '10mb' } },
 };
 
-const DYNASTY_STYLE = {
-  '北宋': 'Northern Song dynasty court painting, gongbi fine brushwork, ink and mineral pigments on silk, warm ochre tones, Palace Museum Beijing',
-  '五代': 'Five Dynasties period court painting, fine brushwork, muted warm palette, ink on silk',
-  '唐':   'Tang dynasty figure painting, mineral pigments on silk, rich warm court colors, flowing robes',
-  '东晋': 'Eastern Jin dynasty handscroll, flowing ink line work, muted silk tones, gossamer drapery',
+const FACE_REGIONS = {
+  qingming: {
+    scholar:  { x:0.53, y:0.35, w:0.04, h:0.30, angle:0   },
+    merchant: { x:0.62, y:0.32, w:0.04, h:0.30, angle:5   },
+    boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
+  },
+  hanxizai: {
+    guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5  },
+    host:   { x:0.30, y:0.22, w:0.18, h:0.28, angle:-3 },
+    dancer: { x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 },
+  },
+  bunianta: {
+    official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3  },
+    envoy:    { x:0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
+  },
+  guoguo: {
+    lady:      { x:0.55, y:0.10, w:0.10, h:0.35, angle:0  },
+    attendant: { x:0.35, y:0.10, w:0.09, h:0.32, angle:3  },
+    rider:     { x:0.15, y:0.08, w:0.09, h:0.30, angle:-5 },
+  },
+  luoshen: {
+    attendant: { x:0.76, y:0.32, w:0.07, h:0.18, angle:-2 },
+    cao:       { x:0.86, y:0.34, w:0.08, h:0.20, angle:-5 },
+  },
+  gongle: {
+    listener: { x:0.10, y:0.30, w:0.13, h:0.28, angle:0  },
+    musician: { x:0.46, y:0.14, w:0.11, h:0.24, angle:-8 },
+    serving:  { x:0.85, y:0.28, w:0.10, h:0.24, angle:2  },
+  },
 };
 
-async function callReplicate(body) {
-  const response = await fetch('https://api.replicate.com/v1/predictions', {
-    method: 'POST',
-    headers: {
-      'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
-      'Content-Type': 'application/json',
-      'Prefer': 'wait',
-    },
-    body: JSON.stringify(body),
-  });
-  if (!response.ok) {
-    const err = await response.text();
-    throw new Error(`Replicate error: ${err}`);
-  }
-  return response.json();
+async function fetchBuffer(url) {
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`Failed to fetch ${url}: ${res.status}`);
+  return Buffer.from(await res.arrayBuffer());
 }
 
-async function pollUntilDone(predictionId, maxWaitMs = 90000) {
+async function pollUntilDone(predictionId, maxWaitMs = 120000) {
   const start = Date.now();
   while (Date.now() - start < maxWaitMs) {
     await new Promise(r => setTimeout(r, 2500));
@@ -45,135 +69,77 @@ async function pollUntilDone(predictionId, maxWaitMs = 90000) {
     if (data.status === 'succeeded') {
       return Array.isArray(data.output) ? data.output[0] : data.output;
     }
-    if (data.status === 'failed') throw new Error(data.error || 'Prediction failed');
+    if (data.status === 'failed') throw new Error(data.error || 'Face swap failed');
   }
-  throw new Error('Prediction timed out');
+  throw new Error('Face swap timed out');
 }
 
-async function getPredictionOutput(prediction) {
-  if (prediction.status === 'succeeded') {
-    return Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
-  }
-  if (prediction.id) return pollUntilDone(prediction.id);
-  throw new Error('No prediction ID or output');
-}
-
-async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
-  const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, ink on silk';
-
-  // If face bounds detected, crop selfie to face region before sending to InstantID
-  // This focuses the model on the actual face regardless of where in frame it was
-  let faceImage = selfie;
-  if (faceBounds) {
-    try {
-      const sharp = (await import('sharp')).default;
-      const base64 = selfie.split(',')[1];
-      const buf = Buffer.from(base64, 'base64');
-      const meta = await sharp(buf).metadata();
-      const iw = meta.width, ih = meta.height;
-      const left   = Math.round(faceBounds.x * iw);
-      const top    = Math.round(faceBounds.y * ih);
-      const width  = Math.round(faceBounds.w * iw);
-      const height = Math.round(faceBounds.h * ih);
-      const cropped = await sharp(buf)
-        .extract({
-          left:   Math.max(0, left),
-          top:    Math.max(0, top),
-          width:  Math.min(width, iw - left),
-          height: Math.min(height, ih - top),
-        })
-        .resize(640, 640, { fit: 'cover', position: 'centre' })
-        .jpeg({ quality: 92 })
-        .toBuffer();
-      faceImage = `data:image/jpeg;base64,${cropped.toString('base64')}`;
-    } catch (e) {
-      console.warn('Face crop failed, using full selfie:', e.message);
-    }
-  }
-
-  const prediction = await callReplicate({
-    version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
-    input: {
-      image:   faceImage,
-      prompt: [
-        'portrait of a person, warm natural skin tones, full color',
-        'traditional Chinese court costume, hanfu silk robes',
-        'soft warm lighting, gentle expression',
-        'elegant court figure, detailed face',
-      ].join(', '),
-      negative_prompt: [
-        'black and white', 'grayscale', 'monochrome', 'desaturated',
-        'ink wash', 'sumi-e', 'sketch', 'drawing',
-        'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
-        'photorealistic background', 'modern clothing', 'western',
-        'blurry', 'watermark', 'bad anatomy', 'disfigured',
-      ].join(', '),
-      // ip_adapter removed — even at low scale it contaminates face with painting's color palette
-      // (red from 步辇图, green from vegetation elements, etc.)
-      sdxl_weights:        'protovision-xl-high-fidel',
-      guidance_scale:      7.5,
-      num_inference_steps: 35,
-      width:               640,
-      height:              640,
-    },
-  });
-
-  return getPredictionOutput(prediction);
-}
-
-// ── Stage 2: Paintify — transform photorealistic face into painted face ────────
-// Strength 0.62: strong enough to fully repaint skin texture and lighting,
-// while preserving enough facial structure for identity recognition.
-async function paintifyFace({ faceUrl, dynasty }) {
-  const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, ink on silk';
-
-  const prediction = await callReplicate({
-    version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    input: {
-      image:   faceUrl,
-      prompt: [
-        styleDesc,
-        'colored Chinese court painting, NOT ink wash, NOT black and white',
-        'warm ochre skin tone, flesh colored face, warm brown complexion',
-        'mineral pigment color on silk, color portrait',
-        'matte painted skin texture, flat traditional lighting',
-        'ink outline defining facial features',
-        'same face identity preserved',
-      ].join(', '),
-      negative_prompt: [
-        'black and white', 'grayscale', 'monochrome', 'ink wash', 'sumi-e',
-        'photorealistic', 'photograph', 'DSLR', 'glossy skin',
-        'dramatic lighting', 'deep shadows', 'high contrast',
-        'modern', 'japanese', 'anime', 'manga',
-        'oil painting', 'western portrait',
-        'blurry', 'distorted', 'bad anatomy',
-      ].join(', '),
-      prompt_strength:     0.50,   // reduced from 0.62 — was stripping too much color/making face ghost-white
-      num_inference_steps: 35,
-      guidance_scale:      7.5,
-      width:               640,
-      height:              640,
-    },
-  });
-
-  return getPredictionOutput(prediction);
-}
-
-// ── Handler ───────────────────────────────────────────────────────────────────
 export default async function handler(req, res) {
-  if (req.method !== 'POST') return res.status(405).json({ error: 'selfie is required' });
+  if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { selfie, paintingId, styleImageUrl, paintingTitle, dynasty, faceBounds } = req.body;
+  const { selfie, paintingId, figureId, styleImageUrl } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
+  const region = FACE_REGIONS[paintingId]?.[figureId];
+  if (!region) return res.status(400).json({ error: `No region for ${paintingId}/${figureId}` });
+
   try {
-    // If face bounds were detected client-side, pass them to InstantID
-    // so it focuses on the actual face region rather than the full selfie frame
-    const outputUrl = await runInstantID({ selfie, styleImageUrl, dynasty, faceBounds });
+    // 1. Fetch painting thumbnail and crop to figure's face region
+    //    This crop becomes the TARGET for face swap — preserves painting style
+    const paintingBuf = await fetchBuffer(styleImageUrl);
+    const { width: PW, height: PH } = await sharp(paintingBuf).metadata();
+
+    const cropX = Math.max(0, Math.round(region.x * PW));
+    const cropY = Math.max(0, Math.round(region.y * PH));
+    const cropW = Math.min(Math.round(region.w * PW), PW - cropX);
+    const cropH = Math.min(Math.round(region.h * PH), PH - cropY);
+
+    // Upscale the figure crop so face-swap has enough pixels to work with
+    const figureCrop = await sharp(paintingBuf)
+      .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+      .resize(512, 512, { fit: 'contain', background: { r:200, g:170, b:120, alpha:1 } })
+      .jpeg({ quality: 95 })
+      .toBuffer();
+
+    const figureB64 = `data:image/jpeg;base64,${figureCrop.toString('base64')}`;
+
+    // 2. Call face-swap: swap selfie face INTO the painted figure
+    const response = await fetch('https://api.replicate.com/v1/predictions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+        'Content-Type': 'application/json',
+        'Prefer': 'wait',
+      },
+      body: JSON.stringify({
+        version: '278a81e7ebb22db98bcba54de985d22cc1abeead2754eb1f2af717247be69b34',
+        input: {
+          swap_image:   selfie,      // source: user's selfie face
+          target_image: figureB64,   // target: painted figure — face will be swapped here
+        },
+      }),
+    });
+
+    if (!response.ok) {
+      const err = await response.text();
+      throw new Error(`Replicate error: ${err}`);
+    }
+
+    const prediction = await response.json();
+
+    let outputUrl;
+    if (prediction.status === 'succeeded') {
+      outputUrl = Array.isArray(prediction.output) ? prediction.output[0] : prediction.output;
+    } else if (prediction.id) {
+      outputUrl = await pollUntilDone(prediction.id);
+    } else {
+      throw new Error('No prediction output');
+    }
+
     return res.status(200).json({ outputUrl });
 
   } catch (err) {
     console.error('Generate error:', err);
-    return res.status(500).json({ error: err.message || 'Internal server error' });
+    return res.status(500).json({ error: err.message || 'Generation failed' });
   }
 }

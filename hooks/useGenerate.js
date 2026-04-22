@@ -60,16 +60,15 @@ export function useGenerate() {
     }, POLL_INTERVAL_MS);
   }), []);
 
-  const runStyleTransfer = useCallback(async ({ selfie, painting, styleImageUrl, faceBounds }) => {
+  const runStyleTransfer = useCallback(async ({ selfie, painting, figure, styleImageUrl, faceBounds }) => {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         selfie,
         paintingId:    painting.id,
+        figureId:      figure.id,
         styleImageUrl,
-        paintingTitle: painting.title,
-        dynasty:       painting.dynasty,
         faceBounds,
       }),
     });
@@ -123,7 +122,7 @@ export function useGenerate() {
       } else {
         // New selfie — run InstantID
         setStatus('styling');
-        styled = await runStyleTransfer({ selfie, painting, styleImageUrl, faceBounds });
+        styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
         // Cache for this session
         styledCache.current[selfieHash] = styled;
         currentSelfieHash.current = selfieHash;

@@ -27,9 +27,10 @@ const FACE_REGIONS = {
     official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3  },
     envoy:    { x:0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
   },
-  qianli: {
-    hermit:    { x:0.28, y:0.58, w:0.03, h:0.08, angle:0   },
-    fisherman: { x:0.65, y:0.62, w:0.03, h:0.07, angle:-10 },
+  guoguo: {
+    lady:      { x:0.55, y:0.10, w:0.10, h:0.35, angle:0  },
+    attendant: { x:0.35, y:0.10, w:0.09, h:0.32, angle:3  },
+    rider:     { x:0.15, y:0.08, w:0.09, h:0.30, angle:-5 },
   },
   luoshen: {
     attendant: { x:0.76, y:0.32, w:0.07, h:0.18, angle:-2 },
@@ -74,37 +75,12 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Crop face from InstantID output
-    // If faceBounds were detected client-side, use them for precise crop
-    // Otherwise fall back to full-frame crop (oval mask defines the blend boundary)
-    // Crop to 88% height — captures full face including chin without too much background
-    let cropX, cropY, cropW, cropH;
-    if (faceBounds) {
-      cropX = Math.round(FW * 0.15);
-      cropY = 0;
-      cropW = Math.round(FW * 0.70);
-      cropH = Math.round(FH * 0.88);
-    } else {
-      cropX = Math.round(FW * 0.15);
-      cropY = 0;
-      cropW = Math.round(FW * 0.70);
-      cropH = Math.round(FH * 0.88);
-    }
-
-    let faceImg = sharp(faceBuf)
-      .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
-
-    // Rotate to match figure's head angle in the painting
-    // Use 'cover' background fill so rotation doesn't introduce transparent corners
-    // that would create artifacts when composited
-    if (region.angle !== 0) {
-      faceImg = faceImg.rotate(region.angle, {
-        background: { r: 128, g: 100, b: 70, alpha: 1 }, // warm neutral fill for corners
-      });
-    }
-
-    const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'fill' })  // fill preserves full face; cover was cropping forehead
+    // With face-swap approach, styledFaceUrl is already a 512×512 crop of the
+    // painting figure with the user's face swapped in.
+    // No need to crop — just resize to the target region dimensions.
+    // Rotation is also not needed since the face-swap preserves the original pose.
+    const facePng = await sharp(faceBuf)
+      .resize(targetW, targetH, { fit: 'fill' })
       .png()
       .toBuffer();
 
