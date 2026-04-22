@@ -111,7 +111,7 @@ async function runInstantID({ selfie, styleImageUrl, dynasty, faceBounds }) {
       // ip_adapter at 0.3 provides painting background/composition context
       // without pulling face color toward muted palette (0.85 caused gray)
       ip_adapter_image:    styleImageUrl,
-      ip_adapter_scale:    0.30,
+      ip_adapter_scale:    0.20,  // 0.30 still caused green bg from painting thumbnail; lower = less contamination
       sdxl_weights:        'protovision-xl-high-fidel',
       guidance_scale:      7.5,
       num_inference_steps: 35,

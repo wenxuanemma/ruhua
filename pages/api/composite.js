@@ -104,7 +104,7 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
+      .resize(targetW, targetH, { fit: 'fill' })  // fill preserves full face; cover was cropping forehead
       .png()
       .toBuffer();
 
@@ -188,21 +188,16 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Fix background bleed ───────────────────────────────────────────────────
-    // Problem: oval mask semi-transparent edges carry SDXL background color (green/gray)
-    // Fix: composite face onto painting region background FIRST, then mask the result
-    // This way feather edges transition painting→face instead of SDXLbg→face
-
-    // Step 1: stamp face onto painting background (SDXL background now hidden)
-    const faceOnPaintingBg = await sharp(paintingRegionBuf)
-      .composite([{ input: colorMatchedFace, blend: 'over' }])
+    // Correct blend order to eliminate SDXL background bleed:
+    // Step 1: apply oval mask to face → SDXL background becomes transparent
+    // Step 2: composite masked face onto painting pixels → edges fade into painting, not SDXL green
+    const maskedFace = await sharp(colorMatchedFace)
+      .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // Step 2: apply oval mask to the painting-backed composite
-    // Edge pixels now blend painting color → face, never SDXL green
-    const faceFinal = await sharp(faceOnPaintingBg)
-      .composite([{ input: ovalMask, blend: 'dest-in' }])
+    const faceFinal = await sharp(paintingRegionBuf)
+      .composite([{ input: maskedFace, blend: 'over' }])
       .png()
       .toBuffer();
 
