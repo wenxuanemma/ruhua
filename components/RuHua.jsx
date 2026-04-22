@@ -186,8 +186,7 @@ const PAINTINGS = [
   },
   {
     id: 'gongle',
-    wikiTitle: 'Court_Ladies_Playing_Double_Sixes',
-    commonsTitle: '宮樂圖.jpg',
+    wikiTitle: 'A_Palace_Concert',
     title: '宫乐图',
     sub: 'Court Ladies Making Music',
     dynasty: '唐',
