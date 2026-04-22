@@ -88,6 +88,7 @@ async function paintifyFace(faceUrl) {
 
 
 
+export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
   const { selfie, paintingId, styleImageUrl, dynasty, faceBounds } = req.body;
