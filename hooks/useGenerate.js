@@ -70,6 +70,7 @@ export function useGenerate() {
         styleImageUrl,
         dynasty:       painting.dynasty,
         faceBounds,
+        faceRegion:    figure.faceRegion,  // actual painted face coords for style transfer
       }),
     });
     const data = await res.json();

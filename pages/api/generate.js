@@ -52,46 +52,76 @@ async function getPredictionOutput(prediction) {
   throw new Error('No prediction output');
 }
 
-async function paintifyFace(faceUrl) {
-  // Convert photorealistic InstantID output into a painted-looking face
-  // KEY: avoid ALL Chinese painting vocabulary — SDXL maps those to monochrome
-  // Use generic "digital painting / concept art" vocabulary instead
+async function paintifyFace(faceUrl, paintedFaceB64) {
+  // Use the actual painted figure's face as ip_adapter style reference.
+  // This directly transfers the brushwork, flat lighting, and ochre palette
+  // of the original figure — far more accurate than text prompt guessing.
+  const input = {
+    image:   faceUrl,
+    prompt: [
+      'portrait, full color, warm tones',
+      'traditional painted figure, matte finish',
+      'flat even lighting, no photographic shadows',
+    ].join(', '),
+    negative_prompt: [
+      'black and white', 'grayscale', 'monochrome',
+      'photorealistic', 'photograph', 'DSLR',
+      'subsurface scattering', 'specular highlights',
+      'japanese', 'anime', 'blurry', 'bad anatomy',
+    ].join(', '),
+    prompt_strength:     0.32,
+    num_inference_steps: 30,
+    guidance_scale:      7.5,
+    width:               640,
+    height:              640,
+  };
+
+  // If we have the actual painted face, use it as strong style reference
+  if (paintedFaceB64) {
+    input.ip_adapter_image = paintedFaceB64;
+    input.ip_adapter_scale = 0.55;  // strong enough to transfer style, low enough to keep identity
+  }
+
   const prediction = await callReplicate({
     version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    input: {
-      image:   faceUrl,
-      prompt: [
-        'digital painting, painterly portrait, concept art',
-        'warm skin tones, natural face color, full color',
-        'soft brush strokes on skin, painted texture',
-        'flat even lighting, matte finish, no photographic shadows',
-        'traditional costume, elegant figure',
-      ].join(', '),
-      negative_prompt: [
-        // CRITICAL: no Chinese painting terms — they trigger monochrome output
-        'ink wash', 'sumi-e', 'chinese painting', 'watercolor', 'sketch',
-        'black and white', 'grayscale', 'monochrome', 'desaturated',
-        'photorealistic', 'photograph', 'DSLR', 'sharp photo',
-        'subsurface scattering', 'specular highlights', 'photographic lighting',
-        'japanese', 'anime', 'manga',
-        'blurry', 'distorted', 'bad anatomy',
-      ].join(', '),
-      prompt_strength:     0.35,  // moderate — adds paint texture without losing identity
-      num_inference_steps: 30,
-      guidance_scale:      7.5,
-      width:               640,
-      height:              640,
-    },
+    input,
   });
   return getPredictionOutput(prediction);
 }
 
+// Fetch painting thumbnail and crop to the figure's face region
+// Returns base64 data URI of the painted face — used as ip_adapter style reference
+async function extractPaintedFace(styleImageUrl, faceRegion) {
+  try {
+    const sharp = (await import('sharp')).default;
+    const res = await fetch(styleImageUrl);
+    if (!res.ok) return null;
+    const buf = Buffer.from(await res.arrayBuffer());
+    const { width: PW, height: PH } = await sharp(buf).metadata();
+
+    const x = Math.max(0, Math.round(faceRegion.x * PW));
+    const y = Math.max(0, Math.round(faceRegion.y * PH));
+    const w = Math.min(Math.round(faceRegion.w * PW), PW - x);
+    const h = Math.min(Math.round(faceRegion.h * PH), PH - y);
+
+    const cropped = await sharp(buf)
+      .extract({ left: x, top: y, width: w, height: h })
+      .resize(512, 512, { fit: 'contain', background: { r:200, g:170, b:120, alpha:1 } })
+      .jpeg({ quality: 92 })
+      .toBuffer();
+
+    return `data:image/jpeg;base64,${cropped.toString('base64')}`;
+  } catch (e) {
+    console.warn('extractPaintedFace failed:', e.message);
+    return null;
+  }
+}
 
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds } = req.body;
+  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
@@ -156,15 +186,17 @@ export default async function handler(req, res) {
 
     const instantIdUrl = await getPredictionOutput(prediction);
 
-    // Stage 2: Paintify — convert photorealistic face to painted look
-    // Uses generic "concept art / digital painting" vocabulary, NOT Chinese painting terms
-    // Chinese painting terms trigger SDXL monochrome/gray output
+    // Stage 2: Paintify using the actual painted figure face as ip_adapter style reference
+    const paintedFaceB64 = faceRegion
+      ? await extractPaintedFace(styleImageUrl, faceRegion)
+      : null;
+
     let outputUrl;
     try {
-      outputUrl = await paintifyFace(instantIdUrl);
+      outputUrl = await paintifyFace(instantIdUrl, paintedFaceB64);
     } catch (e) {
       console.warn('Paintify failed, using InstantID output:', e.message);
-      outputUrl = instantIdUrl;  // graceful fallback
+      outputUrl = instantIdUrl;
     }
 
     return res.status(200).json({ outputUrl });
