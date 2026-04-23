@@ -187,75 +187,65 @@ export default async function handler(req, res) {
       }
     }
 
-    // ── Center oval mask from generated face — excludes SDXL background ────────
-    // Intersect with painting skin mask so neither source's background bleeds through
-    const cx = targetW * 0.50, cy = targetH * 0.44;
-    const rx = targetW * 0.38, ry = targetH * 0.40; // tight oval, face only
-    const ovalData = Buffer.alloc(targetW * targetH * 3);
+    // ── Center oval — shifted DOWN to protect hat at top of region ───────────
+    // cy=0.52 means oval starts at ~14% from top → hat area (0-14%) is protected
+    const cx = targetW * 0.50, cy = targetH * 0.52;
+    const rx = targetW * 0.37, ry = targetH * 0.36;
+    const rawMask = Buffer.alloc(targetW * targetH); // 1-channel
     for (let py = 0; py < targetH; py++) {
       for (let px = 0; px < targetW; px++) {
         const dx = (px - cx) / rx, dy = (py - cy) / ry;
         const dist = Math.sqrt(dx*dx + dy*dy);
-        // Hard falloff: opaque inside 0.85, fade to 0 by 1.0
-        const alpha = dist < 0.85 ? 1 : Math.max(0, 1 - (dist - 0.85) / 0.15);
-        const v = Math.round(alpha * 255);
-        const i = (py * targetW + px) * 3;
-        ovalData[i] = v; ovalData[i+1] = v; ovalData[i+2] = v;
+        const alpha = dist < 0.82 ? 1 : Math.max(0, 1 - (dist - 0.82) / 0.18);
+        rawMask[py * targetW + px] = Math.round(alpha * 255);
       }
     }
 
-    // ── Build blend mask: intersection of painting skin + generated face oval ──
-    // IMPORTANT: Sharp dest-in reads alpha from the mask image.
-    // Must create single-channel (grayscale) PNG, not 3-channel RGB.
+    // ── Intersect oval with skin mask if detected ─────────────────────────────
     const skinCoverage = skinPixelCount / (targetW * faceZoneHeight);
-    let blendMask;
-
+    const finalMask1ch = Buffer.alloc(targetW * targetH);
     if (skinCoverage > 0.04) {
-      // Intersect: multiply painting skin × oval, then blur softly
-      const intersectData = Buffer.alloc(targetW * targetH); // 1 channel
       for (let i = 0; i < targetW * targetH; i++) {
-        const s = skinData[i * 3];      // skin mask value (0 or 255)
-        const o = ovalData[i * 3];      // oval mask value (0–255)
-        intersectData[i] = Math.round((s / 255) * (o / 255) * 255);
+        const s = skinData[i * 3];  // 0 or 255
+        const o = rawMask[i];       // 0–255
+        finalMask1ch[i] = Math.round((s / 255) * (o / 255) * 255);
       }
-      blendMask = await sharp(intersectData, {
-        raw: { width: targetW, height: targetH, channels: 1 },
-      })
-        .blur(2)
-        .png()
-        .toBuffer();
-      console.log(`Skin+oval intersection: ${(skinCoverage*100).toFixed(1)}%`);
+      console.log(`Skin+oval: ${(skinCoverage*100).toFixed(1)}%`);
     } else {
-      // Fallback: oval only
-      const ovalSingle = Buffer.alloc(targetW * targetH);
-      for (let i = 0; i < targetW * targetH; i++) {
-        ovalSingle[i] = ovalData[i * 3];
-      }
-      blendMask = await sharp(ovalSingle, {
-        raw: { width: targetW, height: targetH, channels: 1 },
-      })
-        .blur(2)
-        .png()
-        .toBuffer();
-      console.log(`Oval fallback (skin ${(skinCoverage*100).toFixed(1)}%)`);
+      rawMask.copy(finalMask1ch);
+      console.log(`Oval only (skin ${(skinCoverage*100).toFixed(1)}%)`);
     }
 
-    // Apply blend mask: set grayscale mask as alpha channel of face
-    // MUST removeAlpha first — joinChannel appends, not replaces.
-    // 3-channel RGB + joinChannel(grayscale) = correct 4-channel RGBA
+    // ── Blur the 1-channel mask, then convert to RGBA for dest-in ─────────────
+    // joinChannel is unreliable with PNG grayscale format.
+    // dest-in with RGBA source is the correct Sharp approach:
+    //   output.alpha = face.alpha × mask.alpha  (face is opaque → output.alpha = mask.alpha)
+    const blurredMask1ch = await sharp(finalMask1ch, {
+      raw: { width: targetW, height: targetH, channels: 1 },
+    }).blur(2).raw().toBuffer();
+
+    // Build RGBA mask: R=G=B=255 (white), A=blurred mask value
+    const rgbaData = Buffer.alloc(targetW * targetH * 4);
+    for (let i = 0; i < targetW * targetH; i++) {
+      rgbaData[i*4]   = 255;
+      rgbaData[i*4+1] = 255;
+      rgbaData[i*4+2] = 255;
+      rgbaData[i*4+3] = blurredMask1ch[i];
+    }
+    const blendMask = await sharp(rgbaData, {
+      raw: { width: targetW, height: targetH, channels: 4 },
+    }).png().toBuffer();
+
+    // ── Apply: dest-in masks the face, then composite onto painting ───────────
     const colorMatchedFace = await sharp(facePng)
       .modulate({ saturation: 0.92, brightness: brightnessRatio })
-      .removeAlpha()   // ensure exactly 3 channels
-      .png()
-      .toBuffer();
-
-    const maskedFace = await sharp(colorMatchedFace)
-      .joinChannel(blendMask)   // grayscale becomes the alpha (4th) channel
+      .ensureAlpha()
+      .composite([{ input: blendMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
     const composited = await sharp(paintingBuf)
-      .composite([{ input: maskedFace, left: targetX, top: targetY, blend: 'over' }])
+      .composite([{ input: colorMatchedFace, left: targetX, top: targetY, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
