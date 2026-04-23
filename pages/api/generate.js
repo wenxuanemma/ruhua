@@ -153,14 +153,16 @@ export default async function handler(req, res) {
   try {
     // Stage 1: InstantID — identity-preserving face generation
     const prediction = await callReplicate({
-      version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
+      // grandlineai/instant-id-artistic — Dreamshaper-XL base model
+      // Produces painterly/artistic output vs photographic protovision-xl
+      version: '9cad10c7870bac9d6b587f406aef28208f964454abff5c4152f7dec9b0212a9a',
       input: {
         image: faceImage,
         prompt: [
           'portrait of a person, warm natural skin tones, full color',
           styleDesc,
           'traditional Chinese court hanfu robes',
-          'soft warm lighting, elegant court figure',
+          'soft warm lighting, elegant court figure, painterly',
         ].join(', '),
         negative_prompt: [
           // Remove glasses and jewelry — historical male figures didn't wear these

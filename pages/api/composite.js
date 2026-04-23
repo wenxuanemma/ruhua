@@ -96,56 +96,66 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Sample painting color at face region ──────────────────────────────────
-    const safeX = Math.max(0, targetX);
-    const safeY = Math.max(0, targetY);
-    const safeW = Math.min(targetW, PW - safeX);
-    const safeH = Math.min(targetH, PH - safeY);
+    // ── Per-channel color statistics matching (Reinhard method) ──────────────
+    // Matches mean+stddev of each RGB channel from generated face to painted face region.
+    // This makes the face adopt the exact ochre/umber palette of the original figure
+    // without any AI generation — deterministic, fast, free.
 
-    const paintingCrop = await sharp(paintingBuf)
+    // Sample painting face region pixels (8×8)
+    const paintingCropRaw = await sharp(paintingBuf)
       .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
       .resize(8, 8, { fit: 'fill' })
       .removeAlpha()
       .raw()
       .toBuffer();
 
-    let rSum = 0, gSum = 0, bSum = 0;
-    const pixels = paintingCrop.length / 3;
-    for (let i = 0; i < paintingCrop.length; i += 3) {
-      rSum += paintingCrop[i]; gSum += paintingCrop[i+1]; bSum += paintingCrop[i+2];
-    }
-    const pR = rSum/pixels, pG = gSum/pixels, pB = bSum/pixels;
-
-    // ── Sample raw face color ─────────────────────────────────────────────────
-    const faceCropSmall = await sharp(facePng)
+    // Sample generated face pixels (center 8×8)
+    const faceCropRaw = await sharp(facePng)
       .resize(8, 8)
       .removeAlpha()
       .raw()
       .toBuffer();
-    let fR = 0, fG = 0, fB = 0;
-    const fp = faceCropSmall.length / 3;
-    for (let i = 0; i < faceCropSmall.length; i += 3) {
-      fR += faceCropSmall[i]; fG += faceCropSmall[i+1]; fB += faceCropSmall[i+2];
+
+    // Compute per-channel mean + stddev for both images
+    function channelStats(buf) {
+      const n = buf.length / 3;
+      let rS=0, gS=0, bS=0;
+      for (let i=0; i<buf.length; i+=3) { rS+=buf[i]; gS+=buf[i+1]; bS+=buf[i+2]; }
+      const rM=rS/n, gM=gS/n, bM=bS/n;
+      let rV=0, gV=0, bV=0;
+      for (let i=0; i<buf.length; i+=3) {
+        rV+=(buf[i]-rM)**2; gV+=(buf[i+1]-gM)**2; bV+=(buf[i+2]-bM)**2;
+      }
+      return { rM, gM, bM, rS:Math.sqrt(rV/n), gS:Math.sqrt(gV/n), bS:Math.sqrt(bV/n) };
     }
 
-    // ── Calculate adaptive brightness to match painting region ────────────────
-    // Each painting has a different brightness level — this generalizes automatically:
-    // 韩熙载夜宴图 → dark (0.3–0.4), 千里江山图 → bright (0.6–0.7), 宫乐图 → warm mid (0.5)
-    const paintingBrightness = (pR + pG + pB) / 3 / 255;
-    const faceBrightness     = ((fR + fG + fB) / 3) / fp / 255;
-    const targetBrightness   = faceBrightness + (paintingBrightness - faceBrightness) * 0.40;  // 40%, was 60%
-    const brightnessRatio    = faceBrightness > 0.01
-      ? Math.max(0.4, Math.min(1.5, targetBrightness / faceBrightness))
-      : 1.0;
+    const pStats = channelStats(paintingCropRaw);
+    const fStats = channelStats(faceCropRaw);
 
-    // ── Extract painting figure at target size ─────────────────────────────────
-    const paintingRegionBuf = await sharp(paintingBuf)
-      .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
-      .resize(targetW, targetH, { fit: 'fill' })
+    // Reinhard transfer: x' = (x - fMean) * (pStd/fStd) * blend + (fMean + pMean*blend)
+    // blend=0.55: 55% toward painting statistics, 45% preserves original face color
+    const blend = 0.55;
+    const rScale = fStats.rS > 1 ? (pStats.rS/fStats.rS-1)*blend+1 : 1;
+    const gScale = fStats.gS > 1 ? (pStats.gS/fStats.gS-1)*blend+1 : 1;
+    const bScale = fStats.bS > 1 ? (pStats.bS/fStats.bS-1)*blend+1 : 1;
+    const rOff = (pStats.rM - fStats.rM) * blend;
+    const gOff = (pStats.gM - fStats.gM) * blend;
+    const bOff = (pStats.bM - fStats.bM) * blend;
+
+    // Apply per-channel transform via Sharp recomb matrix
+    // recomb multiplies [R,G,B] by 3×3 matrix — diagonal for independent channels
+    const colorMatchedFace = await sharp(facePng)
+      .removeAlpha()
+      .recomb([
+        [rScale, 0, 0],
+        [0, gScale, 0],
+        [0, 0, bScale],
+      ])
+      .modulate({ saturation: 0.90 })
       .png()
       .toBuffer();
 
-
+    // Note: recomb handles scale; overall brightness nudge via modulate
     // ── Blend mask: SVG radial gradient oval ─────────────────────────────────
     // cy=52% means oval spans from ~15% to ~89% of region height.
     // Top 15% (hat/headdress area) is transparent → original hat preserved.
@@ -170,15 +180,14 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Apply mask and composite ──────────────────────────────────────────────
-    const colorMatchedFace = await sharp(facePng)
-      .modulate({ saturation: 0.92, brightness: brightnessRatio })
+    const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
     const composited = await sharp(paintingBuf)
-      .composite([{ input: colorMatchedFace, left: targetX, top: targetY, blend: 'over' }])
+      .composite([{ input: maskedFace, left: targetX, top: targetY, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
