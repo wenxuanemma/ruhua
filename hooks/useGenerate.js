@@ -47,6 +47,7 @@ function saveCache(cache) {
 }
 
 
+export function useGenerate() {
   const [status, setStatus]         = useState('idle');
   const [outputUrl, setOutputUrl]   = useState(null);
   const [styledUrl, setStyledUrl]   = useState(null);
