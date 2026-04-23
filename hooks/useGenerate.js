@@ -23,7 +23,30 @@ function quickHash(str) {
   return h.toString(36);
 }
 
-export function useGenerate() {
+// LocalStorage-backed cache — persists across page reloads and deployments
+// Key: 'ruhua_cache_v1', Value: { [selfieHash]: styledFaceUrl }
+// Limit: keep only the 5 most recent to avoid hitting localStorage quota (~5MB)
+const CACHE_KEY = 'ruhua_cache_v1';
+const CACHE_MAX = 5;
+
+function loadCache() {
+  try {
+    return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
+  } catch { return {}; }
+}
+
+function saveCache(cache) {
+  try {
+    // Keep only the CACHE_MAX most recent entries (by insertion order)
+    const entries = Object.entries(cache);
+    const trimmed = Object.fromEntries(entries.slice(-CACHE_MAX));
+    localStorage.setItem(CACHE_KEY, JSON.stringify(trimmed));
+  } catch (e) {
+    console.warn('Cache save failed (storage full?):', e.message);
+  }
+}
+
+
   const [status, setStatus]         = useState('idle');
   const [outputUrl, setOutputUrl]   = useState(null);
   const [styledUrl, setStyledUrl]   = useState(null);
@@ -31,8 +54,8 @@ export function useGenerate() {
   const [error, setError]           = useState(null);
 
   // Cache: selfieHash → styledFaceUrl
-  // Persists across painting/figure switches within the same session
-  const styledCache = useRef({});
+  // In-memory ref backed by localStorage for persistence across reloads/deployments
+  const styledCache = useRef(loadCache());
   const currentSelfieHash = useRef(null);
 
   const pollRef   = useRef(null);
@@ -124,8 +147,9 @@ export function useGenerate() {
         // New selfie — run InstantID
         setStatus('styling');
         styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
-        // Cache for this session
+        // Cache in memory + persist to localStorage (survives reloads and deployments)
         styledCache.current[selfieHash] = styled;
+        saveCache(styledCache.current);
         currentSelfieHash.current = selfieHash;
         setStyledUrl(styled);
         setStatus('compositing');
@@ -154,6 +178,7 @@ export function useGenerate() {
     styledCache.current = {};
     currentSelfieHash.current = null;
     setStyledUrl(null);
+    try { localStorage.removeItem(CACHE_KEY); } catch {}
   }, []);
 
   // hasCachedSelfie: true if we have a styled face ready to reuse
