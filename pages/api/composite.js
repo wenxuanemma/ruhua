@@ -240,16 +240,17 @@ export default async function handler(req, res) {
       console.log(`Oval fallback (skin ${(skinCoverage*100).toFixed(1)}%)`);
     }
 
-    // Apply blend mask: add grayscale mask as alpha channel to the face, then paste
+    // Apply blend mask: set grayscale mask as alpha channel of face
+    // MUST removeAlpha first — joinChannel appends, not replaces.
+    // 3-channel RGB + joinChannel(grayscale) = correct 4-channel RGBA
     const colorMatchedFace = await sharp(facePng)
       .modulate({ saturation: 0.92, brightness: brightnessRatio })
-      .ensureAlpha()
+      .removeAlpha()   // ensure exactly 3 channels
       .png()
       .toBuffer();
 
-    // Use joinChannel to replace alpha with our computed mask
     const maskedFace = await sharp(colorMatchedFace)
-      .joinChannel(blendMask)  // adds mask as new alpha channel
+      .joinChannel(blendMask)   // grayscale becomes the alpha (4th) channel
       .png()
       .toBuffer();
 
