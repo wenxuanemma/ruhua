@@ -178,7 +178,6 @@ export default async function handler(req, res) {
         ].join(', '),
         ip_adapter_image:    styleImageUrl,
         ip_adapter_scale:    0.20,
-        sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
         width:               640,
