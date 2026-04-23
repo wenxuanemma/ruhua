@@ -145,98 +145,31 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Detect face skin in the painting figure via color analysis ─────────────
-    // Only scan the upper 55% of the figure region — that's where the face is.
-    // Lower portion contains robes/clothes that may share warm hues with skin.
-    const { data: pxData } = await sharp(paintingRegionBuf)
-      .removeAlpha()
-      .raw()
-      .toBuffer({ resolveWithObject: true });
 
-    const skinData = Buffer.alloc(targetW * targetH * 3);
-    let skinPixelCount = 0;
-    const faceZoneHeight = Math.round(targetH * 0.55); // only scan top 55%
+    // ── Blend mask: SVG radial gradient oval ─────────────────────────────────
+    // cy=52% means oval spans from ~15% to ~89% of region height.
+    // Top 15% (hat/headdress area) is transparent → original hat preserved.
+    // SVG PNG has a proper alpha channel — dest-in works correctly with it.
+    // Raw buffer approach (joinChannel / manual RGBA) has stride alignment bugs.
+    const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
+          <stop offset="60%" stop-color="white" stop-opacity="1"/>
+          <stop offset="78%" stop-color="white" stop-opacity="0.55"/>
+          <stop offset="91%" stop-color="white" stop-opacity="0.07"/>
+          <stop offset="100%" stop-color="white" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="${targetW*0.50}" cy="${targetH*0.52}"
+               rx="${targetW*0.39}" ry="${targetH*0.37}"
+               fill="url(#g)"/>
+    </svg>`;
+    const blendMask = await sharp(Buffer.from(ovalSvg))
+      .resize(targetW, targetH)
+      .png()
+      .toBuffer();
 
-    for (let py = 0; py < targetH; py++) {
-      for (let px = 0; px < targetW; px++) {
-        const i = (py * targetW + px) * 3;
-        // Below face zone — always mask out (robes/background)
-        if (py > faceZoneHeight) {
-          skinData[i] = skinData[i+1] = skinData[i+2] = 0;
-          continue;
-        }
-        const r = pxData[i], g = pxData[i+1], b = pxData[i+2];
-        const rn = r/255, gn = g/255, bn = b/255;
-        const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
-        const l = (max+min)/2;
-        const d = max-min;
-        const s = d === 0 ? 0 : d/(1 - Math.abs(2*l - 1));
-        let h = 0;
-        if (d !== 0) {
-          if (max===rn) h = ((gn-bn)/d + 6) % 6;
-          else if (max===gn) h = (bn-rn)/d + 2;
-          else h = (rn-gn)/d + 4;
-          h *= 60;
-        }
-        // Tighter skin: warm-yellow hue only (excludes red robes at <15°, ochre bg at >42°)
-        // Higher sat minimum (0.18) excludes desaturated ochre backgrounds
-        const isSkin = h>=15 && h<=42 && s>=0.18 && s<=0.55 && l>=0.52 && l<=0.88;
-        const v = isSkin ? 255 : 0;
-        skinData[i] = v; skinData[i+1] = v; skinData[i+2] = v;
-        if (isSkin) skinPixelCount++;
-      }
-    }
-
-    // ── Center oval — shifted DOWN to protect hat at top of region ───────────
-    // cy=0.52 means oval starts at ~14% from top → hat area (0-14%) is protected
-    const cx = targetW * 0.50, cy = targetH * 0.52;
-    const rx = targetW * 0.37, ry = targetH * 0.36;
-    const rawMask = Buffer.alloc(targetW * targetH); // 1-channel
-    for (let py = 0; py < targetH; py++) {
-      for (let px = 0; px < targetW; px++) {
-        const dx = (px - cx) / rx, dy = (py - cy) / ry;
-        const dist = Math.sqrt(dx*dx + dy*dy);
-        const alpha = dist < 0.82 ? 1 : Math.max(0, 1 - (dist - 0.82) / 0.18);
-        rawMask[py * targetW + px] = Math.round(alpha * 255);
-      }
-    }
-
-    // ── Intersect oval with skin mask if detected ─────────────────────────────
-    const skinCoverage = skinPixelCount / (targetW * faceZoneHeight);
-    const finalMask1ch = Buffer.alloc(targetW * targetH);
-    if (skinCoverage > 0.04) {
-      for (let i = 0; i < targetW * targetH; i++) {
-        const s = skinData[i * 3];  // 0 or 255
-        const o = rawMask[i];       // 0–255
-        finalMask1ch[i] = Math.round((s / 255) * (o / 255) * 255);
-      }
-      console.log(`Skin+oval: ${(skinCoverage*100).toFixed(1)}%`);
-    } else {
-      rawMask.copy(finalMask1ch);
-      console.log(`Oval only (skin ${(skinCoverage*100).toFixed(1)}%)`);
-    }
-
-    // ── Blur the 1-channel mask, then convert to RGBA for dest-in ─────────────
-    // joinChannel is unreliable with PNG grayscale format.
-    // dest-in with RGBA source is the correct Sharp approach:
-    //   output.alpha = face.alpha × mask.alpha  (face is opaque → output.alpha = mask.alpha)
-    const blurredMask1ch = await sharp(finalMask1ch, {
-      raw: { width: targetW, height: targetH, channels: 1 },
-    }).blur(2).raw().toBuffer();
-
-    // Build RGBA mask: R=G=B=255 (white), A=blurred mask value
-    const rgbaData = Buffer.alloc(targetW * targetH * 4);
-    for (let i = 0; i < targetW * targetH; i++) {
-      rgbaData[i*4]   = 255;
-      rgbaData[i*4+1] = 255;
-      rgbaData[i*4+2] = 255;
-      rgbaData[i*4+3] = blurredMask1ch[i];
-    }
-    const blendMask = await sharp(rgbaData, {
-      raw: { width: targetW, height: targetH, channels: 4 },
-    }).png().toBuffer();
-
-    // ── Apply: dest-in masks the face, then composite onto painting ───────────
+    // ── Apply mask and composite ──────────────────────────────────────────────
     const colorMatchedFace = await sharp(facePng)
       .modulate({ saturation: 0.92, brightness: brightnessRatio })
       .ensureAlpha()
