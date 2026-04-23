@@ -206,27 +206,21 @@ export default async function handler(req, res) {
       blendMask = await sharp(Buffer.from(ovalSvg)).resize(targetW, targetH).png().toBuffer();
     }
 
-    // ── Apply color match + blend mask ─────────────────────────────────────────
+    // ── Composite directly onto full painting — no region reconstruction seam ───
+    // maskedFace is transparent everywhere except skin pixels.
+    // Pasting it directly means the painting background is NEVER touched → no seam.
     const colorMatchedFace = await sharp(facePng)
       .modulate({ saturation: 0.92, brightness: brightnessRatio })
       .png()
       .toBuffer();
 
-    // Mask the generated face → only skin area visible, SDXL background transparent
     const maskedFace = await sharp(colorMatchedFace)
       .composite([{ input: blendMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // Composite masked face over original painting region → hair/hat untouched
-    const faceFinal = await sharp(paintingRegionBuf)
-      .composite([{ input: maskedFace, blend: 'over' }])
-      .png()
-      .toBuffer();
-
-    // Paste onto painting
     const composited = await sharp(paintingBuf)
-      .composite([{ input: faceFinal, left: targetX, top: targetY, blend: 'over' }])
+      .composite([{ input: maskedFace, left: targetX, top: targetY, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
