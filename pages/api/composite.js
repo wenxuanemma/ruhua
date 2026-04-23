@@ -205,40 +205,51 @@ export default async function handler(req, res) {
     }
 
     // ── Build blend mask: intersection of painting skin + generated face oval ──
+    // IMPORTANT: Sharp dest-in reads alpha from the mask image.
+    // Must create single-channel (grayscale) PNG, not 3-channel RGB.
     const skinCoverage = skinPixelCount / (targetW * faceZoneHeight);
     let blendMask;
 
     if (skinCoverage > 0.04) {
-      // Intersect: multiply painting skin mask × oval mask
-      const intersectData = Buffer.alloc(targetW * targetH * 3);
-      for (let i = 0; i < intersectData.length; i += 3) {
-        const v = Math.round((skinData[i] / 255) * (ovalData[i] / 255) * 255);
-        intersectData[i] = v; intersectData[i+1] = v; intersectData[i+2] = v;
+      // Intersect: multiply painting skin × oval, then blur softly
+      const intersectData = Buffer.alloc(targetW * targetH); // 1 channel
+      for (let i = 0; i < targetW * targetH; i++) {
+        const s = skinData[i * 3];      // skin mask value (0 or 255)
+        const o = ovalData[i * 3];      // oval mask value (0–255)
+        intersectData[i] = Math.round((s / 255) * (o / 255) * 255);
       }
-      blendMask = await sharp(intersectData, { raw: { width: targetW, height: targetH, channels: 3 } })
+      blendMask = await sharp(intersectData, {
+        raw: { width: targetW, height: targetH, channels: 1 },
+      })
         .blur(2)
         .png()
         .toBuffer();
-      console.log(`Skin+oval intersection: ${(skinCoverage*100).toFixed(1)}% coverage`);
+      console.log(`Skin+oval intersection: ${(skinCoverage*100).toFixed(1)}%`);
     } else {
-      // Fallback to oval only — sparse painting or detection failure
-      console.log(`Skin sparse (${(skinCoverage*100).toFixed(1)}%), using oval fallback`);
-      blendMask = await sharp(ovalData, { raw: { width: targetW, height: targetH, channels: 3 } })
+      // Fallback: oval only
+      const ovalSingle = Buffer.alloc(targetW * targetH);
+      for (let i = 0; i < targetW * targetH; i++) {
+        ovalSingle[i] = ovalData[i * 3];
+      }
+      blendMask = await sharp(ovalSingle, {
+        raw: { width: targetW, height: targetH, channels: 1 },
+      })
         .blur(2)
         .png()
         .toBuffer();
+      console.log(`Oval fallback (skin ${(skinCoverage*100).toFixed(1)}%)`);
     }
 
-    // ── Composite directly onto full painting — no region reconstruction seam ───
-    // maskedFace is transparent everywhere except skin pixels.
-    // Pasting it directly means the painting background is NEVER touched → no seam.
+    // Apply blend mask: add grayscale mask as alpha channel to the face, then paste
     const colorMatchedFace = await sharp(facePng)
       .modulate({ saturation: 0.92, brightness: brightnessRatio })
+      .ensureAlpha()
       .png()
       .toBuffer();
 
+    // Use joinChannel to replace alpha with our computed mask
     const maskedFace = await sharp(colorMatchedFace)
-      .composite([{ input: blendMask, blend: 'dest-in' }])
+      .joinChannel(blendMask)  // adds mask as new alpha channel
       .png()
       .toBuffer();
 
