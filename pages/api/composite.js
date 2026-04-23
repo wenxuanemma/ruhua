@@ -138,52 +138,87 @@ export default async function handler(req, res) {
       ? Math.max(0.4, Math.min(1.5, targetBrightness / faceBrightness))
       : 1.0;
 
-    // ── Apply brightness only — remove tint which was causing desaturation ──────
-    // Sharp's tint() replaces ALL chroma with the tint color (near-gray for dark paintings)
-    // causing the gray face issue. Brightness matching alone is sufficient.
-    const colorMatchedFace = await sharp(facePng)
-      .modulate({
-        saturation: 0.92,          // very mild reduction
-        brightness: brightnessRatio,
-      })
-      .png()
-      .toBuffer();
-
-    // Tight oval — hard falloff to minimize halo from SDXL background
-    const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="g" cx="50%" cy="46%" rx="50%" ry="50%">
-          <stop offset="62%" stop-color="white" stop-opacity="1"/>
-          <stop offset="78%" stop-color="white" stop-opacity="0.6"/>
-          <stop offset="90%" stop-color="white" stop-opacity="0.1"/>
-          <stop offset="97%" stop-color="white" stop-opacity="0.02"/>
-          <stop offset="100%" stop-color="white" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.46}"
-               rx="${targetW*0.46}" ry="${targetH*0.50}"
-               fill="url(#g)"/>
-    </svg>`;
-
-    const ovalMask = await sharp(Buffer.from(ovalSvg))
-      .resize(targetW, targetH)
-      .toBuffer();
-
-    // Extract painting region at face target size — used as background for blending
+    // ── Extract painting figure at target size ─────────────────────────────────
     const paintingRegionBuf = await sharp(paintingBuf)
       .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
       .resize(targetW, targetH, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // Correct blend order to eliminate SDXL background bleed:
-    // Step 1: apply oval mask to face → SDXL background becomes transparent
-    // Step 2: composite masked face onto painting pixels → edges fade into painting, not SDXL green
-    const maskedFace = await sharp(colorMatchedFace)
-      .composite([{ input: ovalMask, blend: 'dest-in' }])
+    // ── Detect face skin in the painting figure via color analysis ─────────────
+    // Ancient Chinese figure paintings: face skin is distinctly warm + light
+    // hue 12–52°, moderate saturation, HIGH lightness — clearly above hair/hat/robes
+    const { data: pxData } = await sharp(paintingRegionBuf)
+      .removeAlpha()
+      .raw()
+      .toBuffer({ resolveWithObject: true });
+
+    const skinData = Buffer.alloc(targetW * targetH * 3);
+    let skinPixelCount = 0;
+    for (let i = 0; i < pxData.length; i += 3) {
+      const r = pxData[i], g = pxData[i+1], b = pxData[i+2];
+      const rn = r/255, gn = g/255, bn = b/255;
+      const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
+      const l = (max+min)/2;
+      const d = max-min;
+      const s = d === 0 ? 0 : d/(1 - Math.abs(2*l - 1));
+      let h = 0;
+      if (d !== 0) {
+        if (max===rn) h = ((gn-bn)/d + 6) % 6;
+        else if (max===gn) h = (bn-rn)/d + 2;
+        else h = (rn-gn)/d + 4;
+        h *= 60;
+      }
+      // Face skin: warm hue, moderate saturation, high lightness
+      const isSkin = h>=12 && h<=52 && s>=0.12 && s<=0.60 && l>=0.50 && l<=0.90;
+      const v = isSkin ? 255 : 0;
+      skinData[i] = v; skinData[i+1] = v; skinData[i+2] = v;
+      if (isSkin) skinPixelCount++;
+    }
+
+    // Build the blend mask — prefer painting-derived skin mask, fall back to oval if sparse
+    let blendMask;
+    const skinCoverage = skinPixelCount / (targetW * targetH);
+
+    if (skinCoverage > 0.04) {
+      // Use painting's own skin region — this preserves hat, hair, braids exactly
+      blendMask = await sharp(skinData, { raw: { width: targetW, height: targetH, channels: 3 } })
+        .blur(3)   // soften edges for natural transition
+        .png()
+        .toBuffer();
+      console.log(`Skin mask: ${(skinCoverage*100).toFixed(1)}% coverage`);
+    } else {
+      // Fallback to tight oval (sparse paintings or failed detection)
+      console.log(`Skin sparse (${(skinCoverage*100).toFixed(1)}%), using oval fallback`);
+      const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g" cx="50%" cy="42%" rx="50%" ry="50%">
+            <stop offset="55%" stop-color="white" stop-opacity="1"/>
+            <stop offset="75%" stop-color="white" stop-opacity="0.5"/>
+            <stop offset="90%" stop-color="white" stop-opacity="0.08"/>
+            <stop offset="100%" stop-color="white" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="${targetW*0.50}" cy="${targetH*0.42}"
+                 rx="${targetW*0.42}" ry="${targetH*0.44}"
+                 fill="url(#g)"/>
+      </svg>`;
+      blendMask = await sharp(Buffer.from(ovalSvg)).resize(targetW, targetH).png().toBuffer();
+    }
+
+    // ── Apply color match + blend mask ─────────────────────────────────────────
+    const colorMatchedFace = await sharp(facePng)
+      .modulate({ saturation: 0.92, brightness: brightnessRatio })
       .png()
       .toBuffer();
 
+    // Mask the generated face → only skin area visible, SDXL background transparent
+    const maskedFace = await sharp(colorMatchedFace)
+      .composite([{ input: blendMask, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+
+    // Composite masked face over original painting region → hair/hat untouched
     const faceFinal = await sharp(paintingRegionBuf)
       .composite([{ input: maskedFace, blend: 'over' }])
       .png()
