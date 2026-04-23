@@ -146,8 +146,8 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Detect face skin in the painting figure via color analysis ─────────────
-    // Ancient Chinese figure paintings: face skin is distinctly warm + light
-    // hue 12–52°, moderate saturation, HIGH lightness — clearly above hair/hat/robes
+    // Only scan the upper 55% of the figure region — that's where the face is.
+    // Lower portion contains robes/clothes that may share warm hues with skin.
     const { data: pxData } = await sharp(paintingRegionBuf)
       .removeAlpha()
       .raw()
@@ -155,55 +155,78 @@ export default async function handler(req, res) {
 
     const skinData = Buffer.alloc(targetW * targetH * 3);
     let skinPixelCount = 0;
-    for (let i = 0; i < pxData.length; i += 3) {
-      const r = pxData[i], g = pxData[i+1], b = pxData[i+2];
-      const rn = r/255, gn = g/255, bn = b/255;
-      const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
-      const l = (max+min)/2;
-      const d = max-min;
-      const s = d === 0 ? 0 : d/(1 - Math.abs(2*l - 1));
-      let h = 0;
-      if (d !== 0) {
-        if (max===rn) h = ((gn-bn)/d + 6) % 6;
-        else if (max===gn) h = (bn-rn)/d + 2;
-        else h = (rn-gn)/d + 4;
-        h *= 60;
+    const faceZoneHeight = Math.round(targetH * 0.55); // only scan top 55%
+
+    for (let py = 0; py < targetH; py++) {
+      for (let px = 0; px < targetW; px++) {
+        const i = (py * targetW + px) * 3;
+        // Below face zone — always mask out (robes/background)
+        if (py > faceZoneHeight) {
+          skinData[i] = skinData[i+1] = skinData[i+2] = 0;
+          continue;
+        }
+        const r = pxData[i], g = pxData[i+1], b = pxData[i+2];
+        const rn = r/255, gn = g/255, bn = b/255;
+        const max = Math.max(rn,gn,bn), min = Math.min(rn,gn,bn);
+        const l = (max+min)/2;
+        const d = max-min;
+        const s = d === 0 ? 0 : d/(1 - Math.abs(2*l - 1));
+        let h = 0;
+        if (d !== 0) {
+          if (max===rn) h = ((gn-bn)/d + 6) % 6;
+          else if (max===gn) h = (bn-rn)/d + 2;
+          else h = (rn-gn)/d + 4;
+          h *= 60;
+        }
+        // Tighter skin: warm-yellow hue only (excludes red robes at <15°, ochre bg at >42°)
+        // Higher sat minimum (0.18) excludes desaturated ochre backgrounds
+        const isSkin = h>=15 && h<=42 && s>=0.18 && s<=0.55 && l>=0.52 && l<=0.88;
+        const v = isSkin ? 255 : 0;
+        skinData[i] = v; skinData[i+1] = v; skinData[i+2] = v;
+        if (isSkin) skinPixelCount++;
       }
-      // Face skin: warm hue, moderate saturation, high lightness
-      const isSkin = h>=12 && h<=52 && s>=0.12 && s<=0.60 && l>=0.50 && l<=0.90;
-      const v = isSkin ? 255 : 0;
-      skinData[i] = v; skinData[i+1] = v; skinData[i+2] = v;
-      if (isSkin) skinPixelCount++;
     }
 
-    // Build the blend mask — prefer painting-derived skin mask, fall back to oval if sparse
+    // ── Center oval mask from generated face — excludes SDXL background ────────
+    // Intersect with painting skin mask so neither source's background bleeds through
+    const cx = targetW * 0.50, cy = targetH * 0.44;
+    const rx = targetW * 0.38, ry = targetH * 0.40; // tight oval, face only
+    const ovalData = Buffer.alloc(targetW * targetH * 3);
+    for (let py = 0; py < targetH; py++) {
+      for (let px = 0; px < targetW; px++) {
+        const dx = (px - cx) / rx, dy = (py - cy) / ry;
+        const dist = Math.sqrt(dx*dx + dy*dy);
+        // Hard falloff: opaque inside 0.85, fade to 0 by 1.0
+        const alpha = dist < 0.85 ? 1 : Math.max(0, 1 - (dist - 0.85) / 0.15);
+        const v = Math.round(alpha * 255);
+        const i = (py * targetW + px) * 3;
+        ovalData[i] = v; ovalData[i+1] = v; ovalData[i+2] = v;
+      }
+    }
+
+    // ── Build blend mask: intersection of painting skin + generated face oval ──
+    const skinCoverage = skinPixelCount / (targetW * faceZoneHeight);
     let blendMask;
-    const skinCoverage = skinPixelCount / (targetW * targetH);
 
     if (skinCoverage > 0.04) {
-      // Use painting's own skin region — this preserves hat, hair, braids exactly
-      blendMask = await sharp(skinData, { raw: { width: targetW, height: targetH, channels: 3 } })
-        .blur(3)   // soften edges for natural transition
+      // Intersect: multiply painting skin mask × oval mask
+      const intersectData = Buffer.alloc(targetW * targetH * 3);
+      for (let i = 0; i < intersectData.length; i += 3) {
+        const v = Math.round((skinData[i] / 255) * (ovalData[i] / 255) * 255);
+        intersectData[i] = v; intersectData[i+1] = v; intersectData[i+2] = v;
+      }
+      blendMask = await sharp(intersectData, { raw: { width: targetW, height: targetH, channels: 3 } })
+        .blur(2)
         .png()
         .toBuffer();
-      console.log(`Skin mask: ${(skinCoverage*100).toFixed(1)}% coverage`);
+      console.log(`Skin+oval intersection: ${(skinCoverage*100).toFixed(1)}% coverage`);
     } else {
-      // Fallback to tight oval (sparse paintings or failed detection)
+      // Fallback to oval only — sparse painting or detection failure
       console.log(`Skin sparse (${(skinCoverage*100).toFixed(1)}%), using oval fallback`);
-      const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="g" cx="50%" cy="42%" rx="50%" ry="50%">
-            <stop offset="55%" stop-color="white" stop-opacity="1"/>
-            <stop offset="75%" stop-color="white" stop-opacity="0.5"/>
-            <stop offset="90%" stop-color="white" stop-opacity="0.08"/>
-            <stop offset="100%" stop-color="white" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <ellipse cx="${targetW*0.50}" cy="${targetH*0.42}"
-                 rx="${targetW*0.42}" ry="${targetH*0.44}"
-                 fill="url(#g)"/>
-      </svg>`;
-      blendMask = await sharp(Buffer.from(ovalSvg)).resize(targetW, targetH).png().toBuffer();
+      blendMask = await sharp(ovalData, { raw: { width: targetW, height: targetH, channels: 3 } })
+        .blur(2)
+        .png()
+        .toBuffer();
     }
 
     // ── Composite directly onto full painting — no region reconstruction seam ───
