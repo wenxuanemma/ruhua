@@ -53,39 +53,41 @@ async function getPredictionOutput(prediction) {
 }
 
 async function paintifyFace(faceUrl, paintedFaceB64) {
-  // Use the actual painted figure's face as ip_adapter style reference.
-  // This directly transfers the brushwork, flat lighting, and ochre palette
-  // of the original figure — far more accurate than text prompt guessing.
-  const input = {
-    image:   faceUrl,
-    prompt: [
-      'portrait, full color, warm tones',
-      'traditional painted figure, matte finish',
-      'flat even lighting, no photographic shadows',
-    ].join(', '),
-    negative_prompt: [
-      'black and white', 'grayscale', 'monochrome',
-      'photorealistic', 'photograph', 'DSLR',
-      'subsurface scattering', 'specular highlights',
-      'japanese', 'anime', 'blurry', 'bad anatomy',
-    ].join(', '),
-    prompt_strength:     0.45,
-    num_inference_steps: 30,
-    guidance_scale:      7.5,
-    width:               640,
-    height:              640,
-  };
+  // Flux Kontext: text-guided image editing with strong identity preservation
+  // Far more effective than SDXL img2img for style transfer — it edits rather than regenerates
+  const prompt = [
+    'Transform this photographic portrait to match the style of a 10th century Chinese silk painting.',
+    'Apply flat matte skin with warm ochre and umber tones, remove all photographic lighting effects,',
+    'remove specular highlights and subsurface scattering, add subtle visible brushstroke texture on skin,',
+    'muted warm color palette of aged mineral pigments.',
+    'Keep the exact same face, expression, identity, and composition.',
+    'Do not add any hair ornaments, braids, or headdress.',
+  ].join(' ');
 
-  // If we have the actual painted face, use it as strong style reference
-  if (paintedFaceB64) {
-    input.ip_adapter_image = paintedFaceB64;
-    input.ip_adapter_scale = 0.55;  // strong enough to transfer style, low enough to keep identity
+  const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-kontext-pro/predictions', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+      'Content-Type': 'application/json',
+      'Prefer': 'wait',
+    },
+    body: JSON.stringify({
+      input: {
+        prompt,
+        input_image: faceUrl,
+        aspect_ratio: '1:1',
+        output_format: 'jpeg',
+        safety_tolerance: 6,
+      },
+    }),
+  });
+
+  if (!response.ok) {
+    const err = await response.text();
+    throw new Error(`Flux Kontext error: ${err}`);
   }
 
-  const prediction = await callReplicate({
-    version: '39ed52f2a78e934b3ba6e2a89f5b1c712de7dfea535525255b1aa35c5565e08b',
-    input,
-  });
+  const prediction = await response.json();
   return getPredictionOutput(prediction);
 }
 
@@ -166,7 +168,8 @@ export default async function handler(req, res) {
         ].join(', '),
         negative_prompt: [
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
-          'earrings', 'jewelry', 'necklace', 'accessories', 'piercings',
+          'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
+          'piercings', 'ear piercing', 'hoop earring', 'stud earring', 'dangly earring',
           'braids', 'braid', 'pigtails', 'plaits', 'hair bun', 'topknot',
           'elaborate hairstyle', 'hair ornament', 'hair accessory',
           'black and white', 'grayscale', 'monochrome', 'desaturated',
