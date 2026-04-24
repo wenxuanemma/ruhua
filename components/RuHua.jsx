@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
-import { useGenerate } from '../hooks/useGenerate';
+import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -505,9 +505,10 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
 function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake, onBack }) {
-  const [camState, setCamState] = useState('starting'); // starting | live | counting | flash | done | error
+  const [camState, setCamState] = useState('starting');
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(null);
+  const lastSelfie = loadLastSelfie();
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
@@ -808,7 +809,19 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
         {/* Buttons */}
         <div style={{ width:'100%', maxWidth:300, marginTop:20, display:'flex', flexDirection:'column', gap:10 }}>
           {camState !== 'done' ? (
-            <button
+            <>
+              {lastSelfie && (
+                <button onClick={() => {
+                  onCaptured(lastSelfie);
+                  onConfirm();
+                }} className="btn" style={{
+                  background:'rgba(201,168,76,.12)', border:`1px solid ${C.gold}`,
+                  color:C.gold, fontFamily:F.brush, fontSize:16, padding:'12px 18px',
+                  letterSpacing:'.12em', marginBottom:8,
+                }}>
+                  ✓ 使用上次自拍 · 直接入画
+                </button>
+              )}
               onClick={handleCapture}
               disabled={camState !== 'live'}
               className="btn"
@@ -821,6 +834,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
               }}>
               {camState === 'live' ? '拍照' : camState === 'counting' ? `${count}…` : camState === 'error' ? '无法拍摄' : '准备中…'}
             </button>
+            </>
           ) : (
             <>
               <button onClick={onConfirm} className="btn" style={{

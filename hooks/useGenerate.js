@@ -47,7 +47,19 @@ function saveCache(cache) {
 }
 
 
-export function useGenerate() {
+const SELFIE_KEY = 'ruhua_last_selfie_v1';
+
+function saveLastSelfie(selfieB64) {
+  try { localStorage.setItem(SELFIE_KEY, selfieB64); } catch {}
+}
+
+export function loadLastSelfie() {
+  try { return localStorage.getItem(SELFIE_KEY) || null; } catch { return null; }
+}
+
+export function clearLastSelfie() {
+  try { localStorage.removeItem(SELFIE_KEY); } catch {}
+}
   const [status, setStatus]         = useState('idle');
   const [outputUrl, setOutputUrl]   = useState(null);
   const [styledUrl, setStyledUrl]   = useState(null);
@@ -166,6 +178,7 @@ export function useGenerate() {
 
         styledCache.current[selfieHash] = styled;
         saveCache(styledCache.current);
+        saveLastSelfie(selfie);  // save selfie so user can reuse from landing page
         currentSelfieHash.current = selfieHash;
         setStyledUrl(styled);
         setStatus('compositing');
@@ -195,6 +208,7 @@ export function useGenerate() {
     currentSelfieHash.current = null;
     setStyledUrl(null);
     try { localStorage.removeItem(CACHE_KEY); } catch {}
+    clearLastSelfie();
   }, []);
 
   // hasCachedSelfie: true if we have a styled face ready to reuse
