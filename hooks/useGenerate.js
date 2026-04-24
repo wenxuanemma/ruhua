@@ -60,6 +60,8 @@ export function loadLastSelfie() {
 export function clearLastSelfie() {
   try { localStorage.removeItem(SELFIE_KEY); } catch {}
 }
+
+export function useGenerate() {
   const [status, setStatus]         = useState('idle');
   const [outputUrl, setOutputUrl]   = useState(null);
   const [styledUrl, setStyledUrl]   = useState(null);
