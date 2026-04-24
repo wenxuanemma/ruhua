@@ -504,7 +504,7 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
 
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
-function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake, onBack }) {
+function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, onCaptured, onRetake, onBack }) {
   const [camState, setCamState] = useState('starting');
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(null);
@@ -812,8 +812,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
             <>
               {lastSelfie && (
                 <button onClick={() => {
-                  onCaptured(lastSelfie);
-                  onConfirm();
+                  onConfirmWithSelfie(lastSelfie);
                 }} className="btn" style={{
                   background:'rgba(201,168,76,.12)', border:`1px solid ${C.gold}`,
                   color:C.gold, fontFamily:F.brush, fontSize:16, padding:'12px 18px',
@@ -862,10 +861,11 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
 // ─── Processing Screen ───────────────────────────────────────────────────────
 
 const STEPS = [
-  { zh:'准备中',     en:'Preparing'                  },  // submitting
-  { zh:'风格迁移',   en:'Applying style transfer'    },  // styling (InstantID, ~35s)
-  { zh:'合成入画',   en:'Compositing into the scroll'},  // compositing (~3s)
-  { zh:'完成',       en:'Done'                       },  // succeeded
+  { zh:'准备中',     en:'Preparing'                   },  // submitting
+  { zh:'风格迁移',   en:'Applying style transfer'     },  // styling (InstantID, ~35s)
+  { zh:'笔墨渲染',   en:'Rendering brushstroke style' },  // painting (Flux Kontext, ~20s)
+  { zh:'合成入画',   en:'Compositing into the scroll' },  // compositing (~3s)
+  { zh:'完成',       en:'Done'                        },  // succeeded
 ];
 
 function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
@@ -1292,7 +1292,7 @@ export default function RuHua() {
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
   // Cached selfie: submitting(1) → compositing(3) → succeeded(4)
-  const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:3, succeeded:4, failed:0 };
+  const STEP_FOR_STATUS = { submitting:1, styling:2, paintifying:3, compositing:4, succeeded:5, failed:0 };
   const procStep = STEP_FOR_STATUS[status] ?? 1;
 
   // Fetch real painting thumbnails on mount
@@ -1371,6 +1371,16 @@ export default function RuHua() {
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
                                       onRetake={() => clearSelfieCache()}
+                                      onConfirmWithSelfie={(img) => {
+                                        setScreen('processing');
+                                        generate({
+                                          selfie: img,
+                                          painting,
+                                          figure,
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
+                                        });
+                                      }}
                                       onConfirm={() => {
                                         setScreen('processing');
                                         generate({

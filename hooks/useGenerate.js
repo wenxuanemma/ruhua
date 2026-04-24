@@ -117,6 +117,17 @@ export function useGenerate() {
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
 
+  const runPaintify = useCallback(async (faceUrl) => {
+    const res = await fetch('/api/paintify', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ faceUrl }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error || 'Paintify failed');
+    return data.outputUrl;
+  }, []);
+
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
     const res = await fetch('/api/composite', {
       method: 'POST',
@@ -163,6 +174,14 @@ export function useGenerate() {
         setStatus('styling');
         styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
 
+        // Stage 2: Paintify via separate endpoint (avoids Vercel 60s timeout)
+        setStatus('painting');
+        try {
+          styled = await runPaintify(styled);
+        } catch (e) {
+          console.warn('Paintify failed, using InstantID output:', e.message);
+        }
+
         // Convert Replicate URL → base64 before caching
         // Replicate delivery URLs expire after ~24h — base64 is permanent
         try {
@@ -180,14 +199,29 @@ export function useGenerate() {
 
         styledCache.current[selfieHash] = styled;
         saveCache(styledCache.current);
-        saveLastSelfie(selfie);  // save selfie so user can reuse from landing page
+        saveLastSelfie(selfie);
         currentSelfieHash.current = selfieHash;
         setStyledUrl(styled);
-        setStatus('compositing');
+        setStatus('paintifying');
       }
 
+      // Paintify: Flux Kontext style transfer (separate API call, ~20s)
+      // Always run — applies painting style to the face regardless of cache
+      setStatus('paintifying');
+      let paintified = styled;
+      try {
+        paintified = await runPaintify(
+          typeof styled === 'string' && styled.startsWith('data:')
+            ? styled  // base64 from cache — send directly
+            : styled  // URL from fresh InstantID
+        );
+      } catch (e) {
+        console.warn('Paintify failed, using InstantID output:', e.message);
+      }
+
+      setStatus('compositing');
       const composite = await runComposite({
-        styledFaceUrl:    styled,
+        styledFaceUrl:    paintified,
         painting,
         figure,
         paintingImageUrl: styleImageUrl,
@@ -202,7 +236,7 @@ export function useGenerate() {
       setError(err.message);
       setStatus('failed');
     }
-  }, [runStyleTransfer, runComposite]);
+  }, [runStyleTransfer, runPaintify, runComposite]);
 
   // clearSelfieCache: call this when user explicitly takes a new selfie
   const clearSelfieCache = useCallback(() => {
