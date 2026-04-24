@@ -822,18 +822,19 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
                   ✓ 使用上次自拍 · 直接入画
                 </button>
               )}
-              onClick={handleCapture}
-              disabled={camState !== 'live'}
-              className="btn"
-              style={{
-                background: camState === 'live' ? C.vermillion : 'rgba(191,36,41,.3)',
-                color:'#f5e8c4', fontFamily:F.brush, fontSize:20,
-                padding:'14px', letterSpacing:'.35em',
-                cursor: camState === 'live' ? 'pointer' : 'default',
-                boxShadow: camState === 'live' ? `0 4px 22px rgba(191,36,41,.32)` : 'none',
-              }}>
-              {camState === 'live' ? '拍照' : camState === 'counting' ? `${count}…` : camState === 'error' ? '无法拍摄' : '准备中…'}
-            </button>
+              <button
+                onClick={handleCapture}
+                disabled={camState !== 'live'}
+                className="btn"
+                style={{
+                  background: camState === 'live' ? C.vermillion : 'rgba(191,36,41,.3)',
+                  color:'#f5e8c4', fontFamily:F.brush, fontSize:20,
+                  padding:'14px', letterSpacing:'.35em',
+                  cursor: camState === 'live' ? 'pointer' : 'default',
+                  boxShadow: camState === 'live' ? `0 4px 22px rgba(191,36,41,.32)` : 'none',
+                }}>
+                {camState === 'live' ? '拍照' : camState === 'counting' ? `${count}…` : camState === 'error' ? '无法拍摄' : '准备中…'}
+              </button>
             </>
           ) : (
             <>
