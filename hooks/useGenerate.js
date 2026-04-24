@@ -163,38 +163,40 @@ export function useGenerate() {
       let styled;
 
       if (isSameSelfie) {
-        // Cached selfie — skip InstantID, go straight to compositing
-        // Brief pause so the user sees "准备中" before jumping to compositing
+        // Cached selfie — already paintified, skip InstantID + Flux Kontext
         styled = cachedStyled;
         setStyledUrl(styled);
-        await new Promise(r => setTimeout(r, 400));
+        await new Promise(r => setTimeout(r, 400)); // brief so step 1 is visible
         setStatus('compositing');
       } else {
-        // New selfie — run InstantID
+        // New selfie — run full pipeline: InstantID → Flux Kontext → cache
+
+        // Step 1: InstantID style transfer (~35s)
         setStatus('styling');
         styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
 
-        // Stage 2: Paintify via separate endpoint (avoids Vercel 60s timeout)
-        setStatus('painting');
+        // Step 2: Flux Kontext paintify (~20s) — separate API call under 60s Vercel limit
+        setStatus('paintifying');
         try {
-          styled = await runPaintify(styled);
+          const paintified = await runPaintify(styled);
+          if (paintified) styled = paintified;
         } catch (e) {
           console.warn('Paintify failed, using InstantID output:', e.message);
         }
 
-        // Convert Replicate URL → base64 before caching
-        // Replicate delivery URLs expire after ~24h — base64 is permanent
+        // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
-          const imgRes = await fetch(styled);
-          const blob = await imgRes.blob();
-          const b64 = await new Promise(resolve => {
-            const reader = new FileReader();
-            reader.onload = () => resolve(reader.result);
-            reader.readAsDataURL(blob);
-          });
-          styled = b64; // replace URL with permanent base64
+          if (typeof styled === 'string' && styled.startsWith('http')) {
+            const imgRes = await fetch(styled);
+            const blob = await imgRes.blob();
+            styled = await new Promise(resolve => {
+              const reader = new FileReader();
+              reader.onload = () => resolve(reader.result);
+              reader.readAsDataURL(blob);
+            });
+          }
         } catch (e) {
-          console.warn('Could not convert styled URL to base64, caching URL instead:', e.message);
+          console.warn('Could not convert to base64, caching URL:', e.message);
         }
 
         styledCache.current[selfieHash] = styled;
@@ -202,26 +204,11 @@ export function useGenerate() {
         saveLastSelfie(selfie);
         currentSelfieHash.current = selfieHash;
         setStyledUrl(styled);
-        setStatus('paintifying');
+        setStatus('compositing');
       }
 
-      // Paintify: Flux Kontext style transfer (separate API call, ~20s)
-      // Always run — applies painting style to the face regardless of cache
-      setStatus('paintifying');
-      let paintified = styled;
-      try {
-        paintified = await runPaintify(
-          typeof styled === 'string' && styled.startsWith('data:')
-            ? styled  // base64 from cache — send directly
-            : styled  // URL from fresh InstantID
-        );
-      } catch (e) {
-        console.warn('Paintify failed, using InstantID output:', e.message);
-      }
-
-      setStatus('compositing');
       const composite = await runComposite({
-        styledFaceUrl:    paintified,
+        styledFaceUrl:    styled,
         painting,
         figure,
         paintingImageUrl: styleImageUrl,
