@@ -92,9 +92,15 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'top' })  // cover preserves aspect ratio; top keeps forehead
+      .resize(targetW, targetH, { fit: 'cover', position: 'top' })
       .png()
       .toBuffer();
+
+    // Safe bounds — clamp target region to painting dimensions
+    const safeX = Math.max(0, targetX);
+    const safeY = Math.max(0, targetY);
+    const safeW = Math.min(targetW, PW - safeX);
+    const safeH = Math.min(targetH, PH - safeY);
 
     // ── Per-channel color statistics matching (Reinhard method) ──────────────
     // Matches mean+stddev of each RGB channel from generated face to painted face region.
