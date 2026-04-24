@@ -167,13 +167,15 @@ export default async function handler(req, res) {
         negative_prompt: [
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'jewelry', 'necklace', 'accessories', 'piercings',
+          'braids', 'braid', 'pigtails', 'plaits', 'hair bun', 'topknot',
+          'elaborate hairstyle', 'hair ornament', 'hair accessory',
           'black and white', 'grayscale', 'monochrome', 'desaturated',
           'ink wash', 'sumi-e', 'sketch',
           'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
         ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.20,
+        ip_adapter_scale:    0.15,  // reduced from 0.20 — less hairstyle bleed from style ref
         sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
