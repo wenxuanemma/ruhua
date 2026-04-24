@@ -152,11 +152,11 @@ export function useGenerate() {
       let styled;
 
       if (isSameSelfie) {
-        // Same selfie — skip InstantID, reuse cached styled face
-        console.log('Reusing cached styled face for selfie', selfieHash);
+        // Cached selfie — skip InstantID, go straight to compositing
+        // Brief pause so the user sees "准备中" before jumping to compositing
         styled = cachedStyled;
         setStyledUrl(styled);
-        // Jump straight to compositing
+        await new Promise(r => setTimeout(r, 400));
         setStatus('compositing');
       } else {
         // New selfie — run InstantID

@@ -862,10 +862,10 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onCaptured, onRetake,
 // ─── Processing Screen ───────────────────────────────────────────────────────
 
 const STEPS = [
-  { zh:'分析面部特征', en:'Analyzing facial structure'   },
-  { zh:'学习笔墨风格', en:'Learning brushstroke language' },
-  { zh:'风格迁移渲染', en:'Applying style transfer'       },
-  { zh:'合成入画',     en:'Compositing into the scroll'  },
+  { zh:'准备中',     en:'Preparing'                  },  // submitting
+  { zh:'风格迁移',   en:'Applying style transfer'    },  // styling (InstantID, ~35s)
+  { zh:'合成入画',   en:'Compositing into the scroll'},  // compositing (~3s)
+  { zh:'完成',       en:'Done'                       },  // succeeded
 ];
 
 function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
@@ -1289,8 +1289,10 @@ export default function RuHua() {
 
   const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, hasCachedSelfie } = useGenerate();
 
-  // Map status → processing step
-  const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:4, succeeded:4, failed:0 };
+  // Map status → processing step index (1-based, matches STEPS array)
+  // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
+  // Cached selfie: submitting(1) → compositing(3) → succeeded(4)
+  const STEP_FOR_STATUS = { submitting:1, styling:2, compositing:3, succeeded:4, failed:0 };
   const procStep = STEP_FOR_STATUS[status] ?? 1;
 
   // Fetch real painting thumbnails on mount
