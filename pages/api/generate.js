@@ -69,7 +69,7 @@ async function paintifyFace(faceUrl, paintedFaceB64) {
       'subsurface scattering', 'specular highlights',
       'japanese', 'anime', 'blurry', 'bad anatomy',
     ].join(', '),
-    prompt_strength:     0.32,
+    prompt_strength:     0.45,
     num_inference_steps: 30,
     guidance_scale:      7.5,
     width:               640,
@@ -153,9 +153,9 @@ export default async function handler(req, res) {
   try {
     // Stage 1: InstantID — identity-preserving face generation
     const prediction = await callReplicate({
-      // grandlineai/instant-id-artistic — Dreamshaper-XL base model
-      // Produces painterly/artistic output vs photographic protovision-xl
-      version: '9cad10c7870bac9d6b587f406aef28208f964454abff5c4152f7dec9b0212a9a',
+      // Back to c98b2e7a (protovision-xl) — grandlineai/instant-id-artistic has
+      // 3-5 min cold starts due to low traffic. protovision is warm and reliable.
+      version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
         image: faceImage,
         prompt: [
@@ -165,19 +165,16 @@ export default async function handler(req, res) {
           'soft warm lighting, elegant court figure, painterly',
         ].join(', '),
         negative_prompt: [
-          // Remove glasses and jewelry — historical male figures didn't wear these
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'jewelry', 'necklace', 'accessories', 'piercings',
-          // Anti-gray
           'black and white', 'grayscale', 'monochrome', 'desaturated',
           'ink wash', 'sumi-e', 'sketch',
-          // Anti-Japanese
           'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
-          // Anti-photo artifacts
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
         ip_adapter_image:    styleImageUrl,
         ip_adapter_scale:    0.20,
+        sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
         width:               640,
