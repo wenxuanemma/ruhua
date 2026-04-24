@@ -56,12 +56,14 @@ async function paintifyFace(faceUrl, paintedFaceB64) {
   // Flux Kontext: text-guided image editing with strong identity preservation
   // Far more effective than SDXL img2img for style transfer — it edits rather than regenerates
   const prompt = [
-    'Transform this photographic portrait to match the style of a 10th century Chinese silk painting.',
-    'Apply flat matte skin with warm ochre and umber tones, remove all photographic lighting effects,',
-    'remove specular highlights and subsurface scattering, add subtle visible brushstroke texture on skin,',
-    'muted warm color palette of aged mineral pigments.',
-    'Keep the exact same face, expression, identity, and composition.',
-    'Do not add any hair ornaments, braids, or headdress.',
+    'Convert this photographic portrait into a painted figure from a 10th century Chinese silk handscroll.',
+    'Replace all photographic skin texture with flat matte paint — no pores, no subsurface scattering, no specular highlights.',
+    'Apply warm ochre and raw umber skin tones typical of Five Dynasties period figure painting.',
+    'The face should look like it is painted with mineral pigments on aged silk.',
+    'Add subtle visible dry brushstroke texture across the face and neck.',
+    'Remove all photographic lighting — replace with flat even ambient light from above.',
+    'Preserve the identity, facial structure, eyes, nose, mouth shape, and expression exactly.',
+    'Do not add any hair ornaments, braids, headdress, or accessories.',
   ].join(' ');
 
   const response = await fetch('https://api.replicate.com/v1/models/black-forest-labs/flux-kontext-pro/predictions', {

@@ -148,7 +148,22 @@ export function useGenerate() {
         // New selfie — run InstantID
         setStatus('styling');
         styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
-        // Cache in memory + persist to localStorage (survives reloads and deployments)
+
+        // Convert Replicate URL → base64 before caching
+        // Replicate delivery URLs expire after ~24h — base64 is permanent
+        try {
+          const imgRes = await fetch(styled);
+          const blob = await imgRes.blob();
+          const b64 = await new Promise(resolve => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.readAsDataURL(blob);
+          });
+          styled = b64; // replace URL with permanent base64
+        } catch (e) {
+          console.warn('Could not convert styled URL to base64, caching URL instead:', e.message);
+        }
+
         styledCache.current[selfieHash] = styled;
         saveCache(styledCache.current);
         currentSelfieHash.current = selfieHash;
