@@ -189,21 +189,7 @@ export default async function handler(req, res) {
       },
     });
 
-    const instantIdUrl = await getPredictionOutput(prediction);
-
-    // Stage 2: Paintify using the actual painted figure face as ip_adapter style reference
-    const paintedFaceB64 = faceRegion
-      ? await extractPaintedFace(styleImageUrl, faceRegion)
-      : null;
-
-    let outputUrl;
-    try {
-      outputUrl = await paintifyFace(instantIdUrl, paintedFaceB64);
-    } catch (e) {
-      console.warn('Paintify failed, using InstantID output:', e.message);
-      outputUrl = instantIdUrl;
-    }
-
+    const outputUrl = await getPredictionOutput(prediction);
     return res.status(200).json({ outputUrl });
 
   } catch (err) {
