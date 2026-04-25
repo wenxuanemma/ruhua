@@ -13,33 +13,39 @@ export const config = {
 };
 
 const FACE_REGIONS = {
+  // qingming — Bianjing city gate crop, 3 largest faces
   qingming: {
-    scholar:  { x:0.53, y:0.35, w:0.04, h:0.30, angle:0   },
-    merchant: { x:0.62, y:0.32, w:0.04, h:0.30, angle:5   },
-    boatman:  { x:0.44, y:0.40, w:0.04, h:0.28, angle:-8  },
+    scholar:  { x:0.038,  y:0.4507, w:0.099,  h:0.1372, angle:0 },
+    merchant: { x:0.035,  y:0.4132, w:0.0396, h:0.0881, angle:0 },
+    boatman:  { x:0.0366, y:0.9066, w:0.0292, h:0.0911, angle:0 },
   },
+  // hanxizai — Wikipedia cropped section, 3 largest faces by area
   hanxizai: {
-    guest:  { x:0.77, y:0.01, w:0.10, h:0.18, angle:5  },
-    host:   { x:0.32, y:0.24, w:0.12, h:0.20, angle:-3 },
-    dancer: { x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 },
+    guest:  { x:0.7936, y:0.3944, w:0.0657, h:0.102,  angle:0 },
+    host:   { x:0.1577, y:0.3689, w:0.0823, h:0.1283, angle:0 },
+    dancer: { x:0.3674, y:0.336,  w:0.0499, h:0.0798, angle:0 },
   },
+  // bunianta — auto-calibrated, h capped (full-body detections filtered out)
   bunianta: {
-    official: { x:0.35, y:0.35, w:0.06, h:0.14, angle:3  },
-    envoy:    { x:0.72, y:0.35, w:0.06, h:0.15, angle:-5 },
+    official: { x:0.3694, y:0.3917, w:0.0278, h:0.0699, angle:0 },
+    envoy:    { x:0.8522, y:0.3174, w:0.0343, h:0.0993, angle:0 },
   },
+  // guoguo — auto x/y, h capped to 0.12 (mounted riders, full torso detected)
   guoguo: {
-    lady:      { x:0.55, y:0.10, w:0.10, h:0.35, angle:0  },
-    attendant: { x:0.35, y:0.10, w:0.09, h:0.32, angle:3  },
-    rider:     { x:0.15, y:0.08, w:0.09, h:0.30, angle:-5 },
+    lady:      { x:0.2667, y:0.3875, w:0.0371, h:0.12, angle:0 },
+    attendant: { x:0.4152, y:0.2252, w:0.0457, h:0.12, angle:0 },
+    rider:     { x:0.8082, y:0.2656, w:0.0406, h:0.12, angle:0 },
   },
+  // luoshen — auto-calibrated, largest face = cao
   luoshen: {
-    attendant: { x:0.76, y:0.32, w:0.07, h:0.18, angle:-2 },
-    cao:       { x:0.86, y:0.34, w:0.08, h:0.20, angle:-5 },
+    cao:       { x:0.6,    y:0.1556, w:0.0664, h:0.1509, angle:0 },
+    attendant: { x:0.2505, y:0.3251, w:0.0327, h:0.0684, angle:0 },
   },
+  // gongle — 3 largest faces by area
   gongle: {
-    listener: { x:0.10, y:0.30, w:0.13, h:0.28, angle:0  },
-    musician: { x:0.46, y:0.14, w:0.11, h:0.24, angle:-8 },
-    serving:  { x:0.85, y:0.28, w:0.10, h:0.24, angle:2  },
+    listener: { x:0.2455, y:0.2254, w:0.0575, h:0.1076, angle:0 },
+    musician: { x:0.6107, y:0.4958, w:0.0745, h:0.0982, angle:0 },
+    serving:  { x:0.0379, y:0.4006, w:0.0471, h:0.0855, angle:0 },
   },
 };
 
