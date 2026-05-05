@@ -209,7 +209,7 @@ export function useGenerate() {
             img.crossOrigin = 'anonymous';
             img.onload = () => {
               const canvas = document.createElement('canvas');
-              const cropH = Math.round(img.height * 0.75);
+              const cropH = Math.round(img.height * 0.85);
               canvas.width = img.width;
               canvas.height = img.width; // square
               const ctx = canvas.getContext('2d');
