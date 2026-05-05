@@ -44,18 +44,9 @@ export default async function handler(req, res) {
       return res.status(200).json({ outputUrl: styledFaceUrl });
     }
 
-    // Crop to top 70% to remove chest area, resize back to 640x640
-    const sharp = (await import('sharp')).default;
+    // Return LoRA output directly — composite.js handles the crop
     const loraBuf = Buffer.from(await loraRes.arrayBuffer());
-    const meta = await sharp(loraBuf).metadata();
-    const cropH = Math.round(meta.height * 0.70);
-    const cropped = await sharp(loraBuf)
-      .extract({ left: 0, top: 0, width: meta.width, height: cropH })
-      .resize(640, 640, { fit: 'cover', position: 'top' })
-      .png()
-      .toBuffer();
-
-    const outputUrl = `data:image/png;base64,${cropped.toString('base64')}`;
+    const outputUrl = `data:image/png;base64,${loraBuf.toString('base64')}`;
     return res.status(200).json({ outputUrl });
 
   } catch (e) {
