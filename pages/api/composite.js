@@ -21,9 +21,9 @@ const FACE_REGIONS = {
   },
   // hanxizai — guest=right, host=Han Xizai center-left, dancer=standing center
   hanxizai: {
-    guest:  { x:0.760, y:0.330, w:0.130, h:0.220, angle:5  },
-    host:   { x:0.155, y:0.300, w:0.120, h:0.220, angle:-3 },
-    dancer: { x:0.350, y:0.290, w:0.090, h:0.170, angle:-5 },
+    guest:  { x:0.7647, y:0.0180, w:0.1005, h:0.1480, angle:5  },
+    host:   { x:0.3600, y:0.2820, w:0.1029, h:0.1660, angle:-3 },
+    dancer: { x:0.0767, y:0.3520, w:0.0838, h:0.1340, angle:-5 },
   },
   // bunianta — padded from detected centers
   bunianta: {
