@@ -7,47 +7,7 @@
 // npm install sharp
 
 import sharp from 'sharp';
-
-export const config = {
-  api: { bodyParser: { sizeLimit: '10mb' } },
-};
-
-const FACE_REGIONS = {
-  // qingming — large faces from city gate crop
-  qingming: {
-    scholar:  { x:0.000, y:0.390, w:0.130, h:0.200, angle:0 },
-    merchant: { x:0.000, y:0.350, w:0.080, h:0.180, angle:5   },
-    boatman:  { x:0.000, y:0.840, w:0.070, h:0.180, angle:-8  },
-  },
-  // hanxizai — guest=right, host=Han Xizai center-left, dancer=standing center
-  hanxizai: {
-    guest:  { x:0.7647, y:0.0180, w:0.1005, h:0.1480, angle:5  },
-    host:   { x:0.3600, y:0.2820, w:0.1029, h:0.1660, angle:-3 },
-    dancer: { x:0.0767, y:0.3520, w:0.0838, h:0.1340, angle:-5 },
-  },
-  // bunianta — padded from detected centers
-  bunianta: {
-    official: { x:0.340, y:0.330, w:0.090, h:0.160, angle:3  },
-    envoy:    { x:0.820, y:0.270, w:0.090, h:0.180, angle:-5 },
-  },
-  // guoguo — padded, h capped for mounted riders
-  guoguo: {
-    lady:      { x:0.240, y:0.330, w:0.090, h:0.180, angle:0 },
-    attendant: { x:0.390, y:0.170, w:0.090, h:0.180, angle:3  },
-    rider:     { x:0.785, y:0.210, w:0.090, h:0.180, angle:-5 },
-  },
-  // luoshen — padded from detected centers
-  luoshen: {
-    cao:       { x:0.565, y:0.110, w:0.110, h:0.220, angle:-5 },
-    attendant: { x:0.220, y:0.285, w:0.080, h:0.160, angle:-2 },
-  },
-  // gongle — padded from detected centers
-  gongle: {
-    listener: { x:0.210, y:0.170, w:0.110, h:0.200, angle:0 },
-    musician: { x:0.575, y:0.450, w:0.120, h:0.200, angle:-8 },
-    serving:  { x:0.015, y:0.355, w:0.100, h:0.180, angle:0 },
-  },
-};
+import { FACE_REGIONS } from '../../lib/faceRegions.js';
 
 async function fetchImageBuffer(url) {
   const res = await fetch(url);

@@ -3,6 +3,7 @@
 // Two-stage pipeline with selfie caching:
 //   Stage 1 — InstantID style transfer  → styledFaceUrl (cached per selfie)
 //   Stage 2 — Sharp composite           → outputUrl + profileUrl
+import { FACE_REGIONS } from '../lib/faceRegions';
 //
 // Caching: if the same selfie is reused (switching painting/figure),
 // Stage 1 is skipped and only Stage 2 reruns (~3s instead of ~35s).
@@ -109,7 +110,7 @@ export function useGenerate() {
         styleImageUrl,
         dynasty:       painting.dynasty,
         faceBounds,
-        faceRegion:    figure.faceRegion,
+        faceRegion:    FACE_REGIONS[painting.id]?.[figure.id],
       }),
     });
     const data = await res.json();
