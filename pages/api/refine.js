@@ -22,8 +22,9 @@ export default async function handler(req, res) {
     const imgBuf = await imgRes.arrayBuffer();
     const imgB64 = `data:image/jpeg;base64,${Buffer.from(imgBuf).toString('base64')}`;
 
-    // Call local LoRA server
-    const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
+  // LoRA refinement temporarily disabled — testing identity preservation
+  // TODO: re-enable once identity is confirmed working
+  return res.status(200).json({ outputUrl: styledFaceUrl });
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
