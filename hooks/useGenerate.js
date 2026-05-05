@@ -13,7 +13,7 @@ import { FACE_REGIONS } from '../lib/faceRegions';
 import { useState, useRef, useCallback } from 'react';
 
 const POLL_INTERVAL_MS = 2000;
-const MAX_POLLS = 90; // 90 × 2s = 3 minutes max
+const MAX_POLLS = 150; // 150 × 2s = 5 minutes max
 
 // Compress selfie to max 1200px and 0.85 JPEG quality before sending
 function compressSelfie(b64, maxPx = 1200, quality = 0.85) {
@@ -110,7 +110,11 @@ export function useGenerate() {
         const data = await res.json();
         if (data.status === 'succeeded') { stopPolling(); resolve(data.outputUrl); }
         if (data.status === 'failed')    { stopPolling(); reject(new Error(data.error || 'Generation failed')); }
-      } catch (_) {}
+      } catch (e) {
+        console.warn('Poll error (will retry):', e.message);
+        // Don't count network errors against MAX_POLLS
+        pollCount.current--;
+      }
     }, POLL_INTERVAL_MS);
   }), []);
 
