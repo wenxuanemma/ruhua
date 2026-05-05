@@ -142,7 +142,7 @@ export function useGenerate() {
       const refineRes = await fetch('/api/refine', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ styledFaceUrl: instantIdUrl }),
+        body: JSON.stringify({ styledFaceUrl: instantIdUrl, gender }),
       });
       if (refineRes.ok) {
         const refineData = await refineRes.json();
