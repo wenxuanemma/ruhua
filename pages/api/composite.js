@@ -45,12 +45,11 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Take top 70% of generated image to remove chest area
-    // Face is in upper portion of the 640x640 output
+    // Client already cropped to face region — use full image
     const cropX = 0;
     const cropY = 0;
     const cropW = FW;
-    const cropH = Math.round(FH * 0.70);
+    const cropH = FH;
 
     let faceImg = sharp(faceBuf)
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
@@ -62,7 +61,7 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'top' })
+      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
       .png()
       .toBuffer();
 
