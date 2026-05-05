@@ -251,6 +251,18 @@ export default function Calibrate() {
               background: isDragging ? `${color}22` : `${color}11`,
               boxSizing:'border-box', cursor:'move',
             }}>
+              {/* Dashed oval showing actual face blend area (~74% of box) */}
+              <div style={{
+                position:'absolute',
+                left:`${(1-0.78)/2*100}%`,
+                top:`${(1-0.74)/2*100}%`,
+                width:'78%',
+                height:'74%',
+                borderRadius:'50%',
+                border:`1.5px dashed ${color}`,
+                opacity:0.7,
+                pointerEvents:'none',
+              }}/>
               {/* Corner handles */}
               {[[0,0,'tl'],[pw-10,0,'tr'],[0,ph-10,'bl'],[pw-10,ph-10,'br']].map(([cx,cy,c])=>(
                 <div key={c} style={{position:'absolute',left:cx,top:cy,
