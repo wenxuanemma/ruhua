@@ -131,9 +131,8 @@ export default async function handler(req, res) {
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
 
-  // Default to woman — InstantID preserves actual face identity from selfie
-  // User's real gender comes through naturally via face conditioning
   const genderHint = 'woman';
+  const genderPrompt = 'woman, female face, feminine features';
 
   // Pre-crop selfie to face bounds if detected client-side
   let faceImage = selfie;
@@ -166,13 +165,14 @@ export default async function handler(req, res) {
       input: {
         image: faceImage,
         prompt: [
-          `portrait of a ${genderHint}, headshot, face and shoulders only`,
+          `portrait of a ${genderPrompt}, headshot, face and shoulders only`,
           'face centered in frame, close up portrait',
           styleDesc,
           'soft warm lighting, elegant court figure, painterly',
         ].join(', '),
         negative_prompt: [
           'full body', 'whole body', 'torso', 'chest visible',
+          'male', 'man', 'masculine', 'beard', 'mustache',
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
           'braids', 'braid', 'pigtails', 'hair ornament', 'hair accessory',
@@ -182,7 +182,7 @@ export default async function handler(req, res) {
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
         ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.15,
+        ip_adapter_scale:    0.05,  // very low — just for color/texture hint, not gender
         sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
