@@ -161,29 +161,8 @@ export default async function handler(req, res) {
   const figureKey = `${paintingId}_${figureId}`;
   const figureDesc = FIGURE_PROMPTS[figureKey] || 'classical Chinese court figure, elegant robes';
 
-  // Pre-crop selfie to face bounds if detected client-side
+  // Use selfie directly — face bounds pre-crop disabled temporarily for debugging
   let faceImage = selfie;
-  if (faceBounds) {
-    try {
-      const sharp = (await import('sharp')).default;
-      const base64 = selfie.split(',')[1];
-      const buf = Buffer.from(base64, 'base64');
-      const meta = await sharp(buf).metadata();
-      const iw = meta.width, ih = meta.height;
-      const left   = Math.max(0, Math.round(faceBounds.x * iw));
-      const top    = Math.max(0, Math.round(faceBounds.y * ih));
-      const width  = Math.min(Math.round(faceBounds.w * iw), iw - left);
-      const height = Math.min(Math.round(faceBounds.h * ih), ih - top);
-      const cropped = await sharp(buf)
-        .extract({ left, top, width, height })
-        .resize(640, 640, { fit: 'cover', position: 'centre' })
-        .jpeg({ quality: 92 })
-        .toBuffer();
-      faceImage = `data:image/jpeg;base64,${cropped.toString('base64')}`;
-    } catch (e) {
-      console.warn('Face crop failed:', e.message);
-    }
-  }
 
   try {
     // Stage 1: InstantID on Replicate — identity-preserving face generation
