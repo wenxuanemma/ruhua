@@ -45,12 +45,12 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Crop face from InstantID output — face is centered in 640x640 frame
-    // Use full height so chin is never cut; oval mask defines the blend boundary
-    const cropX = Math.round(FW * 0.15);
-    const cropY = 0;
-    const cropW = Math.round(FW * 0.70);
-    const cropH = FH;
+    // Crop face from generated output
+    // Generated image is 640x640 with face centered — skip top 15% (hair) take next 60% (face+chin)
+    const cropX = Math.round(FW * 0.10);
+    const cropY = Math.round(FH * 0.10);  // skip top hair
+    const cropW = Math.round(FW * 0.80);
+    const cropH = Math.round(FH * 0.55);  // face+chin region
 
     let faceImg = sharp(faceBuf)
       .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
@@ -62,7 +62,7 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'top' })
+      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
       .png()
       .toBuffer();
 

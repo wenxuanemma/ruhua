@@ -200,6 +200,7 @@ export default async function handler(req, res) {
         ].join(', '),
         negative_prompt: [
           'full body', 'whole body', 'torso', 'chest visible',
+          ...(gender === 'woman' ? ['male', 'man', 'masculine', 'beard', 'mustache', 'stubble'] : ['female', 'woman', 'feminine']),
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
           'braids', 'braid', 'pigtails', 'hair ornament', 'hair accessory',
@@ -208,7 +209,8 @@ export default async function handler(req, res) {
           'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha',
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
-        ip_adapter_scale:    0.0,  // disabled — painting style comes from LoRA, not ip_adapter
+        ip_adapter_image:    styleImageUrl,
+        ip_adapter_scale:    0.05,
         sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
