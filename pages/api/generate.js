@@ -131,7 +131,35 @@ export default async function handler(req, res) {
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
 
-  const genderHint = 'woman';
+  // Figure-specific prompt descriptors
+  const FIGURE_PROMPTS = {
+    // 清明上河图
+    qingming_scholar:  'Song dynasty traveling scholar, simple dark robes, plain headwrap',
+    qingming_merchant: 'Song dynasty market merchant, plain merchant robes',
+    qingming_boatman:  'Song dynasty river boatman, simple working clothes, weathered face',
+    // 韩熙载夜宴图
+    hanxizai_guest:    'Five Dynasties period nobleman, black gauze official cap, dark formal robes',
+    hanxizai_host:     'Five Dynasties period aristocrat, black gauze cap, dignified expression',
+    hanxizai_dancer:   'Five Dynasties period court dancer, colorful silk robes, elegant posture',
+    // 步辇图
+    bunianta_official: 'Tang dynasty court official, red official robes, black gauze cap',
+    bunianta_envoy:    'Tibetan envoy in Tang court, distinctive ethnic robes and headdress',
+    // 虢国夫人游春图
+    guoguo_lady:       'Tang dynasty noblewoman, elaborate silk robes, elegant high hairstyle',
+    guoguo_attendant:  'Tang dynasty lady attendant, fine silk robes, graceful bearing',
+    guoguo_rider:      'Tang dynasty mounted escort, riding robes, outdoor setting',
+    // 洛神赋图
+    luoshen_cao:       'Eastern Jin period nobleman poet, flowing robes, contemplative expression',
+    luoshen_attendant: "nobleman's attendant in Eastern Jin period, simple elegant robes",
+    // 宫乐图
+    gongle_listener:   'Tang dynasty court lady, elaborate silk robes, listening to music',
+    gongle_musician:   'Tang dynasty court musician playing pipa, colorful silk robes',
+    gongle_serving:    'Tang dynasty serving lady, simple silk robes, graceful bearing',
+  };
+
+  const figureKey = `${paintingId}_${figureId}`;
+  const figureDesc = FIGURE_PROMPTS[figureKey] || 'classical Chinese court figure, elegant robes';
+
   const genderPrompt = 'woman, female face, feminine features';
 
   // Pre-crop selfie to face bounds if detected client-side
@@ -167,8 +195,9 @@ export default async function handler(req, res) {
         prompt: [
           `portrait of a ${genderPrompt}, headshot, face and shoulders only`,
           'face centered in frame, close up portrait',
+          figureDesc,
           styleDesc,
-          'soft warm lighting, elegant court figure, painterly',
+          'soft warm lighting, painterly',
         ].join(', '),
         negative_prompt: [
           'full body', 'whole body', 'torso', 'chest visible',
