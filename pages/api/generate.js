@@ -155,10 +155,8 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Stage 1: InstantID — identity-preserving face generation
+    // Stage 1: InstantID on Replicate — identity-preserving face generation
     const prediction = await callReplicate({
-      // Back to c98b2e7a (protovision-xl) — grandlineai/instant-id-artistic has
-      // 3-5 min cold starts due to low traffic. protovision is warm and reliable.
       version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
         image: faceImage,
@@ -171,16 +169,14 @@ export default async function handler(req, res) {
         negative_prompt: [
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
-          'piercings', 'ear piercing', 'hoop earring', 'stud earring', 'dangly earring',
-          'braids', 'braid', 'pigtails', 'plaits', 'hair bun', 'topknot',
-          'elaborate hairstyle', 'hair ornament', 'hair accessory',
+          'braids', 'braid', 'pigtails', 'hair ornament', 'hair accessory',
           'black and white', 'grayscale', 'monochrome', 'desaturated',
           'ink wash', 'sumi-e', 'sketch',
-          'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha', 'samurai',
+          'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha',
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
         ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.15,  // reduced from 0.20 — less hairstyle bleed from style ref
+        ip_adapter_scale:    0.15,
         sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
@@ -189,7 +185,59 @@ export default async function handler(req, res) {
       },
     });
 
-    const outputUrl = await getPredictionOutput(prediction);
+    const instantIdUrl = await getPredictionOutput(prediction);
+
+    // Stage 2: Local LoRA server — apply gongbi style on top of InstantID output
+    // Low strength (0.35) preserves identity from Stage 1 while adding painting style
+    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL || 'http://localhost:8000';
+
+    let outputUrl = instantIdUrl; // fallback if local server unavailable
+
+    try {
+      // Fetch InstantID result and convert to base64 for local server
+      const imgRes = await fetch(instantIdUrl);
+      const imgBuf = await imgRes.arrayBuffer();
+      const imgB64 = `data:image/jpeg;base64,${Buffer.from(imgBuf).toString('base64')}`;
+
+      const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          prompt: [
+            'gongbi_portrait',
+            'portrait of a person',
+            styleDesc,
+            'flat matte skin, warm ochre mineral pigments on silk',
+            'fine brushwork, aged silk texture, soft even lighting',
+            'no specular highlights, traditional Chinese figure painting',
+          ].join(', '),
+          negative_prompt: [
+            'photorealistic', 'photograph', 'modern', 'anime',
+            'ukiyo-e', 'japanese style', '3d render',
+            'glasses', 'earrings', 'jewelry', 'braids',
+            'black and white', 'grayscale', 'blurry',
+          ].join(', '),
+          init_image: imgB64,
+          strength: 0.35,
+          steps: 30,
+          guidance: 7.0,
+          width: 640,
+          height: 640,
+          seed: Math.floor(Math.random() * 2**32),
+        }),
+      });
+
+      if (loraRes.ok) {
+        const loraBuf = await loraRes.arrayBuffer();
+        const loraB64 = Buffer.from(loraBuf).toString('base64');
+        outputUrl = `data:image/png;base64,${loraB64}`;
+      } else {
+        console.warn('Local LoRA server failed, using InstantID output directly');
+      }
+    } catch (loraErr) {
+      console.warn('Local LoRA server unavailable, using InstantID output:', loraErr.message);
+    }
+
     return res.status(200).json({ outputUrl });
 
   } catch (err) {
