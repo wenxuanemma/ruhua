@@ -194,7 +194,8 @@ export default function Calibrate() {
   const allOutput = PAINTINGS.map(p => {
     const figures = p.figures.map(f => {
       const key = `${p.id}_${f.id}`;
-      const v = vals[key] || f;
+      const v = vals[key];
+      if (!v) return `    ${f.id.padEnd(12)}: { /* loading... */ }`;
       return `    ${f.id.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:0 },`;
     }).join('\n');
     return `  ${p.id}: {\n${figures}\n  },`;
@@ -296,7 +297,8 @@ export default function Calibrate() {
           PAINTINGS.map(p => {
             return `// ${p.id}\n` + p.figures.map(f => {
               const key = `${p.id}_${f.id}`;
-              const v = vals[key] || f;
+              const v = vals[key];
+              if (!v) return `// ${f.id}: loading...`;
               return `{ id:'${f.id}', ..., faceRegion:{ x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:0 } },`;
             }).join('\n');
           }).join('\n\n')
