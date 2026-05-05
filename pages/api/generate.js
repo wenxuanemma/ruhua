@@ -21,7 +21,8 @@ async function callReplicate(body) {
     headers: {
       'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
       'Content-Type': 'application/json',
-      'Prefer': 'wait',
+      // No 'Prefer: wait' — return immediately with predictionId
+      // Client polls via /api/poll endpoint to avoid Vercel 60s timeout
     },
     body: JSON.stringify(body),
   });
@@ -190,8 +191,8 @@ export default async function handler(req, res) {
       },
     });
 
-    const instantIdUrl = await getPredictionOutput(prediction);
-    return res.status(200).json({ outputUrl: instantIdUrl });
+    // Return predictionId immediately — client polls to avoid Vercel 60s timeout
+    return res.status(200).json({ predictionId: prediction.id });
 
   } catch (err) {
     console.error('Generate error:', err);
