@@ -1012,8 +1012,9 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
+  const [showDebug, setShowDebug] = useState(false);
   const imgUrl = generatedUrl || imgs?.[painting?.id];
   const region = FACE_REGIONS[painting?.id]?.[figure?.id];
 
@@ -1305,6 +1306,27 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, onRese
           }}>
             重新拍照
           </button>
+
+          {/* Debug: show raw converted face */}
+          {styledUrl && (
+            <div style={{marginTop:16,textAlign:'center'}}>
+              <button onClick={() => setShowDebug(d => !d)} style={{
+                fontSize:11, color:'rgba(242,226,192,0.3)', background:'none',
+                border:'1px solid rgba(242,226,192,0.1)', padding:'4px 10px', cursor:'pointer',
+              }}>
+                {showDebug ? '隐藏' : '🔍 查看转换人脸'}
+              </button>
+              {showDebug && (
+                <div style={{marginTop:8}}>
+                  <div style={{fontSize:10,color:'rgba(242,226,192,0.3)',marginBottom:4}}>
+                    Raw converted face (before compositing)
+                  </div>
+                  <img src={styledUrl} style={{width:200,height:200,objectFit:'cover',
+                    border:'1px solid rgba(201,168,76,0.2)'}} />
+                </div>
+              )}
+            </div>
+          )}
         </div>
       </div>
     </div>
@@ -1423,6 +1445,7 @@ export default function RuHua() {
         {screen === 'result'     && <ResultScreen painting={painting} figure={figure} imgs={imgs}
                                       generatedUrl={outputUrl}
                                       profileUrl={profileUrl}
+                                      styledUrl={styledUrl}
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         // Keep styled face cache — only rerun compositing
