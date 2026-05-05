@@ -15,7 +15,22 @@ import { useState, useRef, useCallback } from 'react';
 const POLL_INTERVAL_MS = 2500;
 const MAX_POLLS = 48;
 
-// Simple hash of a string — used as cache key for the selfie
+// Compress selfie to max 1200px and 0.85 JPEG quality before sending
+function compressSelfie(b64, maxPx = 1200, quality = 0.85) {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.onload = () => {
+      const scale = Math.min(1, maxPx / Math.max(img.width, img.height));
+      const w = Math.round(img.width * scale);
+      const h = Math.round(img.height * scale);
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+      resolve(canvas.toDataURL('image/jpeg', quality));
+    };
+    img.src = b64;
+  });
+}
 function quickHash(str) {
   let h = 0;
   for (let i = 0; i < Math.min(str.length, 2000); i++) {
@@ -162,6 +177,9 @@ export function useGenerate() {
 
     const selfieHash = quickHash(selfie);
     const cachedStyled = styledCache.current[selfieHash];
+
+    // Compress selfie before sending to API
+    const compressedSelfie = await compressSelfie(selfie);
     const isSameSelfie = cachedStyled != null;
 
     try {
@@ -177,7 +195,7 @@ export function useGenerate() {
       } else {
         // New selfie — start directly at step 2, skip the "准备中" flash
         setStatus('styling');
-        styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
+        styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, styleImageUrl, faceBounds });
 
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
