@@ -110,9 +110,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#10060300 0%,#100603 0%,#3a100a 24%,#6a2c16 50%,#4a1e0e 74%,#100603 100%)',
     color: '#8a4020',
     figures: [
-      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.77, y:0.01, w:0.10, h:0.18, angle:5  } },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.32, y:0.24, w:0.12, h:0.20, angle:-3 } },
-      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.47, y:0.26, w:0.08, h:0.12, angle:-5 } },
+      { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true,  faceRegion:{ x:0.7647, y:0.0180, w:0.1005, h:0.1480, angle:0 }  },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  faceRegion:{ x:0.3600, y:0.2820, w:0.1029, h:0.1660, angle:0 } },
+      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, faceRegion:{ x:0.0767, y:0.3520, w:0.0838, h:0.1340, angle:0 } },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
