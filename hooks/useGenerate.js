@@ -12,8 +12,8 @@ import { FACE_REGIONS } from '../lib/faceRegions';
 
 import { useState, useRef, useCallback } from 'react';
 
-const POLL_INTERVAL_MS = 2500;
-const MAX_POLLS = 48;
+const POLL_INTERVAL_MS = 2000;
+const MAX_POLLS = 90; // 90 × 2s = 3 minutes max
 
 // Compress selfie to max 1200px and 0.85 JPEG quality before sending
 function compressSelfie(b64, maxPx = 1200, quality = 0.85) {
