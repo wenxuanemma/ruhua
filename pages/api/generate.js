@@ -126,12 +126,13 @@ async function extractPaintedFace(styleImageUrl, faceRegion) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion, figureId } = req.body;
+  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion, figureId, gender } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
-
-  // Figure-specific prompt descriptors
+  const genderPrompt = gender === 'man'
+    ? 'man, male face, masculine features'
+    : 'woman, female face, feminine features';
   const FIGURE_PROMPTS = {
     // 清明上河图
     qingming_scholar:  'Song dynasty traveling scholar, simple dark robes, plain headwrap',
@@ -159,8 +160,6 @@ export default async function handler(req, res) {
 
   const figureKey = `${paintingId}_${figureId}`;
   const figureDesc = FIGURE_PROMPTS[figureKey] || 'classical Chinese court figure, elegant robes';
-
-  const genderPrompt = 'person';
 
   // Pre-crop selfie to face bounds if detected client-side
   let faceImage = selfie;

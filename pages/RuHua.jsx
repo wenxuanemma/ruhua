@@ -859,7 +859,41 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
   );
 }
 
-// ─── Processing Screen ───────────────────────────────────────────────────────
+// ─── Gender Screen ────────────────────────────────────────────────────────────
+
+function GenderScreen({ onSelect }) {
+  return (
+    <div style={{minHeight:'100vh',background:'#0c0904',display:'flex',flexDirection:'column',
+                 alignItems:'center',justifyContent:'center',padding:32,gap:32}}>
+      <div style={{textAlign:'center'}}>
+        <div style={{fontSize:28,fontFamily:"'Ma Shan Zheng', serif",color:'#c9a84c',marginBottom:8}}>
+          请选择
+        </div>
+        <div style={{fontSize:14,color:'rgba(242,226,192,0.55)'}}>
+          Select your gender for a better result
+        </div>
+      </div>
+      <div style={{display:'flex',gap:24}}>
+        <button onClick={() => onSelect('woman')} style={{
+          width:120,height:120,borderRadius:'50%',border:'2px solid #c9a84c',
+          background:'rgba(201,168,76,0.08)',cursor:'pointer',
+          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,
+        }}>
+          <span style={{fontSize:36}}>👩</span>
+          <span style={{fontSize:16,color:'#f2e2c0',fontFamily:"'Noto Serif SC', serif"}}>女</span>
+        </button>
+        <button onClick={() => onSelect('man')} style={{
+          width:120,height:120,borderRadius:'50%',border:'2px solid #c9a84c',
+          background:'rgba(201,168,76,0.08)',cursor:'pointer',
+          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,
+        }}>
+          <span style={{fontSize:36}}>👨</span>
+          <span style={{fontSize:16,color:'#f2e2c0',fontFamily:"'Noto Serif SC', serif"}}>男</span>
+        </button>
+      </div>
+    </div>
+  );
+}
 
 const STEPS = [
   { zh:'准备中',   en:'Preparing'                   },
@@ -1285,6 +1319,7 @@ export default function RuHua() {
   const [figure, setFigure] = useState(null);
   const [selfie, setSelfie] = useState(null);
   const [faceBounds, setFaceBounds] = useState(null);
+  const [gender, setGender] = useState('woman');
   const [imgs, setImgs] = useState({});
 
   const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, hasCachedSelfie } = useGenerate();

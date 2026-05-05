@@ -114,7 +114,7 @@ export function useGenerate() {
     }, POLL_INTERVAL_MS);
   }), []);
 
-  const runStyleTransfer = useCallback(async ({ selfie, painting, figure, styleImageUrl, faceBounds }) => {
+  const runStyleTransfer = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
     const res = await fetch('/api/generate', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -122,6 +122,7 @@ export function useGenerate() {
         selfie,
         paintingId:    painting.id,
         figureId:      figure.id,
+        gender:        gender || 'woman',
         styleImageUrl,
         dynasty:       painting.dynasty,
         faceBounds,
@@ -169,7 +170,7 @@ export function useGenerate() {
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
 
-  const generate = useCallback(async ({ selfie, painting, figure, styleImageUrl, faceBounds }) => {
+  const generate = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
     stopPolling();
     setOutputUrl(null);
     setProfileUrl(null);
@@ -195,7 +196,7 @@ export function useGenerate() {
       } else {
         // New selfie — start directly at step 2, skip the "准备中" flash
         setStatus('styling');
-        styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, styleImageUrl, faceBounds });
+        styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
 
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
