@@ -216,7 +216,7 @@ export function useGenerate() {
       setError(err.message);
       setStatus('failed');
     }
-  }, [runStyleTransfer, runPaintify, runComposite]);
+  }, [runStyleTransfer, runComposite]);
 
   // clearSelfieCache: call this when user explicitly takes a new selfie
   const clearSelfieCache = useCallback(() => {
