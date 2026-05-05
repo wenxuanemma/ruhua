@@ -181,8 +181,7 @@ export default async function handler(req, res) {
           'japanese', 'anime', 'manga', 'ukiyo-e', 'kimono', 'geisha',
           'modern clothing', 'western', 'blurry', 'watermark', 'bad anatomy',
         ].join(', '),
-        ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.05,  // very low — just for color/texture hint, not gender
+        ip_adapter_scale:    0.0,  // disabled — painting style comes from LoRA, not ip_adapter
         sdxl_weights:        'protovision-xl-high-fidel',
         guidance_scale:      7.5,
         num_inference_steps: 35,
