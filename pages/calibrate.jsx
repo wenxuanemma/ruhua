@@ -80,6 +80,9 @@ export default function Calibrate() {
       })
       .catch(() => {}); // silently fall back to hardcoded defaults
   }, []);
+
+  // Fetch painting image when painting changes
+  useEffect(() => {
     setImgUrl('');
     if (painting.commonsTitle) {
       const enc = encodeURIComponent(painting.commonsTitle);
