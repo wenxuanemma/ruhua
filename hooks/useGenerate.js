@@ -108,25 +108,29 @@ export function useGenerate() {
         styleImageUrl,
         dynasty:       painting.dynasty,
         faceBounds,
-        faceRegion:    figure.faceRegion,  // actual painted face coords for style transfer
+        faceRegion:    figure.faceRegion,
       }),
     });
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Style transfer failed');
-    if (data.outputUrl) return data.outputUrl;
-    return pollUntilDone(data.predictionId);
-  }, [pollUntilDone]);
+    const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
 
-  const runPaintify = useCallback(async (faceUrl) => {
-    const res = await fetch('/api/paintify', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ faceUrl }),
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.error || 'Paintify failed');
-    return data.outputUrl;
-  }, []);
+    // Stage 2: LoRA refinement (separate call to avoid Vercel timeout)
+    try {
+      const refineRes = await fetch('/api/refine', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ styledFaceUrl: instantIdUrl }),
+      });
+      if (refineRes.ok) {
+        const refineData = await refineRes.json();
+        if (refineData.outputUrl) return refineData.outputUrl;
+      }
+    } catch (e) {
+      console.warn('Refine step failed, using InstantID output:', e.message);
+    }
+    return instantIdUrl;
+  }, [pollUntilDone]);
 
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
     const res = await fetch('/api/composite', {
@@ -150,7 +154,6 @@ export function useGenerate() {
 
   const generate = useCallback(async ({ selfie, painting, figure, styleImageUrl, faceBounds }) => {
     stopPolling();
-    setStatus('submitting');
     setOutputUrl(null);
     setProfileUrl(null);
     setError(null);
@@ -163,26 +166,16 @@ export function useGenerate() {
       let styled;
 
       if (isSameSelfie) {
-        // Cached selfie — already paintified, skip InstantID + Flux Kontext
+        // Cached selfie — brief "准备中" then straight to compositing
+        setStatus('submitting');
         styled = cachedStyled;
         setStyledUrl(styled);
-        await new Promise(r => setTimeout(r, 400)); // brief so step 1 is visible
+        await new Promise(r => setTimeout(r, 400));
         setStatus('compositing');
       } else {
-        // New selfie — run full pipeline: InstantID → Flux Kontext → cache
-
-        // Step 1: InstantID style transfer (~35s)
+        // New selfie — start directly at step 2, skip the "准备中" flash
         setStatus('styling');
         styled = await runStyleTransfer({ selfie, painting, figure, styleImageUrl, faceBounds });
-
-        // Step 2: Flux Kontext paintify (~20s) — separate API call under 60s Vercel limit
-        setStatus('paintifying');
-        try {
-          const paintified = await runPaintify(styled);
-          if (paintified) styled = paintified;
-        } catch (e) {
-          console.warn('Paintify failed, using InstantID output:', e.message);
-        }
 
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {

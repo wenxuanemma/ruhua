@@ -187,69 +187,7 @@ export default async function handler(req, res) {
     });
 
     const instantIdUrl = await getPredictionOutput(prediction);
-
-    // Stage 2: Local LoRA server — apply gongbi style on top of InstantID output
-    // Low strength (0.35) preserves identity from Stage 1 while adding painting style
-    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL || 'http://localhost:8000';
-
-    let outputUrl = instantIdUrl; // fallback if local server unavailable
-
-    try {
-      // Fetch InstantID result and convert to base64 for local server
-      const imgRes = await fetch(instantIdUrl);
-      const imgBuf = await imgRes.arrayBuffer();
-      const imgB64 = `data:image/jpeg;base64,${Buffer.from(imgBuf).toString('base64')}`;
-
-      const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          prompt: [
-            'gongbi_portrait',
-            'portrait of a person',
-            styleDesc,
-            'flat matte skin, warm ochre mineral pigments on silk',
-            'fine brushwork, aged silk texture, soft even lighting',
-            'no specular highlights, traditional Chinese figure painting',
-          ].join(', '),
-          negative_prompt: [
-            'photorealistic', 'photograph', 'modern', 'anime',
-            'ukiyo-e', 'japanese style', '3d render',
-            'glasses', 'earrings', 'jewelry', 'braids',
-            'black and white', 'grayscale', 'blurry',
-          ].join(', '),
-          init_image: imgB64,
-          strength: 0.35,
-          steps: 30,
-          guidance: 7.0,
-          width: 640,
-          height: 640,
-          seed: Math.floor(Math.random() * 2**32),
-        }),
-      });
-
-      if (loraRes.ok) {
-        const loraBuf = await loraRes.arrayBuffer();
-        // Crop to top 70% to remove chest/body below face
-        const sharp = (await import('sharp')).default;
-        const loraPng = Buffer.from(loraBuf);
-        const meta = await sharp(loraPng).metadata();
-        const cropH = Math.round(meta.height * 0.70);
-        const cropped = await sharp(loraPng)
-          .extract({ left: 0, top: 0, width: meta.width, height: cropH })
-          .resize(640, 640, { fit: 'cover', position: 'top' })
-          .png()
-          .toBuffer();
-        const loraB64 = cropped.toString('base64');
-        outputUrl = `data:image/png;base64,${loraB64}`;
-      } else {
-        console.warn('Local LoRA server failed, using InstantID output directly');
-      }
-    } catch (loraErr) {
-      console.warn('Local LoRA server unavailable, using InstantID output:', loraErr.message);
-    }
-
-    return res.status(200).json({ outputUrl });
+    return res.status(200).json({ outputUrl: instantIdUrl });
 
   } catch (err) {
     console.error('Generate error:', err);
