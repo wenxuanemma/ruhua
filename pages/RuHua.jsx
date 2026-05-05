@@ -1390,41 +1390,33 @@ export default function RuHua() {
                                       onSelect={f => {
                                         setFigure(f);
                                         if (hasCachedSelfie(selfie)) {
-                                          setScreen('processing');
-                                          generate({
-                                            selfie,
-                                            painting,
-                                            figure: f,
-                                            styleImageUrl: imgs[painting.id],
-                                            faceBounds,
-                                          });
+                                          setScreen('gender');
                                         } else {
                                           setScreen('selfie');
                                         }
                                       }}
                                       onBack={() => setScreen('gallery')} />}
+        {screen === 'gender'     && <GenderScreen onSelect={g => {
+                                      setGender(g);
+                                      setScreen('processing');
+                                      generate({
+                                        selfie,
+                                        painting,
+                                        figure,
+                                        gender: g,
+                                        styleImageUrl: imgs[painting.id],
+                                        faceBounds,
+                                      });
+                                    }} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
-                                        setScreen('processing');
-                                        generate({
-                                          selfie: img,
-                                          painting,
-                                          figure,
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
-                                        });
+                                        setSelfie(img);
+                                        setScreen('gender');
                                       }}
                                       onConfirm={() => {
-                                        setScreen('processing');
-                                        generate({
-                                          selfie,
-                                          painting,
-                                          figure,
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
-                                        });
+                                        setScreen('gender');
                                       }}
                                       onBack={() => setScreen('figure')} />}
         {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} onRetry={() => setScreen('selfie')} />}
