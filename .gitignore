@@ -20,3 +20,13 @@ npm-debug.log*
 # AI assistant files
 AGENTS.md
 CLAUDE.md
+
+# Painting images — large binary files, not for git
+wikimedia-paintings/images/
+met-paintings/images/
+museum-paintings/cleveland/images/
+museum-paintings/smithsonian/images/
+tmp-calibration/
+face-crops/
+rejected-paintings/
+dataset/
