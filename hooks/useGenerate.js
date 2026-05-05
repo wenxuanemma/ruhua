@@ -202,27 +202,6 @@ export function useGenerate() {
         setStatus('styling');
         styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
 
-        // Crop to top 50% to get face/head only — InstantID generates full figure
-        try {
-          styled = await new Promise((resolve) => {
-            const img = new Image();
-            img.crossOrigin = 'anonymous';
-            img.onload = () => {
-              const canvas = document.createElement('canvas');
-              const cropH = Math.round(img.height * 0.85);
-              canvas.width = img.width;
-              canvas.height = img.width; // square
-              const ctx = canvas.getContext('2d');
-              ctx.drawImage(img, 0, 0, img.width, cropH, 0, 0, img.width, img.width);
-              resolve(canvas.toDataURL('image/jpeg', 0.92));
-            };
-            img.onerror = () => resolve(styled); // fallback to original
-            img.src = styled;
-          });
-        } catch (e) {
-          console.warn('Face crop failed:', e.message);
-        }
-
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
           if (typeof styled === 'string' && styled.startsWith('http')) {
