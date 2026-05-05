@@ -9,6 +9,10 @@
 import sharp from 'sharp';
 import { FACE_REGIONS } from '../../lib/faceRegions.js';
 
+export const config = {
+  api: { bodyParser: { sizeLimit: '10mb' } },
+};
+
 async function fetchImageBuffer(url) {
   const res = await fetch(url);
   if (!res.ok) throw new Error(`Failed to fetch image: ${url} (${res.status})`);

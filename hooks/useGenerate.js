@@ -179,7 +179,7 @@ export function useGenerate() {
     const cachedStyled = styledCache.current[selfieHash];
 
     // Compress selfie before sending to API
-    const compressedSelfie = await compressSelfie(selfie);
+    const compressedSelfie = await compressSelfie(selfie, 800, 0.80);
     const isSameSelfie = cachedStyled != null;
 
     try {
