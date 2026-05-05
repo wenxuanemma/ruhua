@@ -161,12 +161,13 @@ export default async function handler(req, res) {
       input: {
         image: faceImage,
         prompt: [
-          'portrait of a person, warm natural skin tones, full color',
+          'portrait of a person, headshot, face and shoulders only',
+          'face centered in frame, close up portrait',
           styleDesc,
-          'traditional Chinese court hanfu robes',
           'soft warm lighting, elegant court figure, painterly',
         ].join(', '),
         negative_prompt: [
+          'full body', 'whole body', 'torso', 'chest visible',
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
           'braids', 'braid', 'pigtails', 'hair ornament', 'hair accessory',
@@ -229,7 +230,17 @@ export default async function handler(req, res) {
 
       if (loraRes.ok) {
         const loraBuf = await loraRes.arrayBuffer();
-        const loraB64 = Buffer.from(loraBuf).toString('base64');
+        // Crop to top 70% to remove chest/body below face
+        const sharp = (await import('sharp')).default;
+        const loraPng = Buffer.from(loraBuf);
+        const meta = await sharp(loraPng).metadata();
+        const cropH = Math.round(meta.height * 0.70);
+        const cropped = await sharp(loraPng)
+          .extract({ left: 0, top: 0, width: meta.width, height: cropH })
+          .resize(640, 640, { fit: 'cover', position: 'top' })
+          .png()
+          .toBuffer();
+        const loraB64 = cropped.toString('base64');
         outputUrl = `data:image/png;base64,${loraB64}`;
       } else {
         console.warn('Local LoRA server failed, using InstantID output directly');
