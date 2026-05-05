@@ -160,7 +160,7 @@ export default async function handler(req, res) {
   const figureKey = `${paintingId}_${figureId}`;
   const figureDesc = FIGURE_PROMPTS[figureKey] || 'classical Chinese court figure, elegant robes';
 
-  const genderPrompt = 'woman, female face, feminine features';
+  const genderPrompt = 'person';
 
   // Pre-crop selfie to face bounds if detected client-side
   let faceImage = selfie;
@@ -201,7 +201,6 @@ export default async function handler(req, res) {
         ].join(', '),
         negative_prompt: [
           'full body', 'whole body', 'torso', 'chest visible',
-          'male', 'man', 'masculine', 'beard', 'mustache',
           'glasses', 'eyeglasses', 'spectacles', 'sunglasses',
           'earrings', 'ear rings', 'jewelry', 'necklace', 'accessories',
           'braids', 'braid', 'pigtails', 'hair ornament', 'hair accessory',
