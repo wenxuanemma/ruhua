@@ -125,10 +125,14 @@ async function extractPaintedFace(styleImageUrl, faceRegion) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion } = req.body;
+  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion, figureId } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
+
+  // Derive gender from figure ID
+  const MALE_FIGURES = new Set(['scholar', 'merchant', 'boatman', 'host', 'official', 'envoy', 'cao', 'guest']);
+  const genderHint = MALE_FIGURES.has(figureId) ? 'man' : 'woman';
 
   // Pre-crop selfie to face bounds if detected client-side
   let faceImage = selfie;
@@ -161,7 +165,7 @@ export default async function handler(req, res) {
       input: {
         image: faceImage,
         prompt: [
-          'portrait of a person, headshot, face and shoulders only',
+          `portrait of a ${genderHint}, headshot, face and shoulders only`,
           'face centered in frame, close up portrait',
           styleDesc,
           'soft warm lighting, elegant court figure, painterly',

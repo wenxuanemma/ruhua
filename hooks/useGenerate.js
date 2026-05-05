@@ -105,6 +105,7 @@ export function useGenerate() {
       body: JSON.stringify({
         selfie,
         paintingId:    painting.id,
+        figureId:      figure.id,
         styleImageUrl,
         dynasty:       painting.dynasty,
         faceBounds,
