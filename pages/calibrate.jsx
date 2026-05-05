@@ -282,31 +282,43 @@ export default function Calibrate() {
       </div>
 
       {/* Output */}
-      <div style={{background:'#18110a',border:'1px solid rgba(201,168,76,0.2)',
-                   padding:12,fontSize:12,fontFamily:'monospace',
-                   color:'rgba(242,226,192,0.8)',whiteSpace:'pre',overflowX:'auto',
-                   lineHeight:1.8}}>
-        {'// Paste into composite.js FACE_REGIONS:\nconst FACE_REGIONS = {\n' + allOutput + '\n};'}
-      </div>
-
-      <div style={{marginTop:16,background:'#18110a',border:'1px solid rgba(201,168,76,0.2)',
-                   padding:12,fontSize:12,fontFamily:'monospace',
-                   color:'rgba(242,226,192,0.8)',whiteSpace:'pre',overflowX:'auto',
-                   lineHeight:1.8}}>
-        {'// Paste into RuHua.jsx faceRegion fields:\n' +
-          PAINTINGS.map(p => {
-            return `// ${p.id}\n` + p.figures.map(f => {
+      <div style={{marginTop:16,display:'flex',gap:8,alignItems:'center'}}>
+        <button onClick={async () => {
+          // Build full regions object from current vals
+          const regions = {};
+          for (const p of PAINTINGS) {
+            regions[p.id] = {};
+            for (const f of p.figures) {
               const key = `${p.id}_${f.id}`;
               const v = vals[key];
-              if (!v) return `// ${f.id}: loading...`;
-              return `{ id:'${f.id}', ..., faceRegion:{ x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:0 } },`;
-            }).join('\n');
-          }).join('\n\n')
-        }
+              if (v) regions[p.id][f.id] = { x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0 };
+            }
+          }
+          const res = await fetch('/api/save-face-regions', {
+            method:'POST', headers:{'Content-Type':'application/json'},
+            body: JSON.stringify({ regions }),
+          });
+          if (res.ok) alert('✅ Saved to lib/faceRegions.js — restart dev server to reload');
+          else alert('❌ Save failed');
+        }} style={{padding:'6px 18px',background:'rgba(201,168,76,0.15)',
+                   border:`1px solid ${C.gold}`,color:C.gold,cursor:'pointer',fontSize:13}}>
+          💾 Save to lib/faceRegions.js
+        </button>
+        <span style={{fontSize:11,color:C.dim}}>
+          Saves directly to source — no copy/paste needed
+        </span>
+      </div>
+
+      {/* Preview output */}
+      <div style={{marginTop:12,background:'#18110a',border:`1px solid rgba(201,168,76,0.2)`,
+                   padding:10,fontSize:11,fontFamily:'monospace',
+                   color:'rgba(242,226,192,0.8)',whiteSpace:'pre',overflowX:'auto',
+                   lineHeight:1.8,maxHeight:300,overflowY:'auto'}}>
+        {allOutput}
       </div>
 
       <div style={{marginTop:8,fontSize:11,color:C.dim}}>
-        Copy each block above into <code>pages/api/composite.js</code> and <code>RuHua.jsx</code> → git push → done
+        After saving, remember to manually add correct <code>angle</code> values in <code>lib/faceRegions.js</code>
       </div>
     </div>
   );
