@@ -130,9 +130,9 @@ export default async function handler(req, res) {
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
 
-  // Derive gender from figure ID
-  const MALE_FIGURES = new Set(['scholar', 'merchant', 'boatman', 'host', 'official', 'envoy', 'cao', 'guest']);
-  const genderHint = MALE_FIGURES.has(figureId) ? 'man' : 'woman';
+  // Default to woman — InstantID preserves actual face identity from selfie
+  // User's real gender comes through naturally via face conditioning
+  const genderHint = 'woman';
 
   // Pre-crop selfie to face bounds if detected client-side
   let faceImage = selfie;
