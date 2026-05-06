@@ -1331,11 +1331,28 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                     </div>
                     <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
                     <div style={{textAlign:'center'}}>
-                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画</div>
-                      <img src={styledUrl} style={{
-                        width:150,height:150,objectFit:'cover',objectPosition:'top',
-                        border:'1px solid rgba(201,168,76,0.2)',
-                      }}/>
+                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画 (裁剪区域)</div>
+                      <div style={{position:'relative',display:'inline-block'}}>
+                        <img src={styledUrl} style={{
+                          width:150,height:150,objectFit:'contain',
+                          border:'1px solid rgba(201,168,76,0.2)',display:'block',
+                        }}/>
+                        {/* Crop overlay: center 80% width, top 75% height */}
+                        <div style={{
+                          position:'absolute',
+                          left:'10%',   top:'0%',
+                          width:'80%',  height:'75%',
+                          border:'2px solid #e24b4a',
+                          boxSizing:'border-box',
+                          pointerEvents:'none',
+                        }}>
+                          <div style={{
+                            position:'absolute',top:-14,left:0,
+                            fontSize:8,color:'#e24b4a',whiteSpace:'nowrap',
+                            background:'rgba(0,0,0,0.6)',padding:'1px 4px',
+                          }}>裁剪区域</div>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
