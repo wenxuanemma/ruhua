@@ -1071,7 +1071,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
           <div style={{ position:'absolute', inset:0,
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
-          {/* Debug: face region box + oval overlay */}
+          {/* Debug: face region box + oval overlay — top layer */}
           {showDebug && region && (
             <div style={{
               position:'absolute',
@@ -1084,6 +1084,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               transform:`rotate(${region.angle||0}deg)`,
               transformOrigin:'center center',
               pointerEvents:'none',
+              zIndex:10,
             }}>
               {/* Converted face clipped to oval */}
               {styledUrl && (
@@ -1402,6 +1403,7 @@ export default function RuHua() {
   const [selfie, setSelfie] = useState(null);
   const [faceBounds, setFaceBounds] = useState(null);
   const [gender, setGender] = useState('woman');
+  const [genderNext, setGenderNext] = useState('generate'); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
   const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, hasCachedSelfie } = useGenerate();
@@ -1472,6 +1474,7 @@ export default function RuHua() {
                                       onSelect={f => {
                                         setFigure(f);
                                         if (hasCachedSelfie(selfie)) {
+                                          setGenderNext('generate');
                                           setScreen('gender');
                                         } else {
                                           setScreen('selfie');
@@ -1480,24 +1483,28 @@ export default function RuHua() {
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'gender'     && <GenderScreen onSelect={g => {
                                       setGender(g);
-                                      setScreen('processing');
-                                      generate({
-                                        selfie,
-                                        painting,
-                                        figure,
-                                        gender: g,
-                                        styleImageUrl: imgs[painting.id],
-                                        faceBounds,
-                                      });
+                                      if (genderNext === 'figure') {
+                                        setScreen('figure');
+                                      } else {
+                                        setScreen('processing');
+                                        generate({
+                                          selfie, painting, figure,
+                                          gender: g,
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
+                                        });
+                                      }
                                     }} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
+                                        setGenderNext('generate');
                                         setScreen('gender');
                                       }}
                                       onConfirm={() => {
+                                        setGenderNext('generate');
                                         setScreen('gender');
                                       }}
                                       onBack={() => setScreen('figure')} />}
@@ -1509,9 +1516,9 @@ export default function RuHua() {
                                       selfie={selfie}
                                       onReset={reset}
                                       onChangeFigure={() => {
-                                        // Keep styled face cache — only rerun compositing
                                         resetGen();
-                                        setScreen('figure');
+                                        setGenderNext('figure');
+                                        setScreen('gender');
                                       }}
                                       onNew={() => {
                                         // Keep styled face cache — switch painting, rerun compositing
