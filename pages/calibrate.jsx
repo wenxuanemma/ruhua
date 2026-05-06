@@ -198,7 +198,7 @@ export default function Calibrate() {
       const key = `${p.id}_${f.id}`;
       const v = vals[key];
       if (!v) return `    ${f.id.padEnd(12)}: { /* loading... */ }`;
-      return `    ${f.id.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:0 },`;
+      return `    ${f.id.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${v.angle??0} },`;
     }).join('\n');
     return `  ${p.id}: {\n${figures}\n  },`;
   }).join('\n');
