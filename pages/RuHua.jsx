@@ -1071,6 +1071,47 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
           <div style={{ position:'absolute', inset:0,
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
+          {/* Debug: face region box overlay */}
+          {showDebug && region && (
+            <div style={{
+              position:'absolute',
+              left:`${region.x*100}%`,
+              top:`${region.y*100}%`,
+              width:`${region.w*100}%`,
+              height:`${region.h*100}%`,
+              border:'2px solid #e24b4a',
+              boxSizing:'border-box',
+              transform:`rotate(${region.angle||0}deg)`,
+              transformOrigin:'center center',
+              pointerEvents:'none',
+            }}>
+              {/* Oval inside box */}
+              <div style={{
+                position:'absolute',
+                left:'9%', top:'8%',
+                width:'82%', height:'84%',
+                borderRadius:'50%',
+                border:'1.5px dashed #e24b4a',
+                opacity:0.8,
+              }}/>
+              {/* Overlay converted face */}
+              {styledUrl && (
+                <img src={styledUrl} style={{
+                  position:'absolute', inset:0,
+                  width:'100%', height:'100%',
+                  objectFit:'cover', objectPosition:'top',
+                  opacity:0.75,
+                  borderRadius:'0',
+                }}/>
+              )}
+              <div style={{
+                position:'absolute', top:-16, left:0,
+                fontSize:9, color:'#e24b4a', whiteSpace:'nowrap',
+                background:'rgba(0,0,0,0.7)', padding:'1px 4px',
+              }}>composite区域</div>
+            </div>
+          )}
+
           {/* 你在此处 marker — offset from face to avoid overlap */}
           <div style={{
             position:'absolute',
