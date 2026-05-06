@@ -861,7 +861,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
 
 // ─── Gender Screen ────────────────────────────────────────────────────────────
 
-function GenderScreen({ onSelect }) {
+function GenderScreen({ onSelect, currentGender }) {
   return (
     <div style={{minHeight:'100vh',background:'#0c0904',display:'flex',flexDirection:'column',
                  alignItems:'center',justifyContent:'center',padding:32,gap:32}}>
@@ -874,22 +874,19 @@ function GenderScreen({ onSelect }) {
         </div>
       </div>
       <div style={{display:'flex',gap:24}}>
-        <button onClick={() => onSelect('woman')} style={{
-          width:120,height:120,borderRadius:'50%',border:'2px solid #c9a84c',
-          background:'rgba(201,168,76,0.08)',cursor:'pointer',
-          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,
-        }}>
-          <span style={{fontSize:36}}>👩</span>
-          <span style={{fontSize:16,color:'#f2e2c0',fontFamily:"'Noto Serif SC', serif"}}>女</span>
-        </button>
-        <button onClick={() => onSelect('man')} style={{
-          width:120,height:120,borderRadius:'50%',border:'2px solid #c9a84c',
-          background:'rgba(201,168,76,0.08)',cursor:'pointer',
-          display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,
-        }}>
-          <span style={{fontSize:36}}>👨</span>
-          <span style={{fontSize:16,color:'#f2e2c0',fontFamily:"'Noto Serif SC', serif"}}>男</span>
-        </button>
+        {[['woman','👩','女'],['man','👨','男']].map(([g, emoji, label]) => (
+          <button key={g} onClick={() => onSelect(g)} style={{
+            width:120, height:120, borderRadius:'50%',
+            border:`2px solid ${currentGender===g ? '#f2e2c0' : '#c9a84c'}`,
+            background: currentGender===g ? 'rgba(242,226,192,0.15)' : 'rgba(201,168,76,0.08)',
+            cursor:'pointer',
+            display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',gap:8,
+            boxShadow: currentGender===g ? '0 0 12px rgba(242,226,192,0.3)' : 'none',
+          }}>
+            <span style={{fontSize:36}}>{emoji}</span>
+            <span style={{fontSize:16,color:'#f2e2c0',fontFamily:"'Noto Serif SC', serif"}}>{label}</span>
+          </button>
+        ))}
       </div>
     </div>
   );
@@ -1474,14 +1471,23 @@ export default function RuHua() {
                                       onSelect={f => {
                                         setFigure(f);
                                         if (hasCachedSelfie(selfie)) {
-                                          setGenderNext('generate');
-                                          setScreen('gender');
+                                          // Coming from figure-change flow — go straight to processing
+                                          // Gender was already selected in the previous gender screen
+                                          setScreen('processing');
+                                          generate({
+                                            selfie,
+                                            painting,
+                                            figure: f,
+                                            gender,
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
                                         } else {
                                           setScreen('selfie');
                                         }
                                       }}
                                       onBack={() => setScreen('gallery')} />}
-        {screen === 'gender'     && <GenderScreen onSelect={g => {
+        {screen === 'gender'     && <GenderScreen currentGender={gender} onSelect={g => {
                                       setGender(g);
                                       if (genderNext === 'figure') {
                                         setScreen('figure');
