@@ -119,39 +119,51 @@ export function useGenerate() {
   }), []);
 
   const runStyleTransfer = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
-    const res = await fetch('/api/generate', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        selfie,
-        paintingId:    painting.id,
-        figureId:      figure.id,
-        gender:        gender || 'woman',
-        styleImageUrl,
-        dynasty:       painting.dynasty,
-        faceBounds,
-        faceRegion:    FACE_REGIONS[painting.id]?.[figure.id],
-      }),
-    });
-    const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || 'Style transfer failed');
-    const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
+    // Retry up to 2 times on timeout
+    for (let attempt = 1; attempt <= 2; attempt++) {
+      try {
+        const res = await fetch('/api/generate', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            selfie,
+            paintingId:    painting.id,
+            figureId:      figure.id,
+            gender:        gender || 'woman',
+            styleImageUrl,
+            dynasty:       painting.dynasty,
+            faceBounds,
+            faceRegion:    FACE_REGIONS[painting.id]?.[figure.id],
+          }),
+        });
+        const data = await res.json();
+        if (!res.ok || data.error) throw new Error(data.error || 'Style transfer failed');
+        const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
 
-    // Stage 2: LoRA refinement (separate call to avoid Vercel timeout)
-    try {
-      const refineRes = await fetch('/api/refine', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ styledFaceUrl: instantIdUrl, gender }),
-      });
-      if (refineRes.ok) {
-        const refineData = await refineRes.json();
-        if (refineData.outputUrl) return refineData.outputUrl;
+        // Stage 2: LoRA refinement
+        try {
+          const refineRes = await fetch('/api/refine', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ styledFaceUrl: instantIdUrl, gender }),
+          });
+          if (refineRes.ok) {
+            const refineData = await refineRes.json();
+            if (refineData.outputUrl) return refineData.outputUrl;
+          }
+        } catch (e) {
+          console.warn('Refine step failed, using InstantID output:', e.message);
+        }
+        return instantIdUrl;
+
+      } catch (e) {
+        if (attempt < 2 && e.message.includes('timed out')) {
+          console.warn(`Generation timed out, retrying (attempt ${attempt+1}/2)...`);
+          continue;
+        }
+        throw e;
       }
-    } catch (e) {
-      console.warn('Refine step failed, using InstantID output:', e.message);
     }
-    return instantIdUrl;
   }, [pollUntilDone]);
 
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
