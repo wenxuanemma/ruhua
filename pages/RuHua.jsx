@@ -1088,7 +1088,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                   position:'absolute', inset:0,
                   width:'100%', height:'100%',
                   objectFit:'cover', objectPosition:'top center',
-                  opacity:0.85,
+                  opacity:0.50,
                 }}/>
               )}
               {/* Red box — face region boundary */}
@@ -1402,7 +1402,8 @@ export default function RuHua() {
   const [faceBounds, setFaceBounds] = useState(null);
   const [gender, setGender] = useState('woman');
   const genderRef = useRef('woman');
-  const [genderNext, setGenderNext] = useState('generate'); // 'generate' | 'figure'
+  const [genderNext, setGenderNext] = useState('generate');
+  const [skipSelfie, setSkipSelfie] = useState(false); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
   const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
@@ -1472,9 +1473,19 @@ export default function RuHua() {
                                       hasCachedSelfie={hasCachedSelfie(selfie)}
                                       onSelect={f => {
                                         setFigure(f);
-                                        if (hasCachedSelfie(selfie)) {
-                                          // Coming from figure-change flow — go straight to processing
-                                          // Gender was already selected in the previous gender screen
+                                        if (skipSelfie && selfie) {
+                                          // Figure change flow — skip selfie, generate fresh
+                                          setSkipSelfie(false);
+                                          setScreen('processing');
+                                          generate({
+                                            selfie,
+                                            painting,
+                                            figure: f,
+                                            gender: genderRef.current,
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
+                                        } else if (hasCachedSelfie(selfie)) {
                                           setScreen('processing');
                                           generate({
                                             selfie,
@@ -1526,7 +1537,8 @@ export default function RuHua() {
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         resetGen();
-                                        clearStyledCache(); // force fresh generation with new gender
+                                        clearStyledCache();
+                                        setSkipSelfie(true); // keep existing selfie, skip capture
                                         setGenderNext('figure');
                                         setScreen('gender');
                                       }}
