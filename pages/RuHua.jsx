@@ -1404,7 +1404,7 @@ export default function RuHua() {
   const [genderNext, setGenderNext] = useState('generate'); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -1525,6 +1525,7 @@ export default function RuHua() {
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         resetGen();
+                                        clearStyledCache(); // force fresh generation with new gender
                                         setGenderNext('figure');
                                         setScreen('gender');
                                       }}

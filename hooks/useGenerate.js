@@ -255,6 +255,14 @@ export function useGenerate() {
     }
   }, [runStyleTransfer, runComposite]);
 
+  // clearStyledCache: clears styled face cache but keeps selfie
+  // Use when switching characters with new gender
+  const clearStyledCache = useCallback(() => {
+    styledCache.current = {};
+    setStyledUrl(null);
+    try { localStorage.removeItem(CACHE_KEY); } catch {}
+  }, []);
+
   // clearSelfieCache: call this when user explicitly takes a new selfie
   const clearSelfieCache = useCallback(() => {
     styledCache.current = {};
@@ -288,5 +296,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }
