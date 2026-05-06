@@ -1076,36 +1076,37 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               top:`${region.y*100}%`,
               width:`${region.w*100}%`,
               height:`${region.h*100}%`,
-              border:'2px solid #e24b4a',
               boxSizing:'border-box',
               transform:`rotate(${region.angle||0}deg)`,
               transformOrigin:'center center',
               pointerEvents:'none',
               zIndex:10,
             }}>
-              {/* Converted face clipped to oval */}
+              {/* Converted face shown at natural scale — same as what composite.js sees */}
               {styledUrl && (
                 <img src={styledUrl} style={{
-                  position:'absolute',
-                  left:'8%', top:'4%',
-                  width:'84%', height:'90%',
-                  objectFit:'cover', objectPosition:'top',
+                  position:'absolute', inset:0,
+                  width:'100%', height:'100%',
+                  objectFit:'cover', objectPosition:'top center',
                   opacity:0.85,
-                  borderRadius:'50%',
-                  clipPath:'ellipse(50% 50% at 50% 50%)',
                 }}/>
               )}
-              {/* Dashed oval border */}
+              {/* Red box — face region boundary */}
+              <div style={{
+                position:'absolute', inset:0,
+                border:'2px solid #e24b4a',
+                boxSizing:'border-box',
+              }}/>
+              {/* Dashed oval — actual composite blend boundary */}
               <div style={{
                 position:'absolute',
                 left:'8%', top:'4%',
                 width:'84%', height:'90%',
                 borderRadius:'50%',
                 border:'2px dashed #e24b4a',
-                opacity:1,
                 boxSizing:'border-box',
               }}/>
-              {/* Box label */}
+              {/* Label */}
               <div style={{
                 position:'absolute', top:-16, left:0,
                 fontSize:9, color:'#e24b4a', whiteSpace:'nowrap',
