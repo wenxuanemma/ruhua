@@ -24,15 +24,43 @@ export default async function handler(req, res) {
       : prediction.output;
 
     try {
-      // Fetch image and crop to centered face region
-      // Take center 80% width, top 75% height — face is centered horizontally
       const imgRes = await fetch(rawUrl);
       const imgBuf = Buffer.from(await imgRes.arrayBuffer());
       const meta = await sharp(imgBuf).metadata();
-      const cropW = Math.round(meta.width * 0.80);
-      const cropH = Math.round(meta.height * 0.75);
-      const cropX = Math.round((meta.width - cropW) / 2); // center horizontally
-      const cropY = 0; // start from top
+      const imgB64 = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
+
+      // Default fallback crop: center 80% width, top 85% height
+      let cropX = Math.round(meta.width * 0.10);
+      let cropY = 0;
+      let cropW = Math.round(meta.width * 0.80);
+      let cropH = Math.round(meta.height * 0.85);
+
+      // Try face detection on local server for smart crop
+      const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+      if (LOCAL_SERVER) {
+        try {
+          const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_image: imgB64 }),
+            signal: AbortSignal.timeout(5000),
+          });
+          if (detectRes.ok) {
+            const { box } = await detectRes.json();
+            if (box) {
+              cropX = Math.max(0, Math.round(box.x * meta.width));
+              cropY = Math.max(0, Math.round(box.y * meta.height));
+              const x2 = Math.min(meta.width,  Math.round(box.x2 * meta.width));
+              const y2 = Math.min(meta.height, Math.round(box.y2 * meta.height));
+              cropW = x2 - cropX;
+              cropH = y2 - cropY;
+            }
+          }
+        } catch (e) {
+          console.warn('Face detection failed, using fallback crop:', e.message);
+        }
+      }
+
       const cropped = await sharp(imgBuf)
         .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
         .resize(640, 640, { fit: 'cover', position: 'top' })
