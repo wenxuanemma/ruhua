@@ -62,6 +62,9 @@ export default async function handler(req, res) {
 
     const facePng = await faceImg
       .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
+      // Flatten contrast to reduce 3D shadow/highlight effect
+      // linear: reduces contrast by ~30%, normalise: stretches to painting's range
+      .linear(0.70, 25)  // multiply by 0.70, add 25 — compresses dark shadows up
       .png()
       .toBuffer();
 
