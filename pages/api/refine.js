@@ -29,10 +29,10 @@ export default async function handler(req, res) {
       headers: { 'Content-Type': 'application/json' },
       signal: controller.signal,
       body: JSON.stringify({
-        prompt: 'gongbi_portrait, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat matte warm skin, warm ivory complexion, golden undertone, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, no shading, flat even lighting, warm amber light, painted on silk, meticulous detail, traditional Chinese figure painting, museum quality, 2D flat painting, warm color palette',
-        negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, rim light, dramatic lighting, chiaroscuro, shadow, depth of field, bokeh, modern, anime, ukiyo-e, oil painting, western art, european, japanese style, glasses, earrings, jewelry, braids, black and white, grayscale, blurry, cold, pale, ghostly, desaturated, blue tones, gray tones, ${genderNeg}`,
+        prompt: 'gongbi_portrait, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat 2D matte skin, NO volume, NO dimension, completely flat face, zero shading, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, no shading, flat even lighting, warm amber light, painted on silk, meticulous detail, traditional Chinese figure painting, museum quality, 2D flat painting, warm color palette',
+        negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, rim light, dramatic lighting, chiaroscuro, shadow, depth of field, bokeh, modern, anime, ukiyo-e, oil painting, western art, european, japanese style, glasses, earrings, jewelry, braids, black and white, grayscale, blurry, cold, pale, ghostly, wax figure, plastic skin, smooth skin, perfect skin, airbrushed, CGI face, desaturated, blue tones, gray tones, ${genderNeg}`,
         init_image: imgB64,
-        strength: 0.45,
+        strength: 0.55,
         steps: 20,
         guidance: 8.0,
         width: 640,
