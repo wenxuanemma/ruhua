@@ -63,7 +63,7 @@ export default async function handler(req, res) {
 
       const cropped = await sharp(imgBuf)
         .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
-        .resize(640, 640, { fit: 'cover', position: 'top' })
+        .resize(640, 640, { fit: 'fill' })  // stretch to square — no cropping
         .jpeg({ quality: 95 })
         .toBuffer();
       const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
