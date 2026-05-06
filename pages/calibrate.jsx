@@ -255,13 +255,13 @@ export default function Calibrate() {
               transform:`rotate(${v.angle||0}deg)`,
               transformOrigin:'center center',
             }}>
-              {/* Dashed oval showing actual face blend area (~74% of box) */}
+              {/* Dashed oval showing actual face blend area */}
               <div style={{
                 position:'absolute',
-                left:`${(1-0.78)/2*100}%`,
-                top:`${(1-0.74)/2*100}%`,
-                width:'78%',
-                height:'74%',
+                left:`${(1-0.82)/2*100}%`,
+                top:`${(1-0.84)/2*100 + 5}%`,
+                width:'82%',
+                height:'84%',
                 borderRadius:'50%',
                 border:`1.5px dashed ${color}`,
                 opacity:0.7,
