@@ -1400,6 +1400,7 @@ export default function RuHua() {
   const [selfie, setSelfie] = useState(null);
   const [faceBounds, setFaceBounds] = useState(null);
   const [gender, setGender] = useState('woman');
+  const genderRef = useRef('woman');
   const [genderNext, setGenderNext] = useState('generate'); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
@@ -1478,7 +1479,7 @@ export default function RuHua() {
                                             selfie,
                                             painting,
                                             figure: f,
-                                            gender,
+                                            gender: genderRef.current,
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
                                           });
@@ -1489,6 +1490,7 @@ export default function RuHua() {
                                       onBack={() => setScreen('gallery')} />}
         {screen === 'gender'     && <GenderScreen currentGender={gender} onSelect={g => {
                                       setGender(g);
+                                      genderRef.current = g;
                                       if (genderNext === 'figure') {
                                         setScreen('figure');
                                       } else {
