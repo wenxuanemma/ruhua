@@ -73,7 +73,9 @@ export default function Calibrate() {
         const loaded = {};
         for (const [paintingId, figures] of Object.entries(regions)) {
           for (const [figId, v] of Object.entries(figures)) {
-            loaded[`${paintingId}_${figId}`] = { x:v.x, y:v.y, w:v.w, h:v.h };
+            if (v.x !== undefined) { // skip nested objects like visitor
+              loaded[`${paintingId}_${figId}`] = { x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0 };
+            }
           }
         }
         setVals(loaded);
@@ -135,7 +137,7 @@ export default function Calibrate() {
         const b = drag.type === 'move' ? {
           x: Math.max(0, Math.min(1-ob.w, ob.x+dx)),
           y: Math.max(0, Math.min(1-ob.h, ob.y+dy)),
-          w: ob.w, h: ob.h,
+          w: ob.w, h: ob.h, angle: ob.angle||0,
         } : (() => {
           let {x,y,w,h} = ob;
           const c = drag.corner;
@@ -143,7 +145,7 @@ export default function Calibrate() {
           if (c==='bl') { x=ob.x+dx; w=Math.max(0.01,ob.w-dx); h=Math.max(0.01,ob.h+dy); }
           if (c==='tr') { y=ob.y+dy; w=Math.max(0.01,ob.w+dx); h=Math.max(0.01,ob.h-dy); }
           if (c==='tl') { x=ob.x+dx; y=ob.y+dy; w=Math.max(0.01,ob.w-dx); h=Math.max(0.01,ob.h-dy); }
-          return { x:Math.max(0,x), y:Math.max(0,y), w:Math.min(1,w), h:Math.min(1,h) };
+          return { x:Math.max(0,x), y:Math.max(0,y), w:Math.min(1,w), h:Math.min(1,h), angle:ob.angle||0 };
         })();
         return { ...prev, [key]: b };
       });
@@ -250,6 +252,8 @@ export default function Calibrate() {
               border:`2px solid ${color}`,
               background: isDragging ? `${color}22` : `${color}11`,
               boxSizing:'border-box', cursor:'move',
+              transform:`rotate(${v.angle||0}deg)`,
+              transformOrigin:'center center',
             }}>
               {/* Dashed oval showing actual face blend area (~74% of box) */}
               <div style={{
@@ -279,15 +283,39 @@ export default function Calibrate() {
         })}
       </div>
 
-      {/* Legend */}
-      <div style={{display:'flex',gap:16,marginBottom:16,flexWrap:'wrap'}}>
+      {/* Legend + Angle sliders */}
+      <div style={{display:'flex',gap:12,marginBottom:16,flexWrap:'wrap'}}>
         {painting.figures.map((fig,fi)=>{
           const v = getVal(fig.id);
           const color = FIG_COLORS[fi % FIG_COLORS.length];
           return (
-            <div key={fig.id} style={{fontSize:12,color:C.dim}}>
-              <span style={{color,marginRight:4}}>■</span>
-              {fig.name} ({fig.id}) — x:{v.x.toFixed(3)} y:{v.y.toFixed(3)} w:{v.w.toFixed(3)} h:{v.h.toFixed(3)}
+            <div key={fig.id} style={{fontSize:12,color:C.dim,
+              background:'rgba(0,0,0,0.3)',padding:'6px 10px',borderRadius:4,
+              border:`1px solid ${color}33`}}>
+              <div style={{marginBottom:4}}>
+                <span style={{color,marginRight:4}}>■</span>
+                <span style={{color:C.text}}>{fig.name}</span>
+                <span style={{marginLeft:8,color:C.dim,fontSize:10}}>
+                  x:{v.x?.toFixed(3)} y:{v.y?.toFixed(3)} w:{v.w?.toFixed(3)} h:{v.h?.toFixed(3)}
+                </span>
+              </div>
+              <div style={{display:'flex',alignItems:'center',gap:8}}>
+                <span style={{fontSize:11,color:C.dim,width:40}}>angle:</span>
+                <input type="range" min="-20" max="20" step="1"
+                  value={v.angle||0}
+                  onChange={e => {
+                    const key = `${painting.id}_${fig.id}`;
+                    setVals(prev => ({
+                      ...prev,
+                      [key]: { ...prev[key], angle: parseInt(e.target.value) }
+                    }));
+                  }}
+                  style={{width:100}}
+                />
+                <span style={{fontSize:11,color:color,width:30}}>
+                  {v.angle||0}°
+                </span>
+              </div>
             </div>
           );
         })}
