@@ -24,14 +24,18 @@ export default async function handler(req, res) {
       : prediction.output;
 
     try {
-      // Fetch image and crop to top 75% — removes chest/body, keeps face+head
+      // Fetch image and crop to centered face region
+      // Take center 80% width, top 75% height — face is centered horizontally
       const imgRes = await fetch(rawUrl);
       const imgBuf = Buffer.from(await imgRes.arrayBuffer());
       const meta = await sharp(imgBuf).metadata();
+      const cropW = Math.round(meta.width * 0.80);
       const cropH = Math.round(meta.height * 0.75);
+      const cropX = Math.round((meta.width - cropW) / 2); // center horizontally
+      const cropY = 0; // start from top
       const cropped = await sharp(imgBuf)
-        .extract({ left: 0, top: 0, width: meta.width, height: cropH })
-        .resize(meta.width, meta.width, { fit: 'cover', position: 'top' })
+        .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+        .resize(640, 640, { fit: 'cover', position: 'top' })
         .jpeg({ quality: 95 })
         .toBuffer();
       const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
