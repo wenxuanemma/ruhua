@@ -358,7 +358,8 @@ export default function Calibrate() {
       </div>
 
       <div style={{marginTop:8,fontSize:11,color:C.dim}}>
-        After saving, remember to manually add correct <code>angle</code> values in <code>lib/faceRegions.js</code>
+        Saves directly to source. Angles are preserved from existing file if slider shows 0.
+        Use the angle slider to explicitly set a non-zero angle.
       </div>
     </div>
   );
