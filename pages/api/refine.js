@@ -21,21 +21,26 @@ export default async function handler(req, res) {
       ? 'female, woman, feminine, dress'
       : 'male, man, masculine, beard, mustache, stubble, facial hair';
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 60000); // 60s timeout
+
     const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
+      signal: controller.signal,
       body: JSON.stringify({
         prompt: 'gongbi_portrait, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat matte porcelain skin, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, even diffuse lighting, painted on silk, meticulous detail, traditional Chinese figure painting, museum quality',
         negative_prompt: `photorealistic, photograph, modern, anime, ukiyo-e, oil painting, western art, european, japanese style, 3d render, glasses, earrings, jewelry, braids, black and white, grayscale, blurry, ${genderNeg}`,
         init_image: imgB64,
         strength: 0.50,
-        steps: 30,
+        steps: 20,
         guidance: 7.0,
         width: 640,
         height: 640,
         seed: -1,
       }),
     });
+    clearTimeout(timeout);
 
     if (!loraRes.ok) {
       console.warn('LoRA server error, using InstantID output');
