@@ -1071,7 +1071,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
           <div style={{ position:'absolute', inset:0,
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
-          {/* Debug: face region box overlay */}
+          {/* Debug: face region box + oval overlay */}
           {showDebug && region && (
             <div style={{
               position:'absolute',
@@ -1085,25 +1085,29 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               transformOrigin:'center center',
               pointerEvents:'none',
             }}>
-              {/* Oval inside box */}
-              <div style={{
-                position:'absolute',
-                left:'9%', top:'8%',
-                width:'82%', height:'84%',
-                borderRadius:'50%',
-                border:'1.5px dashed #e24b4a',
-                opacity:0.8,
-              }}/>
-              {/* Overlay converted face */}
+              {/* Converted face clipped to oval */}
               {styledUrl && (
                 <img src={styledUrl} style={{
-                  position:'absolute', inset:0,
-                  width:'100%', height:'100%',
+                  position:'absolute',
+                  left:'8%', top:'4%',
+                  width:'84%', height:'90%',
                   objectFit:'cover', objectPosition:'top',
-                  opacity:0.75,
-                  borderRadius:'0',
+                  opacity:0.85,
+                  borderRadius:'50%',
+                  clipPath:'ellipse(50% 50% at 50% 50%)',
                 }}/>
               )}
+              {/* Dashed oval border */}
+              <div style={{
+                position:'absolute',
+                left:'8%', top:'4%',
+                width:'84%', height:'90%',
+                borderRadius:'50%',
+                border:'2px dashed #e24b4a',
+                opacity:1,
+                boxSizing:'border-box',
+              }}/>
+              {/* Box label */}
               <div style={{
                 position:'absolute', top:-16, left:0,
                 fontSize:9, color:'#e24b4a', whiteSpace:'nowrap',
