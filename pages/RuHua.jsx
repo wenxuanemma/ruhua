@@ -1012,7 +1012,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const imgUrl = generatedUrl || imgs?.[painting?.id];
@@ -1318,11 +1318,26 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               </button>
               {showDebug && (
                 <div style={{marginTop:8}}>
-                  <div style={{fontSize:10,color:'rgba(242,226,192,0.3)',marginBottom:4}}>
-                    Raw converted face (before compositing)
+                  <div style={{fontSize:10,color:'rgba(242,226,192,0.3)',marginBottom:8}}>
+                    自拍 → 入画 (compositing前)
                   </div>
-                  <img src={styledUrl} style={{width:200,height:200,objectFit:'cover',
-                    border:'1px solid rgba(201,168,76,0.2)'}} />
+                  <div style={{display:'flex',gap:8,justifyContent:'center',alignItems:'flex-start'}}>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>自拍</div>
+                      {selfie && <img src={selfie} style={{
+                        width:150,height:150,objectFit:'cover',objectPosition:'top',
+                        border:'1px solid rgba(201,168,76,0.2)',
+                      }}/>}
+                    </div>
+                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画</div>
+                      <img src={styledUrl} style={{
+                        width:150,height:150,objectFit:'cover',objectPosition:'top',
+                        border:'1px solid rgba(201,168,76,0.2)',
+                      }}/>
+                    </div>
+                  </div>
                 </div>
               )}
             </div>
@@ -1446,6 +1461,7 @@ export default function RuHua() {
                                       generatedUrl={outputUrl}
                                       profileUrl={profileUrl}
                                       styledUrl={styledUrl}
+                                      selfie={selfie}
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         // Keep styled face cache — only rerun compositing
