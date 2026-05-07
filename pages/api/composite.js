@@ -4,179 +4,189 @@ import { FACE_REGIONS } from '../../lib/faceRegions.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
-async function fetchImageBuffer(url) {
-  if (url.startsWith('data:')) {
-    return Buffer.from(url.split(',')[1], 'base64');
-  }
-  const res = await fetch(url);
-  if (!res.ok) throw new Error(`Failed to fetch image: ${url}`);
-  return Buffer.from(await res.arrayBuffer());
+async function fetchBuf(url) {
+  if (url.startsWith('data:')) return Buffer.from(url.split(',')[1], 'base64');
+  const r = await fetch(url);
+  if (!r.ok) throw new Error(`Failed to fetch: ${url}`);
+  return Buffer.from(await r.arrayBuffer());
 }
 
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds } = req.body;
+  const { styledFaceUrl, paintingImageUrl, paintingId, figureId } = req.body;
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
   const region = FACE_REGIONS[paintingId]?.[figureId];
-  if (!region)
-    return res.status(400).json({ error: `No face region for ${paintingId}/${figureId}` });
+  if (!region) return res.status(400).json({ error: `No region for ${paintingId}/${figureId}` });
 
   try {
     const [paintingBuf, faceBuf] = await Promise.all([
-      fetchImageBuffer(paintingImageUrl),
-      fetchImageBuffer(styledFaceUrl),
+      fetchBuf(paintingImageUrl),
+      fetchBuf(styledFaceUrl),
     ]);
 
     const { width: PW, height: PH } = await sharp(paintingBuf).metadata();
     const { width: FW, height: FH } = await sharp(faceBuf).metadata();
 
+    // Target region in painting pixels
     const targetX = Math.round(region.x * PW);
     const targetY = Math.round(region.y * PH);
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    const safeX = Math.max(0, targetX);
-    const safeY = Math.max(0, targetY);
-    const safeW = Math.min(targetW, PW - safeX);
-    const safeH = Math.min(targetH, PH - safeY);
-
-    // ── Face crop ─────────────────────────────────────────────────────────────
-    const cropX = 0;
-    const cropY = 0;
-    const cropW = FW;
-    const cropH = FH;
-
-    let faceImg = sharp(faceBuf)
-      .extract({ left: cropX, top: cropY, width: cropW, height: cropH });
-
-    if (region.angle !== 0) {
-      faceImg = faceImg.rotate(region.angle, {
-        background: { r: 128, g: 100, b: 70, alpha: 1 },
-      });
-    }
-
-    // Resize to square to avoid squashing — face image is square from generate.js
+    // Use square target — max of width/height
     const targetSize = Math.max(targetW, targetH);
+
     console.log(`[composite] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
 
+    // ── Step 1: Detect face and crop from full portrait ───────────────────────
+    let faceCropBuf = faceBuf;
+    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+    if (LOCAL_SERVER && (FW > 500 || FH > 500)) {
+      // Only run detection if input is a large portrait (not already cropped)
+      try {
+        const resizedForDetect = await sharp(faceBuf)
+          .resize(640, 640, { fit: 'cover' })
+          .jpeg({ quality: 85 })
+          .toBuffer();
+        const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ init_image: `data:image/jpeg;base64,${resizedForDetect.toString('base64')}` }),
+          signal: AbortSignal.timeout(15000),
+        });
+        if (detectRes.ok) {
+          const { box } = await detectRes.json();
+          if (box) {
+            const faceCx = Math.round(((box.x + box.x2) / 2) * FW);
+            const faceCy = Math.round(((box.y + box.y2) / 2) * FH);
+            // Crop 55% of portrait width centered on face
+            const cropSize = Math.round(FW * 0.55);
+            const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+            const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize*0.50), FH - cropSize));
+            console.log(`[composite face detect] faceCx=${faceCx} faceCy=${faceCy} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+            faceCropBuf = await sharp(faceBuf)
+              .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
+              .jpeg({ quality: 95 })
+              .toBuffer();
+          }
+        }
+      } catch (e) {
+        console.warn('Composite face detection failed:', e.message);
+      }
+    }
+
+    // ── Step 2: Resize face to exact square ───────────────────────────────────
+    let faceImg = sharp(faceCropBuf);
+
+    if (region.angle && region.angle !== 0) {
+      faceImg = faceImg.rotate(region.angle, { background: { r:128, g:100, b:70, alpha:1 } });
+    }
+
+    // Resize to exact targetSize x targetSize square — cover preserves aspect
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
       .linear(0.60, 40)
       .png()
       .toBuffer();
 
-    // ── Color matching (Reinhard) ──────────────────────────────────────────────
-    const paintingCropRaw = await sharp(paintingBuf)
+    // Verify exact dimensions
+    const fpMeta = await sharp(facePng).metadata();
+    const S = fpMeta.width; // guaranteed square
+
+    // ── Step 2: Color matching ────────────────────────────────────────────────
+    const safeX = Math.max(0, targetX);
+    const safeY = Math.max(0, targetY);
+    const safeW = Math.min(targetW, PW - safeX);
+    const safeH = Math.min(targetH, PH - safeY);
+
+    const paintingRaw = await sharp(paintingBuf)
       .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
-      .resize(8, 8, { fit: 'fill' })
-      .removeAlpha()
-      .raw()
-      .toBuffer();
+      .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
-    const faceCropRaw = await sharp(facePng)
-      .resize(8, 8)
-      .removeAlpha()
-      .raw()
-      .toBuffer();
+    const faceRaw = await sharp(facePng)
+      .resize(8, 8).removeAlpha().raw().toBuffer();
 
-    function channelStats(buf) {
+    function stats(buf) {
       const n = buf.length / 3;
-      let rS=0, gS=0, bS=0;
-      for (let i=0; i<buf.length; i+=3) { rS+=buf[i]; gS+=buf[i+1]; bS+=buf[i+2]; }
-      const rM=rS/n, gM=gS/n, bM=bS/n;
-      let rV=0, gV=0, bV=0;
-      for (let i=0; i<buf.length; i+=3) {
-        rV+=(buf[i]-rM)**2; gV+=(buf[i+1]-gM)**2; bV+=(buf[i+2]-bM)**2;
-      }
-      return { rM, gM, bM, rS:Math.sqrt(rV/n), gS:Math.sqrt(gV/n), bS:Math.sqrt(bV/n) };
+      let r=0,g=0,b=0;
+      for (let i=0; i<buf.length; i+=3) { r+=buf[i]; g+=buf[i+1]; b+=buf[i+2]; }
+      const rm=r/n, gm=g/n, bm=b/n;
+      let rv=0,gv=0,bv=0;
+      for (let i=0; i<buf.length; i+=3) { rv+=(buf[i]-rm)**2; gv+=(buf[i+1]-gm)**2; bv+=(buf[i+2]-bm)**2; }
+      return { rm, gm, bm, rs:Math.sqrt(rv/n)||1, gs:Math.sqrt(gv/n)||1, bs:Math.sqrt(bv/n)||1 };
     }
 
-    const pStats = channelStats(paintingCropRaw);
-    const fStats = channelStats(faceCropRaw);
+    const ps = stats(paintingRaw), fs = stats(faceRaw);
+    const bl = 0.75;
+    const rS = (ps.rs/fs.rs-1)*bl+1;
+    const gS = (ps.gs/fs.gs-1)*bl+1;
+    const bS = (ps.bs/fs.bs-1)*bl+1;
 
-    const blend = 0.75;
-    const rScale = fStats.rS > 1 ? (pStats.rS/fStats.rS-1)*blend+1 : 1;
-    const gScale = fStats.gS > 1 ? (pStats.gS/fStats.gS-1)*blend+1 : 1;
-    const bScale = fStats.bS > 1 ? (pStats.bS/fStats.bS-1)*blend+1 : 1;
-
-    const colorMatchedFace = await sharp(facePng)
+    // Color match — keep exact S x S dimensions
+    const colorFace = await sharp(facePng)
       .removeAlpha()
-      .recomb([
-        [rScale, 0, 0],
-        [0, gScale, 0],
-        [0, 0, bScale],
-      ])
+      .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
       .modulate({ saturation: 0.90 })
       .png()
       .toBuffer();
 
-    // ── Oval blend mask ───────────────────────────────────────────────────────
-    const ovalSvg = `<svg width="${targetSize}" height="${targetSize}" xmlns="http://www.w3.org/2000/svg">
+    // Force exact S x S after color operations (recomb can shift by 1px)
+    const colorFaceExact = await sharp(colorFace)
+      .resize(S, S, { fit: 'fill' })
+      .png()
+      .toBuffer();
+
+    // ── Step 3: Oval mask ─────────────────────────────────────────────────────
+    const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="60%" rx="50%" ry="50%">
+        <radialGradient id="g" cx="50%" cy="58%" rx="50%" ry="50%">
           <stop offset="60%" stop-color="white" stop-opacity="1"/>
           <stop offset="78%" stop-color="white" stop-opacity="0.55"/>
           <stop offset="91%" stop-color="white" stop-opacity="0.07"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetSize*0.50}" cy="${targetSize*0.60}"
-               rx="${targetSize*0.42}" ry="${targetSize*0.47}"
-               fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.58}" rx="${S*0.42}" ry="${S*0.46}" fill="url(#g)"/>
     </svg>`;
-    const blendMask = await sharp(Buffer.from(ovalSvg))
-      .resize(targetSize, targetSize)
+
+    const ovalMask = await sharp(Buffer.from(ovalSvg))
+      .resize(S, S, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // Get exact colorMatchedFace dimensions
-    const cmMeta = await sharp(colorMatchedFace).metadata();
-    const cmW = cmMeta.width;
-    const cmH = cmMeta.height;
-
-    // Resize blendMask to exactly match colorMatchedFace — must not exceed it
-    const blendMaskSized = await sharp(blendMask)
-      .resize(cmW, cmH, { fit: 'fill' })
-      .png()
-      .toBuffer();
-
-    const maskedFaceFull = await sharp(colorMatchedFace)
+    const masked = await sharp(colorFaceExact)
       .ensureAlpha()
-      .composite([{ input: blendMaskSized, blend: 'dest-in' }])
+      .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // Center the square face over the target region center
-    const regionCenterX = targetX + Math.round(targetW / 2);
-    const regionCenterY = targetY + Math.round(targetH / 2);
-    const pasteX = Math.max(0, Math.min(regionCenterX - Math.round(cmW / 2), PW - cmW));
-    const pasteY = Math.max(0, Math.min(regionCenterY - Math.round(cmH / 2), PH - cmH));
+    // ── Step 4: Paste onto painting — center over region ─────────────────────
+    const cx = targetX + Math.round(targetW / 2);
+    const cy = targetY + Math.round(targetH / 2);
+    const px = Math.max(0, Math.min(cx - Math.round(S/2), PW - S));
+    const py = Math.max(0, Math.min(cy - Math.round(S/2), PH - S));
 
-    // Clamp to painting bounds — use extract not resize to avoid squash
-    const faceW = Math.min(cmW, PW - pasteX);
-    const faceH = Math.min(cmH, PH - pasteY);
-    const maskedFace = (faceW === cmW && faceH === cmH)
-      ? maskedFaceFull
-      : await sharp(maskedFaceFull)
-          .extract({ left: 0, top: 0, width: faceW, height: faceH })
-          .png().toBuffer();
+    // Clamp without squashing — extract if overflows
+    const cW = Math.min(S, PW - px);
+    const cH = Math.min(S, PH - py);
+    const pasteBuf = (cW === S && cH === S)
+      ? masked
+      : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
 
     const composited = await sharp(paintingBuf)
-      .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
+      .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
-    // ── Profile crop ──────────────────────────────────────────────────────────
-    const sizeScale = Math.max(0.3, Math.min(1.0, 0.12 / region.w));
-    const padX = Math.round(targetW * 0.5 * sizeScale);
-    const padY = Math.round(targetH * 0.4 * sizeScale);
-    const profX = Math.max(0, pasteX - padX);
-    const profY = Math.max(0, pasteY - padY);
-    const profW = Math.min(PW - profX, targetW + padX * 2);
-    const profH = Math.min(PH - profY, targetH + padY * 2);
+    // ── Step 5: Profile crop ──────────────────────────────────────────────────
+    const pad = Math.round(targetH * 1.5);
+    const profX = Math.max(0, px - pad);
+    const profY = Math.max(0, py - pad);
+    const profW = Math.min(PW - profX, S + pad * 2);
+    const profH = Math.min(PH - profY, S + pad * 2);
 
     const profileBuf = await sharp(composited)
       .extract({ left: profX, top: profY, width: profW, height: profH })
@@ -184,10 +194,10 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    const outputUrl  = `data:image/jpeg;base64,${composited.toString('base64')}`;
-    const profileUrl = `data:image/jpeg;base64,${profileBuf.toString('base64')}`;
-
-    return res.status(200).json({ outputUrl, profileUrl });
+    return res.status(200).json({
+      outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
+      profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
+    });
 
   } catch (err) {
     console.error('Composite error:', err);

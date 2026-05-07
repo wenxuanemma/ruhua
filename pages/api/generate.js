@@ -204,67 +204,16 @@ export default async function handler(req, res) {
         }
 
         if (rawUrl) {
-            console.log('Seedream succeeded, running face detection for crop');
+            console.log('Seedream succeeded - returning full portrait');
+            // Return full portrait — composite.js handles face crop
             try {
               const sharp = (await import('sharp')).default;
               const imgRes = await fetch(rawUrl);
               const imgBuf = Buffer.from(await imgRes.arrayBuffer());
-              const meta = await sharp(imgBuf).metadata();
-
-              // Try face detection on Seedream output
-              let cropX, cropY, cropSize;
-              const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
-              if (LOCAL_SERVER) {
-                try {
-                  // Resize to 640x640 first — reduces payload from ~7MB to ~100KB
-                  const resizedBuf = await sharp(imgBuf)
-                    .resize(640, 640, { fit: 'cover' })
-                    .jpeg({ quality: 85 })
-                    .toBuffer();
-                  const imgB64 = `data:image/jpeg;base64,${resizedBuf.toString('base64')}`;
-                  const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ init_image: imgB64 }),
-                    signal: AbortSignal.timeout(15000),
-                  });
-                  if (detectRes.ok) {
-                    const { box } = await detectRes.json();
-                    if (box) {
-                      // Use detection only for horizontal center — box is too large for size
-                      const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
-                      const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
-                      // Fixed crop: 45% of image width (tight head crop)
-                      cropSize = Math.round(meta.width * 0.45);
-                      cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
-                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.55), meta.height - cropSize));
-                      console.log(`[face detect] faceCx=${faceCx} faceCy=${faceCy} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
-                    }
-                  }
-                } catch (e) {
-                  console.warn('Face detection failed:', e.message);
-                }
-              }
-
-              // Fallback crop if detection failed
-              if (!cropSize) {
-                cropSize = Math.round(Math.min(meta.width, meta.height) * 0.60);
-                cropX = Math.max(0, Math.min(
-                  Math.round(meta.width / 2) + Math.round(meta.width * 0.20) - Math.round(cropSize/2),
-                  meta.width - cropSize
-                ));
-                cropY = Math.round(meta.height * 0.02);
-                console.log(`[fallback crop] cropX=${cropX} cropY=${cropY} size=${cropSize}`);
-              }
-
-              const cropped = await sharp(imgBuf)
-                .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
-                .jpeg({ quality: 95 })
-                .toBuffer();
-              const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+              const outputUrl = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
               return res.status(200).json({ outputUrl });
             } catch (e) {
-              console.warn('Seedream crop failed:', e.message);
+              console.warn('Seedream fetch failed:', e.message);
               return res.status(200).json({ outputUrl: rawUrl });
             }
           }
