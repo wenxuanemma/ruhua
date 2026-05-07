@@ -196,7 +196,51 @@ export default async function handler(req, res) {
 
         if (loraRes.ok) {
           const buf = Buffer.from(await loraRes.arrayBuffer());
-          const outputUrl = `data:image/png;base64,${buf.toString('base64')}`;
+
+          // Run face detection to get proper square crop
+          let outputUrl = `data:image/png;base64,${buf.toString('base64')}`;
+          try {
+            const sharp = (await import('sharp')).default;
+            const meta = await sharp(buf).metadata();
+            const imgB64 = `data:image/jpeg;base64,${buf.toString('base64')}`;
+
+            let cropX = Math.round(meta.width * 0.20);
+            let cropY = 0;
+            let cropW = Math.round(meta.width * 0.60);
+            let cropH = cropW; // square fallback
+
+            const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ init_image: imgB64 }),
+              signal: AbortSignal.timeout(5000),
+            });
+            if (detectRes.ok) {
+              const { box } = await detectRes.json();
+              if (box) {
+                const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
+                const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
+                const faceW  = Math.round((box.x2 - box.x) * meta.width);
+                const faceH  = Math.round((box.y2 - box.y) * meta.height);
+                const half   = Math.round(Math.max(faceW, faceH) * 0.75);
+                const cx     = Math.round(faceCx + meta.width * 0.08);
+                cropX = Math.max(0, Math.min(cx - half, meta.width  - half * 2));
+                cropY = Math.max(0, Math.min(faceCy - half, meta.height - half * 2));
+                cropW = Math.min(half * 2, meta.width  - cropX);
+                cropH = Math.min(half * 2, meta.height - cropY);
+              }
+            }
+
+            const cropped = await sharp(buf)
+              .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+              .resize(640, 640, { fit: 'cover', position: 'centre' })
+              .jpeg({ quality: 95 })
+              .toBuffer();
+            outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+          } catch (e) {
+            console.warn('Face detection/crop failed:', e.message);
+          }
+
           return res.status(200).json({ outputUrl });
         }
       } catch (e) {
@@ -204,7 +248,40 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback: InstantID on Replicate
+    // Fallback: Seedream 4.5 via aimlapi.com — native gongbi style understanding
+    const AIML_KEY = process.env.AIML_API_KEY;
+    if (AIML_KEY) {
+      try {
+        const seedreamRes = await fetch('https://api.aimlapi.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${AIML_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify({
+            model: 'bytedance/seedream-4-5',
+            prompt: `工笔画风格人物肖像, ${gender === 'man' ? '男性' : '女性'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, flat 2D matte warm skin, warm ochre vermillion mineral pigments on silk, no shadows no shading, even flat lighting, meticulous detail, preserve the person's facial features and identity`,
+            image_urls: [faceImage],
+            image_size: 'square_hd',
+          }),
+        });
+
+        if (seedreamRes.ok) {
+          const seedreamData = await seedreamRes.json();
+          const outputUrl = seedreamData.data?.[0]?.url;
+          if (outputUrl) {
+            return res.status(200).json({ outputUrl });
+          }
+        } else {
+          const err = await seedreamRes.text();
+          console.warn('Seedream failed:', err);
+        }
+      } catch (e) {
+        console.warn('Seedream error:', e.message);
+      }
+    }
+
+    // Final fallback: InstantID on Replicate
     const prediction = await callReplicate({
       version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
