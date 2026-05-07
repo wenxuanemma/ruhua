@@ -30,3 +30,4 @@ tmp-calibration/
 face-crops/
 rejected-paintings/
 dataset/
+.vercel
