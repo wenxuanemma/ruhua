@@ -46,9 +46,10 @@ export default async function handler(req, res) {
     const targetH = Math.round(region.h * PH);
 
     // Client already cropped to face region — use full image
-    const cropX = 0;
+    // Crop: shift left 8% to compensate LoRA output's systematic right bias
+    const cropX = Math.round(FW * 0.08);
     const cropY = 0;
-    const cropW = FW;
+    const cropW = FW - cropX;
     const cropH = FH;
 
     let faceImg = sharp(faceBuf)

@@ -30,7 +30,7 @@ export default async function handler(req, res) {
       const imgB64 = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
 
       // Default fallback crop: shift right by 5% to compensate InstantID's systematic left bias
-      let cropX = Math.round(meta.width * 0.18);
+      let cropX = Math.round(meta.width * 0.20);
       let cropY = 0;
       let cropW = Math.round(meta.width * 0.80);
       let cropH = Math.round(meta.height * 0.85);
@@ -50,7 +50,7 @@ export default async function handler(req, res) {
             if (box) {
               const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
               // Shift center right by 5% of image width to compensate systematic left bias
-              const adjustedCx = Math.min(meta.width, faceCx + Math.round(meta.width * 0.08));
+              const adjustedCx = Math.min(meta.width, faceCx + Math.round(meta.width * 0.10));
               const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
               const halfW = Math.round(meta.width * 0.40); // 80% width centered on face
               const halfH = Math.round((box.y2 - box.y) * meta.height / 2);
