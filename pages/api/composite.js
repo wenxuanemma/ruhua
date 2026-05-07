@@ -150,9 +150,11 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Paste at target position — face is square (targetSize x targetSize)
-    const pasteX = Math.max(0, Math.min(targetX, PW - cmW));
-    const pasteY = Math.max(0, Math.min(targetY, PH - cmH));
+    // Center the square face over the target region center
+    const regionCenterX = targetX + Math.round(targetW / 2);
+    const regionCenterY = targetY + Math.round(targetH / 2);
+    const pasteX = Math.max(0, Math.min(regionCenterX - Math.round(cmW / 2), PW - cmW));
+    const pasteY = Math.max(0, Math.min(regionCenterY - Math.round(cmH / 2), PH - cmH));
 
     // Clamp to painting bounds — use extract not resize to avoid squash
     const faceW = Math.min(cmW, PW - pasteX);
