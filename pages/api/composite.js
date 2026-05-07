@@ -80,7 +80,7 @@ export default async function handler(req, res) {
               // Oversized box — use horizontal center, start from top, 75% height
               // Square crop: 65% of image centered on face, shift left 5% for bias correction
               cropSize = Math.round(FW * 0.65);
-              const biasShift = Math.round(FW * 0.05);
+              const biasShift = Math.round(FW * 0.02);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - biasShift, FW - cropSize));
               cropY = 0;
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
