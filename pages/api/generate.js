@@ -184,7 +184,7 @@ export default async function handler(req, res) {
             prompt: `gongbi_portrait, ${gender === 'man' ? 'man' : 'woman'}, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat 2D matte warm skin, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, flat even lighting, painted on silk, traditional Chinese figure painting`,
             negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, shadow, modern, anime, oil painting, western art, european, japanese style, ${genderNeg}`,
             init_image: faceImage,
-            strength: 0.85,
+            strength: 0.70,
             steps: 30,
             guidance: 8.0,
             width: 640,
