@@ -78,9 +78,10 @@ export default async function handler(req, res) {
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
               // Oversized box — use horizontal center, start from top, 75% height
-              // Square crop: 75% of image, centered horizontally, from top
-              cropSize = Math.round(FW * 0.75);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+              // Square crop: 65% of image centered on face, shift left 5% for bias correction
+              cropSize = Math.round(FW * 0.65);
+              const biasShift = Math.round(FW * 0.05);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - biasShift, FW - cropSize));
               cropY = 0;
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
