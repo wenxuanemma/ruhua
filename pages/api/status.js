@@ -48,10 +48,17 @@ export default async function handler(req, res) {
           if (detectRes.ok) {
             const { box } = await detectRes.json();
             if (box) {
-              cropX = Math.max(0, Math.round(box.x * meta.width));
-              cropY = Math.max(0, Math.round(box.y * meta.height));
-              const x2 = Math.min(meta.width,  Math.round(box.x2 * meta.width));
-              const y2 = Math.min(meta.height, Math.round(box.y2 * meta.height));
+              // Center crop on face center point to avoid left/right bias
+              const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
+              const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
+              const faceW = Math.round((box.x2 - box.x) * meta.width);
+              const faceH = Math.round((box.y2 - box.y) * meta.height);
+              // Make square crop centered on face
+              const halfSize = Math.round(Math.max(faceW, faceH) / 2);
+              cropX = Math.max(0, faceCx - halfSize);
+              cropY = Math.max(0, faceCy - halfSize);
+              const x2 = Math.min(meta.width,  faceCx + halfSize);
+              const y2 = Math.min(meta.height, faceCy + halfSize);
               cropW = x2 - cropX;
               cropH = y2 - cropY;
             }
