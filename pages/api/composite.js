@@ -77,10 +77,10 @@ export default async function handler(req, res) {
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
-              // Oversized box — use horizontal center but start from top of image
-              cropSize = Math.round(FW * 0.55);
+              // Oversized box — use horizontal center, start from top, 75% height
+              cropSize = Math.round(FW * 0.75);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
-              cropY = 0; // head is always at top of Seedream portrait
+              cropY = 0;
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
             faceCropBuf = await sharp(faceBuf)
@@ -158,14 +158,14 @@ export default async function handler(req, res) {
     // ── Step 3: Oval mask ─────────────────────────────────────────────────────
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="58%" rx="50%" ry="50%">
+        <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
           <stop offset="60%" stop-color="white" stop-opacity="1"/>
           <stop offset="78%" stop-color="white" stop-opacity="0.55"/>
           <stop offset="91%" stop-color="white" stop-opacity="0.07"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.58}" rx="${S*0.42}" ry="${S*0.46}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.42}" ry="${S*0.44}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
