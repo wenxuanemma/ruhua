@@ -61,8 +61,12 @@ export default async function handler(req, res) {
       });
     }
 
+    // Resize to square (max dimension) to avoid squashing
+    // The oval mask defines the actual visible boundary
+    const targetSize = Math.max(targetW, targetH);
+
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'attention' })
+      .resize(targetSize, targetSize, { fit: 'cover', position: 'attention' })
       .linear(0.60, 40)
       .png()
       .toBuffer();
@@ -138,7 +142,7 @@ export default async function handler(req, res) {
     // Top 15% (hat/headdress area) is transparent → original hat preserved.
     // SVG PNG has a proper alpha channel — dest-in works correctly with it.
     // Raw buffer approach (joinChannel / manual RGBA) has stride alignment bugs.
-    const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
+    const ovalSvg = `<svg width="${targetSize}" height="${targetSize}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="60%" rx="50%" ry="50%">
           <stop offset="60%" stop-color="white" stop-opacity="1"/>
@@ -147,19 +151,21 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.60}"
-               rx="${targetW*0.42}" ry="${targetH*0.47}"
+      <ellipse cx="${targetSize*0.50}" cy="${targetSize*0.60}"
+               rx="${targetSize*0.42}" ry="${targetSize*0.47}"
                fill="url(#g)"/>
     </svg>`;
     const blendMask = await sharp(Buffer.from(ovalSvg))
-      .resize(targetW, targetH)
+      .resize(targetSize, targetSize)
       .png()
       .toBuffer();
 
     // ── Apply mask and composite ──────────────────────────────────────────────
+    // Resize masked face back to targetW x targetH for painting placement
     const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMask, blend: 'dest-in' }])
+      .resize(targetW, targetH, { fit: 'fill' })
       .png()
       .toBuffer();
 
