@@ -77,11 +77,10 @@ export default async function handler(req, res) {
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
-              // Oversized box — InsightFace confused by art style, use face center with fixed size
-              const faceCy = Math.round(((box.y + box.y2) / 2) * FH);
+              // Oversized box — use horizontal center but start from top of image
               cropSize = Math.round(FW * 0.55);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
-              cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize*0.40), FH - cropSize));
+              cropY = 0; // head is always at top of Seedream portrait
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
             faceCropBuf = await sharp(faceBuf)
