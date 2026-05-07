@@ -141,15 +141,15 @@ export default async function handler(req, res) {
     // Raw buffer approach (joinChannel / manual RGBA) has stride alignment bugs.
     const ovalSvg = `<svg width="${targetW}" height="${targetH}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="55%" rx="50%" ry="50%">
+        <radialGradient id="g" cx="50%" cy="60%" rx="50%" ry="50%">
           <stop offset="60%" stop-color="white" stop-opacity="1"/>
           <stop offset="78%" stop-color="white" stop-opacity="0.55"/>
           <stop offset="91%" stop-color="white" stop-opacity="0.07"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${targetW*0.50}" cy="${targetH*0.55}"
-               rx="${targetW*0.41}" ry="${targetH*0.42}"
+      <ellipse cx="${targetW*0.50}" cy="${targetH*0.60}"
+               rx="${targetW*0.42}" ry="${targetH*0.47}"
                fill="url(#g)"/>
     </svg>`;
     const blendMask = await sharp(Buffer.from(ovalSvg))
