@@ -78,11 +78,10 @@ export default async function handler(req, res) {
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
               // Oversized box — use horizontal center, start from top, 75% height
-              // Crop: 70% width, 80% height square — includes full face forehead to chin
-              const cropW = Math.round(FW * 0.70);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropW/2), FW - cropW));
+              // Square crop: 75% of image, centered horizontally, from top
+              cropSize = Math.round(FW * 0.75);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
               cropY = 0;
-              cropSize = Math.round(FH * 0.80); // 80% height includes full face
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
             faceCropBuf = await sharp(faceBuf)
@@ -106,7 +105,7 @@ export default async function handler(req, res) {
     // Resize to exact targetSize x targetSize square — cover preserves aspect
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
-      .linear(0.70, 20)  // mild contrast reduction — avoid faded photo look
+      .linear(0.75, 0)  // mild contrast reduction, no brightness shift
       .png()
       .toBuffer();
 
