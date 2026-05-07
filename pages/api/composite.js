@@ -133,6 +133,17 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // Get exact colorMatchedFace dimensions (may differ from targetSize by 1px due to rounding)
+    const cmMeta = await sharp(colorMatchedFace).metadata();
+    const cmW = cmMeta.width;
+    const cmH = cmMeta.height;
+
+    // Resize blendMask to exactly match colorMatchedFace
+    const blendMaskSized = await sharp(blendMask)
+      .resize(cmW, cmH, { fit: 'fill' })
+      .png()
+      .toBuffer();
+
     const pasteX = Math.max(0, Math.min(targetX, PW - 1));
     const pasteY = Math.max(0, Math.min(targetY, PH - 1));
     const faceW  = Math.min(targetW, PW - pasteX);
@@ -140,7 +151,7 @@ export default async function handler(req, res) {
 
     const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
-      .composite([{ input: blendMask, blend: 'dest-in' }])
+      .composite([{ input: blendMaskSized, blend: 'dest-in' }])
       .resize(faceW, faceH, { fit: 'fill' })
       .png()
       .toBuffer();
