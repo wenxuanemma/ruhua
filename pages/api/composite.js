@@ -46,10 +46,10 @@ export default async function handler(req, res) {
     const targetH = Math.round(region.h * PH);
 
     // Client already cropped to face region — use full image
-    // Face is left-biased in output — crop from left side to center on face
+    // Use full image — status.js already centered the face
     const cropX = 0;
     const cropY = 0;
-    const cropW = Math.round(FW * 0.92); // take left 92%, cutting off right excess
+    const cropW = FW;
     const cropH = FH;
 
     let faceImg = sharp(faceBuf)
@@ -62,10 +62,8 @@ export default async function handler(req, res) {
     }
 
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
-      // Flatten contrast to reduce 3D shadow/highlight effect
-      // linear: reduces contrast by ~30%, normalise: stretches to painting's range
-      .linear(0.60, 40)  // compress highlights more, lift shadows more
+      .resize(targetW, targetH, { fit: 'cover', position: 'attention' })
+      .linear(0.60, 40)
       .png()
       .toBuffer();
 
