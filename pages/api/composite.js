@@ -60,13 +60,30 @@ export default async function handler(req, res) {
         if (detectRes.ok) {
           const { box } = await detectRes.json();
           if (box) {
-            const faceCx = Math.round(((box.x + box.x2) / 2) * FW);
-            const faceCy = Math.round(((box.y + box.y2) / 2) * FH);
-            // Crop 55% of portrait width centered on face
-            const cropSize = Math.round(FW * 0.55);
-            const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
-            const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize*0.50), FH - cropSize));
-            console.log(`[composite face detect] faceCx=${faceCx} faceCy=${faceCy} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+            const faceCx  = Math.round(((box.x  + box.x2) / 2) * FW);
+            const faceTop = Math.round(box.y  * FH);
+            const faceBot = Math.round(box.y2 * FH);
+            const faceH   = faceBot - faceTop;
+            const faceW   = Math.round((box.x2 - box.x) * FW);
+            const faceRatio = faceH / FH;
+
+            let cropSize, cropX, cropY;
+            if (faceRatio < 0.60) {
+              // Good detection — use face bounds with padding
+              const padTop = Math.round(faceH * 0.25);
+              const padBot = Math.round(faceH * 0.15);
+              cropSize = Math.max(Math.round(faceW * 1.1), faceH + padTop + padBot);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+              cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
+              console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+            } else {
+              // Oversized box — InsightFace confused by art style, use face center with fixed size
+              const faceCy = Math.round(((box.y + box.y2) / 2) * FH);
+              cropSize = Math.round(FW * 0.55);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+              cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize*0.40), FH - cropSize));
+              console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+            }
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
               .jpeg({ quality: 95 })
