@@ -167,7 +167,44 @@ export default async function handler(req, res) {
   try {
     const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
 
-    // Stage 1: InstantID on Replicate — identity preservation
+    if (LOCAL_SERVER) {
+      try {
+        const controller = new AbortController();
+        const loraTimeout = setTimeout(() => controller.abort(), 55000);
+
+        const genderNeg = gender === 'man'
+          ? 'female, woman, feminine'
+          : 'male, man, masculine, beard, mustache, stubble, facial hair';
+
+        const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            prompt: `gongbi_portrait, ${gender === 'man' ? 'man' : 'woman'}, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat 2D matte warm skin, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, flat even lighting, painted on silk, traditional Chinese figure painting`,
+            negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, shadow, modern, anime, oil painting, western art, european, japanese style, ${genderNeg}`,
+            init_image: faceImage,
+            strength: 0.85,
+            steps: 30,
+            guidance: 8.0,
+            width: 640,
+            height: 640,
+            seed: -1,
+          }),
+        });
+        clearTimeout(loraTimeout);
+
+        if (loraRes.ok) {
+          const buf = Buffer.from(await loraRes.arrayBuffer());
+          const outputUrl = `data:image/png;base64,${buf.toString('base64')}`;
+          return res.status(200).json({ outputUrl });
+        }
+      } catch (e) {
+        console.warn('LoRA img2img failed, falling back to InstantID:', e.message);
+      }
+    }
+
+    // Fallback: InstantID on Replicate
     const prediction = await callReplicate({
       version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
