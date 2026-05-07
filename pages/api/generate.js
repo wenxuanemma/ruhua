@@ -236,10 +236,12 @@ export default async function handler(req, res) {
                       const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
                       const faceW  = Math.round((box.x2 - box.x) * meta.width);
                       const faceH  = Math.round((box.y2 - box.y) * meta.height);
-                      cropSize = Math.round(Math.max(faceW, faceH) * 1.1);
+                      // Use face width as crop size (face is roughly square)
+                      // faceH includes hair/chin padding from InsightFace so use faceW
+                      cropSize = Math.round(faceW * 0.80);
                       cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
-                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize/2), meta.height - cropSize));
-                      console.log(`[face detect] box=${JSON.stringify(box)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.55), meta.height - cropSize));
+                      console.log(`[face detect] faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
                     }
                   }
                 } catch (e) {
