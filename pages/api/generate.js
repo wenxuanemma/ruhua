@@ -206,6 +206,7 @@ export default async function handler(req, res) {
     }
 
     const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+    if (LOCAL_SERVER) {
       try {
         const controller = new AbortController();
         const loraTimeout = setTimeout(() => controller.abort(), 55000);
