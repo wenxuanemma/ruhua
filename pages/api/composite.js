@@ -133,11 +133,6 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    const pasteX = Math.max(0, Math.min(targetX, PW - 1));
-    const pasteY = Math.max(0, Math.min(targetY, PH - 1));
-    const faceW  = Math.max(1, Math.min(targetW, PW - pasteX));
-    const faceH  = Math.max(1, Math.min(targetH, PH - pasteY));
-
     // Get exact colorMatchedFace dimensions
     const cmMeta = await sharp(colorMatchedFace).metadata();
     const cmW = cmMeta.width;
@@ -155,26 +150,19 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Final resize to target region — clamp to avoid any off-by-one
-    const maskedFace = await sharp(maskedFaceFull)
-      .resize(faceW, faceH, { fit: 'fill' })
-      .png()
-      .toBuffer();
+    // Keep face square — center it over target region
+    // Offset paste position so the square face is centered on the target region center
+    const targetCenterX = targetX + Math.round(targetW / 2);
+    const targetCenterY = targetY + Math.round(targetH / 2);
+    const pasteX = Math.max(0, Math.min(targetCenterX - Math.round(cmW / 2), PW - cmW));
+    const pasteY = Math.max(0, Math.min(targetCenterY - Math.round(cmH / 2), PH - cmH));
 
-    // Verify maskedFace fits in painting before compositing
-    const mMeta = await sharp(maskedFace).metadata();
-    if (mMeta.width + pasteX > PW || mMeta.height + pasteY > PH) {
-      const trimW = Math.max(1, Math.min(mMeta.width,  PW - pasteX));
-      const trimH = Math.max(1, Math.min(mMeta.height, PH - pasteY));
-      const trimmed = await sharp(maskedFace)
-        .resize(trimW, trimH, { fit: 'fill' })
-        .png().toBuffer();
-      const compositedTrim = await sharp(paintingBuf)
-        .composite([{ input: trimmed, left: pasteX, top: pasteY, blend: 'over' }])
-        .jpeg({ quality: 92 }).toBuffer();
-      const outputTrimUrl = `data:image/jpeg;base64,${compositedTrim.toString('base64')}`;
-      return res.status(200).json({ outputUrl: outputTrimUrl, profileUrl: outputTrimUrl });
-    }
+    // Clamp to painting bounds
+    const faceW = Math.min(cmW, PW - pasteX);
+    const faceH = Math.min(cmH, PH - pasteY);
+    const maskedFace = (faceW === cmW && faceH === cmH)
+      ? maskedFaceFull
+      : await sharp(maskedFaceFull).resize(faceW, faceH, { fit: 'fill' }).png().toBuffer();
 
     const composited = await sharp(paintingBuf)
       .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
