@@ -231,17 +231,14 @@ export default async function handler(req, res) {
                   if (detectRes.ok) {
                     const { box } = await detectRes.json();
                     if (box) {
-                      // box coords are relative to 640x640 — scale back to original
+                      // Use detection only for horizontal center — box is too large for size
                       const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
                       const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
-                      const faceW  = Math.round((box.x2 - box.x) * meta.width);
-                      const faceH  = Math.round((box.y2 - box.y) * meta.height);
-                      // Use face width as crop size (face is roughly square)
-                      // faceH includes hair/chin padding from InsightFace so use faceW
-                      cropSize = Math.round(faceW * 0.80);
+                      // Fixed crop: 45% of image width (tight head crop)
+                      cropSize = Math.round(meta.width * 0.45);
                       cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
-                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.55), meta.height - cropSize));
-                      console.log(`[face detect] faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.45), meta.height - cropSize));
+                      console.log(`[face detect] faceCx=${faceCx} faceCy=${faceCy} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
                     }
                   }
                 } catch (e) {

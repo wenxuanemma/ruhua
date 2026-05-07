@@ -110,7 +110,6 @@ export default async function handler(req, res) {
         [0, 0, bScale],
       ])
       .modulate({ saturation: 0.90 })
-      .resize(targetSize, targetSize, { fit: 'fill' })
       .png()
       .toBuffer();
 
