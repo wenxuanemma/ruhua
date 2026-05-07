@@ -48,16 +48,13 @@ export default async function handler(req, res) {
           if (detectRes.ok) {
             const { box } = await detectRes.json();
             if (box) {
-              // Always center horizontally — Replicate output face is consistently centered X
-              // Use face detection only for vertical positioning
+              const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
               const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
-              const faceH = Math.round((box.y2 - box.y) * meta.height);
-              const halfH = Math.round(faceH / 2);
-
-              // Square crop: full width centered, height centered on face
-              cropX = 0;
-              cropW = meta.width;
+              const halfW = Math.round(meta.width * 0.40); // 80% width centered on face
+              const halfH = Math.round((box.y2 - box.y) * meta.height / 2);
+              cropX = Math.max(0, Math.min(faceCx - halfW, meta.width - halfW*2));
               cropY = Math.max(0, faceCy - halfH);
+              cropW = Math.min(halfW * 2, meta.width - cropX);
               const y2 = Math.min(meta.height, faceCy + halfH);
               cropH = y2 - cropY;
             }
