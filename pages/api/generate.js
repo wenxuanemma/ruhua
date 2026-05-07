@@ -165,9 +165,111 @@ export default async function handler(req, res) {
   let faceImage = selfie;
 
   try {
-    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+    const AIML_KEY = process.env.AIML_API_KEY;
 
-    // Stage 1: InstantID on Replicate — identity preservation
+    // Primary: Seedream 4.5 — native gongbi style + identity preservation
+    if (AIML_KEY) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 55000);
+
+        const seedreamRes = await fetch('https://api.aimlapi.com/v1/images/generations', {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${AIML_KEY}`,
+            'Content-Type': 'application/json',
+          },
+          signal: controller.signal,
+          body: JSON.stringify({
+            model: 'bytedance/seedream-4-5',
+            prompt: `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, flat 2D matte warm skin, warm ochre vermillion mineral pigments on silk, fine line brushwork, no shadows no shading no highlights, even flat lighting, meticulous detail, preserve facial features identity likeness of the person in the photo`,
+            image_urls: [faceImage],
+            image_size: 'square_hd',
+          }),
+        });
+        clearTimeout(timeout);
+
+        if (seedreamRes.ok) {
+          const data = await seedreamRes.json();
+          const outputUrl = data.data?.[0]?.url;
+          if (outputUrl) {
+            console.log('Seedream 4.5 succeeded');
+            return res.status(200).json({ outputUrl });
+          }
+        } else {
+          const err = await seedreamRes.text();
+          console.warn('Seedream failed:', seedreamRes.status, err);
+        }
+      } catch (e) {
+        console.warn('Seedream error:', e.message);
+      }
+    }
+
+    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+      try {
+        const controller = new AbortController();
+        const loraTimeout = setTimeout(() => controller.abort(), 55000);
+
+        const genderNeg = gender === 'man'
+          ? 'female, woman, feminine'
+          : 'male, man, masculine, beard, mustache, stubble, facial hair';
+
+        const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          signal: controller.signal,
+          body: JSON.stringify({
+            prompt: `gongbi_portrait, ${gender === 'man' ? 'man' : 'woman'}, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat 2D matte warm skin, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, flat even lighting, painted on silk, traditional Chinese figure painting`,
+            negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, shadow, modern, anime, oil painting, western art, european, japanese style, ${genderNeg}`,
+            init_image: faceImage,
+            strength: 0.60,
+            steps: 30,
+            guidance: 8.0,
+            width: 640,
+            height: 640,
+            seed: -1,
+          }),
+        });
+        clearTimeout(loraTimeout);
+
+        if (loraRes.ok) {
+          const buf = Buffer.from(await loraRes.arrayBuffer());
+          let outputUrl = `data:image/png;base64,${buf.toString('base64')}`;
+
+          try {
+            const sharp = (await import('sharp')).default;
+            const meta = await sharp(buf).metadata();
+
+            // Use selfie face detection box to crop LoRA output
+            // (face position should correspond between selfie and LoRA output)
+            // Square crop centred on image - face position matches between selfie and LoRA output
+            let cropX, cropY, cropW, cropH;
+            {
+              const size = Math.round(meta.height * 0.75);
+              cropX = Math.max(0, Math.round((meta.width - size) / 2) + Math.round(meta.width * 0.08));
+              cropY = 0;
+              cropW = Math.min(size, meta.width  - cropX);
+              cropH = Math.min(size, meta.height - cropY);
+            }
+
+            const cropped = await sharp(buf)
+              .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
+              .resize(640, 640, { fit: 'cover', position: 'centre' })
+              .jpeg({ quality: 95 })
+              .toBuffer();
+            outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+          } catch (e) {
+            console.warn('Face crop failed:', e.message);
+          }
+
+          return res.status(200).json({ outputUrl });
+        }
+      } catch (e) {
+        console.warn('LoRA img2img failed, falling back to InstantID:', e.message);
+      }
+    }
+
+    // Final fallback: InstantID on Replicate
     const prediction = await callReplicate({
       version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
       input: {
