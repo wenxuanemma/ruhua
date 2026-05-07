@@ -213,7 +213,7 @@ export default async function handler(req, res) {
               const meta = await sharp(imgBuf).metadata();
               // Square crop: center 70% of width, shifted right 8%
               const size = Math.round(Math.min(meta.width, meta.height) * 0.85);
-              const cx = Math.round(meta.width / 2) + Math.round(meta.width * 0.08);
+              const cx = Math.round(meta.width / 2) + Math.round(meta.width * 0.15);
               const cropX = Math.max(0, Math.min(cx - Math.round(size/2), meta.width - size));
               const cropY = 0;
               const cropped = await sharp(imgBuf)
