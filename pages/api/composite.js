@@ -58,9 +58,9 @@ export default async function handler(req, res) {
       });
     }
 
-    // Face image is now square (cropped by status.js) — cover fills region cleanly
     // Resize to square to avoid squashing — face image is square from generate.js
     const targetSize = Math.max(targetW, targetH);
+    console.log(`[composite] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
 
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
