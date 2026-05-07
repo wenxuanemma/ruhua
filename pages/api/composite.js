@@ -133,6 +133,7 @@ export default async function handler(req, res) {
         [0, 0, bScale],
       ])
       .modulate({ saturation: 0.90 })
+      .resize(targetSize, targetSize, { fit: 'fill' })  // ensure exact dimensions
       .png()
       .toBuffer();
 
@@ -179,6 +180,7 @@ export default async function handler(req, res) {
     const maskedMeta = await sharp(maskedFace).metadata();
     const clampW = Math.min(maskedMeta.width,  PW - pasteX);
     const clampH = Math.min(maskedMeta.height, PH - pasteY);
+    console.log(`composite: painting=${PW}x${PH} paste=${pasteX},${pasteY} face=${maskedMeta.width}x${maskedMeta.height} clamp=${clampW}x${clampH}`);
     const safeFace = (clampW === maskedMeta.width && clampH === maskedMeta.height)
       ? maskedFace
       : await sharp(maskedFace).resize(clampW, clampH, { fit: 'fill' }).png().toBuffer();
