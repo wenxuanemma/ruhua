@@ -161,7 +161,7 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Apply mask and composite ──────────────────────────────────────────────
-    // Resize masked face back to targetW x targetH for painting placement
+    // Resize masked face to exactly targetW x targetH for painting placement
     const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMask, blend: 'dest-in' }])
@@ -169,8 +169,12 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // Clamp composite position to ensure face fits within painting bounds
+    const pasteX = Math.max(0, Math.min(targetX, PW - targetW));
+    const pasteY = Math.max(0, Math.min(targetY, PH - targetH));
+
     const composited = await sharp(paintingBuf)
-      .composite([{ input: maskedFace, left: targetX, top: targetY, blend: 'over' }])
+      .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
