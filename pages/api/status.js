@@ -29,8 +29,8 @@ export default async function handler(req, res) {
       const meta = await sharp(imgBuf).metadata();
       const imgB64 = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
 
-      // Default fallback crop: center 80% width, top 85% height
-      let cropX = Math.round(meta.width * 0.10);
+      // Default fallback crop: shift right by 5% to compensate InstantID's systematic left bias
+      let cropX = Math.round(meta.width * 0.15);
       let cropY = 0;
       let cropW = Math.round(meta.width * 0.80);
       let cropH = Math.round(meta.height * 0.85);
@@ -49,10 +49,12 @@ export default async function handler(req, res) {
             const { box } = await detectRes.json();
             if (box) {
               const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
+              // Shift center right by 5% of image width to compensate systematic left bias
+              const adjustedCx = Math.min(meta.width, faceCx + Math.round(meta.width * 0.05));
               const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
               const halfW = Math.round(meta.width * 0.40); // 80% width centered on face
               const halfH = Math.round((box.y2 - box.y) * meta.height / 2);
-              cropX = Math.max(0, Math.min(faceCx - halfW, meta.width - halfW*2));
+              cropX = Math.max(0, Math.min(adjustedCx - halfW, meta.width - halfW*2));
               cropY = Math.max(0, faceCy - halfH);
               cropW = Math.min(halfW * 2, meta.width - cropX);
               const y2 = Math.min(meta.height, faceCy + halfH);
@@ -66,7 +68,7 @@ export default async function handler(req, res) {
 
       const cropped = await sharp(imgBuf)
         .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
-        .resize(640, 640, { fit: 'contain', background: { r:0, g:0, b:0, alpha:0 } })
+        .resize(640, 640, { fit: 'cover', position: 'centre' })
         .jpeg({ quality: 95 })
         .toBuffer();
       const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
