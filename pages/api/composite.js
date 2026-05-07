@@ -175,8 +175,17 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // Final safety check — ensure maskedFace never exceeds painting bounds
+    const maskedMeta = await sharp(maskedFace).metadata();
+    const safeW = Math.min(maskedMeta.width,  PW - pasteX);
+    const safeH = Math.min(maskedMeta.height, PH - pasteY);
+    const safeFace = (safeW === maskedMeta.width && safeH === maskedMeta.height)
+      ? maskedFace
+      : await sharp(maskedFace).resize(safeW, safeH, { fit: 'fill' }).png().toBuffer();
+
     const composited = await sharp(paintingBuf)
-      .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
+      .composite([{ input: safeFace, left: pasteX, top: pasteY, blend: 'over' }])
+      .composite([{ input: safeFace, left: pasteX, top: pasteY, blend: 'over' }])
       .jpeg({ quality: 92 })
       .toBuffer();
 
