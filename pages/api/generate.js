@@ -184,7 +184,7 @@ export default async function handler(req, res) {
             model: 'bytedance/seedream-4-5',
             prompt: `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, flat 2D matte warm skin, warm ochre vermillion mineral pigments on silk, fine line brushwork, no shadows no shading no highlights, even flat lighting, meticulous detail, preserve facial features identity likeness of the person in the photo`,
             image_urls: [faceImage],
-            image_size: '2K',
+            image_size: { width: 1024, height: 1024 },
           }),
         });
         clearTimeout(timeout);
