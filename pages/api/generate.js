@@ -173,26 +173,37 @@ export default async function handler(req, res) {
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 55000);
 
-        const seedreamRes = await fetch('https://api.aimlapi.com/v1/images/generations', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${AIML_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          signal: controller.signal,
-          body: JSON.stringify({
-            model: 'bytedance/seedream-4-5',
-            prompt: `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the photo, headshot portrait`,
-            image_urls: [faceImage],
-            image_size: { width: 1920, height: 1920 },
-          }),
-        });
-        clearTimeout(timeout);
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the photo, headshot portrait`;
 
-        if (seedreamRes.ok) {
-          const data = await seedreamRes.json();
-          const rawUrl = data.data?.[0]?.url;
-          if (rawUrl) {
+        let rawUrl = null;
+        for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {
+          const seedreamRes = await fetch('https://api.aimlapi.com/v1/images/generations', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${AIML_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            signal: controller.signal,
+            body: JSON.stringify({
+              model,
+              prompt: seedreamPrompt,
+              image_urls: [faceImage],
+              ...(model === 'bytedance/seedream-4-5' ? { image_size: { width: 1920, height: 1920 } } : {}),
+            }),
+          });
+          clearTimeout(timeout);
+
+          if (seedreamRes.ok) {
+            const data = await seedreamRes.json();
+            rawUrl = data.data?.[0]?.url;
+            if (rawUrl) { console.log(`${model} succeeded`); break; }
+          } else {
+            const err = await seedreamRes.text();
+            console.warn(`${model} failed: ${seedreamRes.status} ${err.slice(0,200)}`);
+          }
+        }
+
+        if (rawUrl) {
             console.log('Seedream 4.5 succeeded');
             // Crop to centered square — Seedream face is slightly left-of-center
             try {
@@ -216,10 +227,6 @@ export default async function handler(req, res) {
               return res.status(200).json({ outputUrl: rawUrl });
             }
           }
-        } else {
-          const err = await seedreamRes.text();
-          console.warn('Seedream failed:', seedreamRes.status, err);
-        }
       } catch (e) {
         console.warn('Seedream error:', e.message);
       }
