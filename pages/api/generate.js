@@ -216,6 +216,7 @@ export default async function handler(req, res) {
               const cx = Math.round(meta.width / 2) + Math.round(meta.width * 0.15);
               const cropX = Math.max(0, Math.min(cx - Math.round(size/2), meta.width - size));
               const cropY = 0;
+              console.log(`[seedream crop] image=${meta.width}x${meta.height} size=${size} cx=${cx} cropX=${cropX}`);
               const cropped = await sharp(imgBuf)
                 .extract({ left: cropX, top: cropY, width: size, height: size })
                 .jpeg({ quality: 95 })
