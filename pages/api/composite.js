@@ -79,8 +79,12 @@ export default async function handler(req, res) {
             } else {
               // Oversized box — use horizontal center, start from top, 75% height
               cropSize = Math.round(FW * 0.75);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+              // Narrow horizontal crop: take center 65% of cropSize width
+              const cropW = Math.round(cropSize * 0.65);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropW/2), FW - cropW));
               cropY = 0;
+              // Use cropW as the square size for consistent aspect ratio
+              cropSize = cropW;
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
             faceCropBuf = await sharp(faceBuf)
@@ -104,7 +108,7 @@ export default async function handler(req, res) {
     // Resize to exact targetSize x targetSize square — cover preserves aspect
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
-      .linear(0.60, 40)
+      .linear(0.55, 45)  // stronger contrast reduction for vivid Seedream output
       .png()
       .toBuffer();
 
@@ -136,7 +140,7 @@ export default async function handler(req, res) {
     }
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
-    const bl = 0.75;
+    const bl = 0.90; // strong pull toward painting palette to reduce vivid colors
     const rS = (ps.rs/fs.rs-1)*bl+1;
     const gS = (ps.gs/fs.gs-1)*bl+1;
     const bS = (ps.bs/fs.bs-1)*bl+1;
@@ -159,13 +163,13 @@ export default async function handler(req, res) {
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
-          <stop offset="60%" stop-color="white" stop-opacity="1"/>
-          <stop offset="78%" stop-color="white" stop-opacity="0.55"/>
-          <stop offset="91%" stop-color="white" stop-opacity="0.07"/>
+          <stop offset="50%" stop-color="white" stop-opacity="1"/>
+          <stop offset="70%" stop-color="white" stop-opacity="0.7"/>
+          <stop offset="85%" stop-color="white" stop-opacity="0.2"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.42}" ry="${S*0.44}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.36}" ry="${S*0.44}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
