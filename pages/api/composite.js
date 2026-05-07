@@ -78,13 +78,11 @@ export default async function handler(req, res) {
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
               // Oversized box — use horizontal center, start from top, 75% height
-              cropSize = Math.round(FW * 0.75);
-              // Narrow horizontal crop: take center 65% of cropSize width
-              const cropW = Math.round(cropSize * 0.65);
+              // Crop: 70% width, 80% height square — includes full face forehead to chin
+              const cropW = Math.round(FW * 0.70);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropW/2), FW - cropW));
               cropY = 0;
-              // Use cropW as the square size for consistent aspect ratio
-              cropSize = cropW;
+              cropSize = Math.round(FH * 0.80); // 80% height includes full face
               console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             }
             faceCropBuf = await sharp(faceBuf)
@@ -108,7 +106,7 @@ export default async function handler(req, res) {
     // Resize to exact targetSize x targetSize square — cover preserves aspect
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
-      .linear(0.55, 45)  // stronger contrast reduction for vivid Seedream output
+      .linear(0.70, 20)  // mild contrast reduction — avoid faded photo look
       .png()
       .toBuffer();
 
@@ -149,7 +147,7 @@ export default async function handler(req, res) {
     const colorFace = await sharp(facePng)
       .removeAlpha()
       .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
-      .modulate({ saturation: 0.90 })
+      .modulate({ saturation: 0.65 }) // reduce vivid Seedream saturation
       .png()
       .toBuffer();
 
