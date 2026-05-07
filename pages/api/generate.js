@@ -204,31 +204,30 @@ export default async function handler(req, res) {
       }
     }
 
-    // Fallback: InstantID on Replicate
+    // Fallback: Seedream 4.5 on Replicate — better gongbi style than InstantID
+    // Upload selfie to get a public URL first (Replicate needs a URL not base64)
+    const selfieBase64 = faceImage.split(',')[1];
+    const selfieBlob = Buffer.from(selfieBase64, 'base64');
+
+    // Use Replicate's file upload endpoint to get a public URL
+    const uploadRes = await fetch('https://api.replicate.com/v1/files', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Token ${process.env.REPLICATE_API_TOKEN}`,
+        'Content-Type': 'image/jpeg',
+      },
+      body: selfieBlob,
+    });
+    if (!uploadRes.ok) throw new Error('Failed to upload selfie to Replicate');
+    const uploadData = await uploadRes.json();
+    const selfieUrl = uploadData.urls?.get || uploadData.url;
+
     const prediction = await callReplicate({
-      version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
+      version: 'bytedance/seedream-4.5',
       input: {
-        image: faceImage,
-        prompt: [
-          `portrait of a ${genderPrompt}, headshot, face and shoulders only`,
-          'face centered in frame, close up portrait',
-          figureDesc, styleDesc,
-          'Tang dynasty Chinese court painting style, gongbi brushwork',
-          'flat matte skin, mineral pigments on silk, soft even lighting',
-        ].join(', '),
-        negative_prompt: [
-          'full body', 'whole body', 'torso', 'chest visible',
-          ...(gender === 'woman' ? ['male', 'man', 'masculine', 'beard', 'mustache'] : ['female', 'woman', 'feminine']),
-          'glasses', 'earrings', 'jewelry', 'braids',
-          'black and white', 'grayscale', 'blurry', 'watermark',
-          'japanese', 'anime', 'manga', 'ukiyo-e', 'western',
-        ].join(', '),
-        ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.40,
-        sdxl_weights:        'protovision-xl-high-fidel',
-        guidance_scale:      7.5,
-        num_inference_steps: 35,
-        width: 640, height: 640,
+        prompt: `工笔画 gongbi portrait, ${gender === 'man' ? 'man male face' : 'woman female face'}, Tang dynasty Chinese court painting style, flat 2D matte warm skin, warm ochre vermillion mineral pigments on silk, fine line brushwork, no shadows no shading, even flat lighting, traditional Chinese figure painting, preserve the person's facial features identity likeness`,
+        image_urls: [selfieUrl],
+        image_size: 'square_hd',
       },
     });
     return res.status(200).json({ predictionId: prediction.id });
