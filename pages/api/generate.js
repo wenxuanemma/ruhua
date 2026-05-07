@@ -237,7 +237,7 @@ export default async function handler(req, res) {
                       // Fixed crop: 45% of image width (tight head crop)
                       cropSize = Math.round(meta.width * 0.45);
                       cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
-                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.45), meta.height - cropSize));
+                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize * 0.55), meta.height - cropSize));
                       console.log(`[face detect] faceCx=${faceCx} faceCy=${faceCy} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
                     }
                   }
