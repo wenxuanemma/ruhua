@@ -191,10 +191,30 @@ export default async function handler(req, res) {
 
         if (seedreamRes.ok) {
           const data = await seedreamRes.json();
-          const outputUrl = data.data?.[0]?.url;
-          if (outputUrl) {
+          const rawUrl = data.data?.[0]?.url;
+          if (rawUrl) {
             console.log('Seedream 4.5 succeeded');
-            return res.status(200).json({ outputUrl });
+            // Crop to centered square — Seedream face is slightly left-of-center
+            try {
+              const sharp = (await import('sharp')).default;
+              const imgRes = await fetch(rawUrl);
+              const imgBuf = Buffer.from(await imgRes.arrayBuffer());
+              const meta = await sharp(imgBuf).metadata();
+              // Square crop: center 70% of width, shifted right 8%
+              const size = Math.round(Math.min(meta.width, meta.height) * 0.85);
+              const cx = Math.round(meta.width / 2) + Math.round(meta.width * 0.08);
+              const cropX = Math.max(0, Math.min(cx - Math.round(size/2), meta.width - size));
+              const cropY = 0;
+              const cropped = await sharp(imgBuf)
+                .extract({ left: cropX, top: cropY, width: size, height: size })
+                .jpeg({ quality: 95 })
+                .toBuffer();
+              const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
+              return res.status(200).json({ outputUrl });
+            } catch (e) {
+              console.warn('Seedream crop failed:', e.message);
+              return res.status(200).json({ outputUrl: rawUrl });
+            }
           }
         } else {
           const err = await seedreamRes.text();
