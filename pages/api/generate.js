@@ -204,21 +204,56 @@ export default async function handler(req, res) {
         }
 
         if (rawUrl) {
-            console.log('Seedream 4.5 succeeded');
-            // Crop to centered square — Seedream face is slightly left-of-center
+            console.log('Seedream succeeded, running face detection for crop');
             try {
               const sharp = (await import('sharp')).default;
               const imgRes = await fetch(rawUrl);
               const imgBuf = Buffer.from(await imgRes.arrayBuffer());
               const meta = await sharp(imgBuf).metadata();
-              // Square crop: center 70% of width, shifted right 8%
-              const size = Math.round(Math.min(meta.width, meta.height) * 0.70);
-              const cx = Math.round(meta.width / 2) + Math.round(meta.width * 0.10);
-              const cropX = Math.max(0, Math.min(cx - Math.round(size/2), meta.width - size));
-              const cropY = Math.round(meta.height * 0.02); // slight top offset
-              console.log(`[seedream crop] image=${meta.width}x${meta.height} size=${size} cx=${cx} cropX=${cropX}`);
+
+              // Try face detection on Seedream output
+              let cropX, cropY, cropSize;
+              const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+              if (LOCAL_SERVER) {
+                try {
+                  const imgB64 = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
+                  const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ init_image: imgB64 }),
+                    signal: AbortSignal.timeout(5000),
+                  });
+                  if (detectRes.ok) {
+                    const { box } = await detectRes.json();
+                    if (box) {
+                      const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
+                      const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
+                      const faceW  = Math.round((box.x2 - box.x) * meta.width);
+                      const faceH  = Math.round((box.y2 - box.y) * meta.height);
+                      cropSize = Math.round(Math.max(faceW, faceH) * 1.4);
+                      cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
+                      cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize/2), meta.height - cropSize));
+                      console.log(`[face detect] box=${JSON.stringify(box)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+                    }
+                  }
+                } catch (e) {
+                  console.warn('Face detection failed:', e.message);
+                }
+              }
+
+              // Fallback crop if detection failed
+              if (!cropSize) {
+                cropSize = Math.round(Math.min(meta.width, meta.height) * 0.60);
+                cropX = Math.max(0, Math.min(
+                  Math.round(meta.width / 2) + Math.round(meta.width * 0.20) - Math.round(cropSize/2),
+                  meta.width - cropSize
+                ));
+                cropY = Math.round(meta.height * 0.02);
+                console.log(`[fallback crop] cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+              }
+
               const cropped = await sharp(imgBuf)
-                .extract({ left: cropX, top: cropY, width: size, height: size })
+                .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
                 .jpeg({ quality: 95 })
                 .toBuffer();
               const outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
