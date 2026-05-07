@@ -165,31 +165,31 @@ export default async function handler(req, res) {
     const maskW = colorMeta.width;
     const maskH = colorMeta.height;
 
-    // Resize blendMask to exactly match colorMatchedFace dimensions
+    // Resize blendMask to match colorMatchedFace
     const blendMaskSized = await sharp(blendMask)
       .resize(maskW, maskH, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // Clamp paste position so face region stays within painting
-    const pasteX = Math.max(0, Math.min(targetX, PW - 1));
-    const pasteY = Math.max(0, Math.min(targetY, PH - 1));
-    const faceW = Math.min(maskW, PW - pasteX);
-    const faceH = Math.min(maskH, PH - pasteY);
-
+    // Apply oval mask — keep face square, don't squash to target region
     const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMaskSized, blend: 'dest-in' }])
-      .resize(faceW, faceH, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // Final safety check — ensure maskedFace never exceeds painting bounds
-    const maskedMeta = await sharp(maskedFace).metadata();
-    const clampW = Math.min(maskedMeta.width,  PW - pasteX);
-    const clampH = Math.min(maskedMeta.height, PH - pasteY);
-    console.log(`composite: painting=${PW}x${PH} paste=${pasteX},${pasteY} face=${maskedMeta.width}x${maskedMeta.height} clamp=${clampW}x${clampH}`);
-    const safeFace = (clampW === maskedMeta.width && clampH === maskedMeta.height)
+    // Center the square face over the target region
+    // Add small rightward offset to compensate systematic left bias in generated faces
+    const biasOffsetX = Math.round(maskW * 0.05);
+    const targetCenterX = targetX + Math.round(targetW / 2);
+    const targetCenterY = targetY + Math.round(targetH / 2);
+    const pasteX = Math.max(0, targetCenterX - Math.round(maskW / 2) + biasOffsetX);
+    const pasteY = Math.max(0, targetCenterY - Math.round(maskH / 2));
+
+    // Clamp to painting bounds
+    const clampW = Math.min(maskW, PW - pasteX);
+    const clampH = Math.min(maskH, PH - pasteY);
+    const safeFace = (clampW === maskW && clampH === maskH)
       ? maskedFace
       : await sharp(maskedFace).resize(clampW, clampH, { fit: 'fill' }).png().toBuffer();
 
