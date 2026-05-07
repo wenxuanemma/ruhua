@@ -58,8 +58,10 @@ export default async function handler(req, res) {
       });
     }
 
+    // Resize face preserving aspect ratio — no squash
+    // contain keeps proportions, fills remainder with painting-toned background
     const facePng = await faceImg
-      .resize(targetW, targetH, { fit: 'cover', position: 'centre' })
+      .resize(targetW, targetH, { fit: 'contain', position: 'centre', background: { r:180, g:150, b:100, alpha:1 } })
       .linear(0.60, 40)
       .png()
       .toBuffer();
@@ -134,8 +136,9 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Clamp to painting bounds
-    const pasteX = Math.max(0, Math.min(targetX, PW - targetW));
+    // Clamp to painting bounds, add small rightward offset for left-bias compensation
+    const biasX = Math.round(targetW * 0.08);
+    const pasteX = Math.max(0, Math.min(targetX + biasX, PW - targetW));
     const pasteY = Math.max(0, Math.min(targetY, PH - targetH));
 
     const composited = await sharp(paintingBuf)
