@@ -216,21 +216,27 @@ export default async function handler(req, res) {
               const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
               if (LOCAL_SERVER) {
                 try {
-                  const imgB64 = `data:image/jpeg;base64,${imgBuf.toString('base64')}`;
+                  // Resize to 640x640 first — reduces payload from ~7MB to ~100KB
+                  const resizedBuf = await sharp(imgBuf)
+                    .resize(640, 640, { fit: 'cover' })
+                    .jpeg({ quality: 85 })
+                    .toBuffer();
+                  const imgB64 = `data:image/jpeg;base64,${resizedBuf.toString('base64')}`;
                   const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({ init_image: imgB64 }),
-                    signal: AbortSignal.timeout(5000),
+                    signal: AbortSignal.timeout(15000),
                   });
                   if (detectRes.ok) {
                     const { box } = await detectRes.json();
                     if (box) {
+                      // box coords are relative to 640x640 — scale back to original
                       const faceCx = Math.round(((box.x + box.x2) / 2) * meta.width);
                       const faceCy = Math.round(((box.y + box.y2) / 2) * meta.height);
                       const faceW  = Math.round((box.x2 - box.x) * meta.width);
                       const faceH  = Math.round((box.y2 - box.y) * meta.height);
-                      cropSize = Math.round(Math.max(faceW, faceH) * 1.4);
+                      cropSize = Math.round(Math.max(faceW, faceH) * 1.1);
                       cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), meta.width - cropSize));
                       cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize/2), meta.height - cropSize));
                       console.log(`[face detect] box=${JSON.stringify(box)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
