@@ -133,28 +133,48 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Get exact colorMatchedFace dimensions (may differ from targetSize by 1px due to rounding)
+    const pasteX = Math.max(0, Math.min(targetX, PW - 1));
+    const pasteY = Math.max(0, Math.min(targetY, PH - 1));
+    const faceW  = Math.max(1, Math.min(targetW, PW - pasteX));
+    const faceH  = Math.max(1, Math.min(targetH, PH - pasteY));
+
+    // Get exact colorMatchedFace dimensions
     const cmMeta = await sharp(colorMatchedFace).metadata();
     const cmW = cmMeta.width;
     const cmH = cmMeta.height;
 
-    // Resize blendMask to exactly match colorMatchedFace
+    // Resize blendMask to exactly match colorMatchedFace — must not exceed it
     const blendMaskSized = await sharp(blendMask)
       .resize(cmW, cmH, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    const pasteX = Math.max(0, Math.min(targetX, PW - 1));
-    const pasteY = Math.max(0, Math.min(targetY, PH - 1));
-    const faceW  = Math.min(targetW, PW - pasteX);
-    const faceH  = Math.min(targetH, PH - pasteY);
-
-    const maskedFace = await sharp(colorMatchedFace)
+    const maskedFaceFull = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMaskSized, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+
+    // Final resize to target region — clamp to avoid any off-by-one
+    const maskedFace = await sharp(maskedFaceFull)
       .resize(faceW, faceH, { fit: 'fill' })
       .png()
       .toBuffer();
+
+    // Verify maskedFace fits in painting before compositing
+    const mMeta = await sharp(maskedFace).metadata();
+    if (mMeta.width + pasteX > PW || mMeta.height + pasteY > PH) {
+      const trimW = Math.max(1, Math.min(mMeta.width,  PW - pasteX));
+      const trimH = Math.max(1, Math.min(mMeta.height, PH - pasteY));
+      const trimmed = await sharp(maskedFace)
+        .resize(trimW, trimH, { fit: 'fill' })
+        .png().toBuffer();
+      const compositedTrim = await sharp(paintingBuf)
+        .composite([{ input: trimmed, left: pasteX, top: pasteY, blend: 'over' }])
+        .jpeg({ quality: 92 }).toBuffer();
+      const outputTrimUrl = `data:image/jpeg;base64,${compositedTrim.toString('base64')}`;
+      return res.status(200).json({ outputUrl: outputTrimUrl, profileUrl: outputTrimUrl });
+    }
 
     const composited = await sharp(paintingBuf)
       .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
