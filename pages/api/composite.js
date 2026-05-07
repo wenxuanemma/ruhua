@@ -133,15 +133,17 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    const pasteX = Math.max(0, Math.min(targetX, PW - 1));
+    const pasteY = Math.max(0, Math.min(targetY, PH - 1));
+    const faceW  = Math.min(targetW, PW - pasteX);
+    const faceH  = Math.min(targetH, PH - pasteY);
+
     const maskedFace = await sharp(colorMatchedFace)
       .ensureAlpha()
       .composite([{ input: blendMask, blend: 'dest-in' }])
-      .resize(targetW, targetH, { fit: 'fill' })
+      .resize(faceW, faceH, { fit: 'fill' })
       .png()
       .toBuffer();
-
-    const pasteX = Math.max(0, Math.min(targetX, PW - targetW));
-    const pasteY = Math.max(0, Math.min(targetY, PH - targetH));
 
     const composited = await sharp(paintingBuf)
       .composite([{ input: maskedFace, left: pasteX, top: pasteY, blend: 'over' }])
