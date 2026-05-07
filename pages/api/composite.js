@@ -167,7 +167,7 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.36}" ry="${S*0.44}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.40}" ry="${S*0.44}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
