@@ -106,6 +106,11 @@ export default async function handler(req, res) {
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
 
+    // Flip horizontally for profile_right — painting figure faces right (mirrored)
+    if (region.faceAngle === 'profile_right') {
+      faceImg = faceImg.flop();
+    }
+
     if (region.angle && region.angle !== 0) {
       faceImg = faceImg.rotate(region.angle, { background: { r:128, g:100, b:70, alpha:1 } });
     }
