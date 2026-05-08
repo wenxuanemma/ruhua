@@ -73,11 +73,12 @@ export default async function handler(req, res) {
 
             if (faceRatio < 0.60) {
               const padX    = Math.round(faceW * 0.15);
-              const padTop  = Math.round(faceH * 0.25);
-              const padBot  = Math.round(faceH * 0.15);
+              const padTop  = Math.round(faceH * 0.40); // 40% above eyebrows = includes full forehead
+              const padBot  = Math.round(faceH * 0.05); // 5% below chin
               cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
-              // Center crop on detected face center — no bias shift
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+              // Shift left 5% to fix right bias from MediaPipe detection
+              const leftShift = Math.round(faceW * 0.05);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
               // Oversized box — use face WIDTH as basis
