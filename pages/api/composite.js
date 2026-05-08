@@ -71,12 +71,12 @@ export default async function handler(req, res) {
             let cropSize, cropX, cropY;
 
             if (faceRatio < 0.60) {
-              const padX    = Math.round(faceW * 0.15); // larger sides to fill oval
-              const padTop  = Math.round(faceH * 0.25); // 25% above for forehead
-              const padBot  = Math.round(faceH * 0.15); // 15% below for chin
+              const padX    = Math.round(faceW * 0.15);
+              const padTop  = Math.round(faceH * 0.25);
+              const padBot  = Math.round(faceH * 0.15);
               cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
-              const rightShift = Math.round(faceW * 0.05);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) + rightShift, FW - cropSize));
+              // Center crop on detected face center — no bias shift
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
               // Oversized box — use face WIDTH as basis
