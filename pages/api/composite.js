@@ -164,10 +164,8 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Step 3: Oval mask ─────────────────────────────────────────────────────
-    // Oval matches region aspect ratio — rx proportional to targetW, ry to targetH
-    const ovalRx = S * 0.42 * (targetW / targetSize);
-    const ovalRy = S * 0.42 * (targetH / targetSize);
+    // Oval: use circular mask — region aspect ratio handled by paste position, not oval shape
+    const ovalR = S * 0.42;
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
@@ -177,7 +175,7 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
