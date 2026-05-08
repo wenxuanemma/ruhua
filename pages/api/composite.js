@@ -73,8 +73,9 @@ export default async function handler(req, res) {
 
             if (faceRatio < 0.60) {
               const padX    = Math.round(faceW * 0.15);
-              const padTop  = Math.round(faceH * 0.40); // 40% above eyebrows = includes full forehead
-              const padBot  = Math.round(faceH * 0.05); // 5% below chin
+              const padTop  = Math.round(faceH * 0.40);
+              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+              const padBot  = Math.round(faceH * (isProfile ? 0.30 : 0.05));
               cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
               // Shift left 5% to fix right bias from MediaPipe detection
               const leftShift = Math.round(faceW * 0.05);
@@ -108,7 +109,8 @@ export default async function handler(req, res) {
 
     // Flip for right-facing figures — Seedream generates facing right naturally
     // but painting convention requires left-facing for these roles
-    if (region.faceAngle === 'profile_right' || region.faceAngle === 'three_quarter_right') {
+    // Flop for left-facing figures — Seedream generates facing right by default
+    if (region.faceAngle && region.faceAngle.includes('left')) {
       faceImg = faceImg.flop();
     }
 
