@@ -45,6 +45,21 @@ function quickHash(str) {
 const CACHE_KEY = 'ruhua_cache_v1';
 const CACHE_MAX = 5;
 
+// Composite result cache — keyed by selfieHash + paintingId + figureId
+const RESULT_CACHE_KEY = 'ruhua_results_v1';
+const RESULT_CACHE_MAX = 10;
+
+function loadResultCache() {
+  try { return JSON.parse(localStorage.getItem(RESULT_CACHE_KEY) || '{}'); } catch { return {}; }
+}
+function saveResultCache(cache) {
+  try {
+    const entries = Object.entries(cache);
+    const trimmed = Object.fromEntries(entries.slice(-RESULT_CACHE_MAX));
+    localStorage.setItem(RESULT_CACHE_KEY, JSON.stringify(trimmed));
+  } catch (e) { console.warn('Result cache save failed:', e.message); }
+}
+
 function loadCache() {
   try {
     return JSON.parse(localStorage.getItem(CACHE_KEY) || '{}');
@@ -88,6 +103,7 @@ export function useGenerate() {
   // Cache: selfieHash → styledFaceUrl
   // In-memory ref backed by localStorage for persistence across reloads/deployments
   const styledCache = useRef(loadCache());
+  const resultCache = useRef(loadResultCache());
   const currentSelfieHash = useRef(null);
 
   const pollRef   = useRef(null);
@@ -195,6 +211,19 @@ export function useGenerate() {
     setError(null);
 
     const selfieHash = quickHash(selfie);
+    const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
+
+    // Check composite result cache first
+    const cachedResult = resultCache.current[resultKey];
+    if (cachedResult) {
+      console.log('Result cache hit:', resultKey);
+      setOutputUrl(cachedResult.outputUrl);
+      if (cachedResult.profileUrl) setProfileUrl(cachedResult.profileUrl);
+      if (cachedResult.styledUrl)  setStyledUrl(cachedResult.styledUrl);
+      setStatus('done');
+      return;
+    }
+
     const cachedStyled = styledCache.current[selfieHash];
 
     // Compress selfie before sending to API
@@ -247,6 +276,14 @@ export function useGenerate() {
         faceBounds,
       });
 
+      // Save composite result to cache for instant re-access
+      resultCache.current[resultKey] = {
+        outputUrl:  composite,
+        profileUrl: profileUrl,
+        styledUrl:  styled,
+      };
+      saveResultCache(resultCache.current);
+
       setOutputUrl(composite);
       setStatus('succeeded');
 
@@ -261,8 +298,12 @@ export function useGenerate() {
   // Use when switching characters with new gender
   const clearStyledCache = useCallback(() => {
     styledCache.current = {};
+    resultCache.current = {};
     setStyledUrl(null);
-    try { localStorage.removeItem(CACHE_KEY); } catch {}
+    try {
+      localStorage.removeItem(CACHE_KEY);
+      localStorage.removeItem(RESULT_CACHE_KEY);
+    } catch {}
   }, []);
 
   // clearSelfieCache: call this when user explicitly takes a new selfie
