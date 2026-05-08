@@ -112,7 +112,7 @@ export default async function handler(req, res) {
     }
 
     if (region.angle && region.angle !== 0) {
-      faceImg = faceImg.rotate(region.angle, { background: { r:128, g:100, b:70, alpha:1 } });
+      faceImg = faceImg.rotate(region.angle, { background: { r:0, g:0, b:0, alpha:0 } });
     }
 
     // Resize to exact targetSize x targetSize square — cover preserves aspect
