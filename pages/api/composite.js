@@ -51,7 +51,7 @@ export default async function handler(req, res) {
           .resize(640, 640, { fit: 'cover' })
           .jpeg({ quality: 85 })
           .toBuffer();
-        const detectRes = await fetch(`${LOCAL_SERVER}/detect-face`, {
+        const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-mp`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ init_image: `data:image/jpeg;base64,${resizedForDetect.toString('base64')}` }),
