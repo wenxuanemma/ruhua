@@ -81,6 +81,7 @@ export function useGenerate() {
   const [status, setStatus]         = useState('idle');
   const [outputUrl, setOutputUrl]   = useState(null);
   const [styledUrl, setStyledUrl]   = useState(null);
+  const [cropBox, setCropBox]        = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]           = useState(null);
 
@@ -182,6 +183,7 @@ export function useGenerate() {
     const data = await res.json();
     if (!res.ok || data.error) throw new Error(data.error || 'Compositing failed');
     if (data.profileUrl) setProfileUrl(data.profileUrl);
+    if (data.cropBox)    setCropBox(data.cropBox);
     if (data.outputUrl) return data.outputUrl;
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
@@ -296,5 +298,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, cropBox, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }

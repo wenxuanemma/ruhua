@@ -1009,7 +1009,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, selfie, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const imgUrl = generatedUrl || imgs?.[painting?.id];
@@ -1375,11 +1375,25 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                     </div>
                     <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
                     <div style={{textAlign:'center'}}>
-                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画 (已裁剪)</div>
-                      <img src={styledUrl} style={{
-                        width:150,height:150,objectFit:'cover',objectPosition:'top',
-                        border:'1px solid rgba(201,168,76,0.2)',display:'block',
-                      }}/>
+                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画 (裁剪区域)</div>
+                      <div style={{position:'relative',display:'inline-block'}}>
+                        <img src={styledUrl} style={{
+                          width:150,height:150,objectFit:'cover',objectPosition:'top',
+                          border:'1px solid rgba(201,168,76,0.2)',display:'block',
+                        }}/>
+                        {cropBox && (
+                          <div style={{
+                            position:'absolute',
+                            left:`${cropBox.x*100}%`,
+                            top:`${cropBox.y*100}%`,
+                            width:`${cropBox.w*100}%`,
+                            height:`${cropBox.h*100}%`,
+                            border:'2px solid #e24b4a',
+                            boxSizing:'border-box',
+                            pointerEvents:'none',
+                          }}/>
+                        )}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -1406,7 +1420,7 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, cropBox, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -1533,6 +1547,7 @@ export default function RuHua() {
                                       generatedUrl={outputUrl}
                                       profileUrl={profileUrl}
                                       styledUrl={styledUrl}
+                                      cropBox={cropBox}
                                       selfie={selfie}
                                       onReset={reset}
                                       onChangeFigure={() => {

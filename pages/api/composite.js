@@ -43,6 +43,7 @@ export default async function handler(req, res) {
 
     // ── Step 1: Detect face and crop from full portrait ───────────────────────
     let faceCropBuf = faceBuf;
+    let faceCropBox = null; // normalized crop box for debug overlay
     const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
     if (LOCAL_SERVER && (FW > 500 || FH > 500)) {
       // Only run detection if input is a large portrait (not already cropped)
@@ -89,6 +90,7 @@ export default async function handler(req, res) {
               cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
             console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} faceLeft=${Math.round(box.x*FW)} cropX=${cropX} cropY=${cropY} size=${cropSize} padTop=${Math.round(faceH*0.20)}`);
+            faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
               .jpeg({ quality: 95 })
@@ -222,6 +224,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
+      cropBox: faceCropBox,
     });
 
   } catch (err) {
