@@ -60,31 +60,36 @@ export default async function handler(req, res) {
         if (detectRes.ok) {
           const { box } = await detectRes.json();
           if (box) {
-            const faceCx  = Math.round(((box.x  + box.x2) / 2) * FW);
-            const faceTop = Math.round(box.y  * FH);
-            const faceBot = Math.round(box.y2 * FH);
-            const faceH   = faceBot - faceTop;
-            const faceW   = Math.round((box.x2 - box.x) * FW);
+            const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
+            const faceLeft = Math.round(box.x  * FW);
+            const faceTop  = Math.round(box.y  * FH);
+            const faceBot  = Math.round(box.y2 * FH);
+            const faceW    = Math.round((box.x2 - box.x) * FW);
+            const faceH    = faceBot - faceTop;
             const faceRatio = faceH / FH;
 
             let cropSize, cropX, cropY;
+
             if (faceRatio < 0.60) {
-              // Good detection — use face bounds with padding
-              const padTop = Math.round(faceH * 0.25);
-              const padBot = Math.round(faceH * 0.15);
-              cropSize = Math.max(Math.round(faceW * 1.1), faceH + padTop + padBot);
+              // Good tight detection — pad around face bounds
+              const padX   = Math.round(faceW * 0.15);
+              const padTop = Math.round(faceH * 0.20);
+              const padBot = Math.round(faceH * 0.10);
+              cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
-              console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
-              // Use face ratio directly — face spans ~ratio of image, crop matches exactly
-              cropSize = Math.round(FH * (faceRatio + 0.02)); // face ratio + 2% margin
-              cropSize = Math.min(cropSize, Math.round(FH * 0.90)); // cap at 90%
-              const biasShift = Math.round(FW * 0.02);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - biasShift, FW - cropSize));
-              cropY = 0;
-              console.log(`[composite fallback crop] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+              // Oversized box — use face WIDTH as the basis for tight crop
+              // faceW is more reliable than faceH for Seedream gongbi portraits
+              const padX   = Math.round(faceW * 0.10);
+              const padTop = Math.round(faceW * 0.20); // extra space for forehead
+              cropSize = faceW + padX * 2;
+              cropX = Math.max(0, Math.min(faceLeft - padX, FW - cropSize));
+              cropY = Math.max(0, faceTop - padTop);
+              // Ensure square doesn't go out of bounds
+              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
+            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
               .jpeg({ quality: 95 })
