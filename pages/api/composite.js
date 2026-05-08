@@ -88,7 +88,7 @@ export default async function handler(req, res) {
               cropY = Math.max(0, faceTop - topShift);
               cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
-            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
+            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} faceLeft=${Math.round(box.x*FW)} cropX=${cropX} cropY=${cropY} size=${cropSize} padTop=${Math.round(faceH*0.20)}`);
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
               .jpeg({ quality: 95 })
