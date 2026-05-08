@@ -134,8 +134,15 @@ export default async function handler(req, res) {
     const safeW = Math.min(targetW, PW - safeX);
     const safeH = Math.min(targetH, PH - safeY);
 
+    // Sample the CENTER of the face region — avoids dark background at edges
+    const samplePad = Math.round(Math.min(safeW, safeH) * 0.25);
+    const sampleX = safeX + samplePad;
+    const sampleY = safeY + samplePad;
+    const sampleW = Math.max(4, safeW - samplePad * 2);
+    const sampleH = Math.max(4, safeH - samplePad * 2);
+
     const paintingRaw = await sharp(paintingBuf)
-      .extract({ left: safeX, top: safeY, width: safeW, height: safeH })
+      .extract({ left: sampleX, top: sampleY, width: sampleW, height: sampleH })
       .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
     const faceRaw = await sharp(facePng)
@@ -152,7 +159,7 @@ export default async function handler(req, res) {
     }
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
-    const bl = 0.90; // strong pull toward painting palette to reduce vivid colors
+    const bl = 0.65; // moderate pull toward painting palette
     const rS = (ps.rs/fs.rs-1)*bl+1;
     const gS = (ps.gs/fs.gs-1)*bl+1;
     const bS = (ps.bs/fs.bs-1)*bl+1;
@@ -161,7 +168,7 @@ export default async function handler(req, res) {
     const colorFace = await sharp(facePng)
       .removeAlpha()
       .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
-      .modulate({ saturation: 0.65 }) // reduce vivid Seedream saturation
+      .modulate({ saturation: 0.80 }) // reduce vivid Seedream saturation moderately
       .png()
       .toBuffer();
 
