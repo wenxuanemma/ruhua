@@ -77,8 +77,9 @@ export default async function handler(req, res) {
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
               console.log(`[composite face detect] ratio=${faceRatio.toFixed(2)} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
             } else {
-              // Square crop: 85% of image — definitively includes chin (face ratio ~0.83)
-              cropSize = Math.round(FH * 0.85);
+              // Use face ratio directly — face spans ~ratio of image, crop matches exactly
+              cropSize = Math.round(FH * (faceRatio + 0.02)); // face ratio + 2% margin
+              cropSize = Math.min(cropSize, Math.round(FH * 0.90)); // cap at 90%
               const biasShift = Math.round(FW * 0.02);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - biasShift, FW - cropSize));
               cropY = 0;
@@ -157,6 +158,9 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Step 3: Oval mask ─────────────────────────────────────────────────────
+    // Oval matches region aspect ratio — rx proportional to targetW, ry to targetH
+    const ovalRx = S * 0.42 * (targetW / targetSize);
+    const ovalRy = S * 0.42 * (targetH / targetSize);
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
@@ -166,7 +170,7 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${S*0.40}" ry="${S*0.42}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
