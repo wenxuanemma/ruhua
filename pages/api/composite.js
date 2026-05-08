@@ -79,14 +79,13 @@ export default async function handler(req, res) {
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
-              // Oversized box — use face WIDTH as the basis for tight crop
-              // faceW is more reliable than faceH for Seedream gongbi portraits
+              // Oversized box — use face WIDTH as basis
               const padX   = Math.round(faceW * 0.10);
-              const padTop = Math.round(faceW * 0.20); // extra space for forehead
+              // Shift down 10% of face height to reduce hair, include chin
+              const topShift = Math.round(faceH * 0.10);
               cropSize = faceW + padX * 2;
               cropX = Math.max(0, Math.min(faceLeft - padX, FW - cropSize));
-              cropY = Math.max(0, faceTop - padTop);
-              // Ensure square doesn't go out of bounds
+              cropY = Math.max(0, faceTop + topShift);
               cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
             console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
