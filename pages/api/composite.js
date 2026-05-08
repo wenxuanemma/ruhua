@@ -72,8 +72,8 @@ export default async function handler(req, res) {
 
             if (faceRatio < 0.60) {
               // Good tight detection — pad around face bounds
-              const padX   = Math.round(faceW * 0.15);
-              const padTop = Math.round(faceH * 0.20);
+              const padX   = Math.round(faceW * 0.05); // tight sides
+              const padTop = Math.round(faceH * 0.40); // generous top for forehead/hair
               const padBot = Math.round(faceH * 0.10);
               cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
