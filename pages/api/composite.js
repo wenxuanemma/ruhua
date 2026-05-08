@@ -106,13 +106,15 @@ export default async function handler(req, res) {
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
 
-    // Flip horizontally for profile_right — painting figure faces right (mirrored)
-    if (region.faceAngle === 'profile_right') {
+    // Flip for right-facing figures — Seedream generates facing right naturally
+    // but painting convention requires left-facing for these roles
+    if (region.faceAngle === 'profile_right' || region.faceAngle === 'three_quarter_right') {
       faceImg = faceImg.flop();
     }
 
     if (region.angle && region.angle !== 0) {
-      faceImg = faceImg.rotate(region.angle, { background: { r:0, g:0, b:0, alpha:0 } });
+      // Rotate with neutral skin-tone background to avoid black corners after removeAlpha
+      faceImg = faceImg.rotate(region.angle, { background: { r:200, g:170, b:140, alpha:1 } });
     }
 
     // Resize to exact targetSize x targetSize square — cover preserves aspect
