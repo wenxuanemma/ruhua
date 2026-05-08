@@ -80,12 +80,12 @@ export default async function handler(req, res) {
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
               // Oversized box — use face WIDTH as basis
-              const padX   = Math.round(faceW * 0.10);
-              // Shift down 10% of face height to reduce hair, include chin
-              const topShift = Math.round(faceH * 0.10);
+              const padX    = Math.round(faceW * 0.10);
+              const topShift = Math.round(faceH * 0.05); // shift up 5% to include forehead
+              const leftShift = Math.round(faceW * 0.03); // shift left 3% to fix right bias
               cropSize = faceW + padX * 2;
-              cropX = Math.max(0, Math.min(faceLeft - padX, FW - cropSize));
-              cropY = Math.max(0, faceTop + topShift);
+              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
+              cropY = Math.max(0, faceTop - topShift);
               cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
             console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} cropX=${cropX} cropY=${cropY} size=${cropSize}`);
