@@ -181,7 +181,16 @@ export default async function handler(req, res) {
           'profile_right':       'side profile facing right',
         }[faceRegion?.faceAngle || 'front'] || 'facing forward';
 
-        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the photo, headshot portrait, ${faceAngleDesc}`;
+        // Extract painting figure as angle/style reference
+        const paintingFaceCrop = styleImageUrl
+          ? await extractPaintedFace(styleImageUrl, faceRegion)
+          : null;
+
+        const imageUrls = paintingFaceCrop
+          ? [faceImage, paintingFaceCrop]
+          : [faceImage];
+
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, match the face angle and direction shown in the second reference image, headshot portrait, ${faceAngleDesc}`;
 
         let rawUrl = null;
         for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {
@@ -195,7 +204,7 @@ export default async function handler(req, res) {
             body: JSON.stringify({
               model,
               prompt: seedreamPrompt,
-              image_urls: [faceImage],
+              image_urls: imageUrls,
               image_size: { width: 1920, height: 1920 },
             }),
           });
