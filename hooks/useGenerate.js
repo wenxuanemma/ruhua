@@ -47,7 +47,7 @@ const CACHE_MAX = 5;
 
 // Composite result cache — keyed by selfieHash + paintingId + figureId
 const RESULT_CACHE_KEY = 'ruhua_results_v1';
-const RESULT_CACHE_MAX = 10;
+const RESULT_CACHE_MAX = 5;
 
 function loadResultCache() {
   try { return JSON.parse(localStorage.getItem(RESULT_CACHE_KEY) || '{}'); } catch { return {}; }
@@ -213,14 +213,26 @@ export function useGenerate() {
     const selfieHash = quickHash(selfie);
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
-    // Check composite result cache first
+    // Check result cache — styled face cached, skip generation, just re-composite
     const cachedResult = resultCache.current[resultKey];
-    if (cachedResult) {
-      console.log('Result cache hit:', resultKey);
-      setOutputUrl(cachedResult.outputUrl);
-      if (cachedResult.profileUrl) setProfileUrl(cachedResult.profileUrl);
-      if (cachedResult.styledUrl)  setStyledUrl(cachedResult.styledUrl);
-      setStatus('done');
+    if (cachedResult?.styledUrl) {
+      console.log('Result cache hit — re-compositing:', resultKey);
+      setStatus('compositing');
+      setStyledUrl(cachedResult.styledUrl);
+      try {
+        const composite = await runComposite({
+          styledFaceUrl:    cachedResult.styledUrl,
+          painting,
+          figure,
+          paintingImageUrl: styleImageUrl,
+          faceBounds,
+        });
+        setOutputUrl(composite);
+        setStatus('succeeded');
+      } catch (err) {
+        console.warn('Cache re-composite failed, regenerating:', err.message);
+        delete resultCache.current[resultKey];
+      }
       return;
     }
 
@@ -276,12 +288,9 @@ export function useGenerate() {
         faceBounds,
       });
 
-      // Save composite result to cache for instant re-access
-      resultCache.current[resultKey] = {
-        outputUrl:  composite,
-        profileUrl: profileUrl,
-        styledUrl:  styled,
-      };
+      // Save only styledUrl to result cache — compositing is fast (~400ms)
+      // Full composite result is too large for localStorage
+      resultCache.current[resultKey] = { styledUrl: styled };
       saveResultCache(resultCache.current);
 
       setOutputUrl(composite);
