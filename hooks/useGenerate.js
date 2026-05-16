@@ -50,14 +50,33 @@ const RESULT_CACHE_KEY = 'ruhua_results_v1';
 const RESULT_CACHE_MAX = 5;
 
 function loadResultCache() {
-  try { return JSON.parse(localStorage.getItem(RESULT_CACHE_KEY) || '{}'); } catch { return {}; }
+  try {
+    const cache = JSON.parse(localStorage.getItem(RESULT_CACHE_KEY) || '{}');
+    // Clear old format entries that stored outputUrl (too large)
+    const cleaned = {};
+    for (const [k, v] of Object.entries(cache)) {
+      if (v.styledUrl && !v.outputUrl) cleaned[k] = v;
+    }
+    return cleaned;
+  } catch { return {}; }
 }
 function saveResultCache(cache) {
   try {
-    const entries = Object.entries(cache);
+    // Only keep styledUrl — outputUrl is too large for localStorage
+    const cleaned = {};
+    for (const [k, v] of Object.entries(cache)) {
+      if (v.styledUrl) cleaned[k] = { styledUrl: v.styledUrl };
+    }
+    const entries = Object.entries(cleaned);
     const trimmed = Object.fromEntries(entries.slice(-RESULT_CACHE_MAX));
     localStorage.setItem(RESULT_CACHE_KEY, JSON.stringify(trimmed));
-  } catch (e) { console.warn('Result cache save failed:', e.message); }
+  } catch (e) {
+    console.warn('Result cache save failed:', e.message);
+    // Clear and retry with just the latest entry
+    try {
+      localStorage.removeItem(RESULT_CACHE_KEY);
+    } catch {}
+  }
 }
 
 function loadCache() {
