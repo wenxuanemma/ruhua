@@ -40,7 +40,7 @@ function quickHash(str) {
 }
 
 // LocalStorage-backed cache — persists across page reloads and deployments
-// Key: 'ruhua_cache_v1', Value: { [selfieHash]: styledFaceUrl }
+// Key: 'ruhua_cache_v1', Value: { [selfieHash_faceAngle_gender]: styledFaceUrl }
 // Limit: keep only the 5 most recent to avoid hitting localStorage quota (~5MB)
 const CACHE_KEY = 'ruhua_cache_v1';
 const CACHE_MAX = 5;
@@ -230,12 +230,14 @@ export function useGenerate() {
     setError(null);
 
     const selfieHash = quickHash(selfie);
+    const faceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
+    const styleKey = `${selfieHash}_${faceAngle}_${gender || 'woman'}`;
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
     const cachedResult = resultCache.current[resultKey];
     if (cachedResult?.styledUrl) {
-      console.log('Result cache hit — re-compositing:', resultKey);
+      console.log('[cache] Result HIT — skipping Seedream:', resultKey);
       setStatus('compositing');
       setStyledUrl(cachedResult.styledUrl);
       try {
@@ -249,13 +251,15 @@ export function useGenerate() {
         setOutputUrl(composite);
         setStatus('succeeded');
       } catch (err) {
-        console.warn('Cache re-composite failed, regenerating:', err.message);
+        console.warn('[cache] Re-composite failed, regenerating:', err.message);
         delete resultCache.current[resultKey];
+        // fall through to regenerate
       }
-      return;
+      return; // success path only reaches here
     }
+    console.log('[cache] Result MISS:', resultKey);
 
-    const cachedStyled = styledCache.current[selfieHash];
+    const cachedStyled = styledCache.current[styleKey];
 
     // Compress selfie before sending to API
     const compressedSelfie = await compressSelfie(selfie, 800, 0.80);
@@ -265,14 +269,16 @@ export function useGenerate() {
       let styled;
 
       if (isSameSelfie) {
-        // Cached selfie — brief "准备中" then straight to compositing
+        // Cached selfie — skip Seedream, straight to compositing
+        console.log('[cache] Style HIT — skipping Seedream, styleKey:', styleKey);
         setStatus('submitting');
         styled = cachedStyled;
         setStyledUrl(styled);
         await new Promise(r => setTimeout(r, 400));
         setStatus('compositing');
       } else {
-        // New selfie — start directly at step 2, skip the "准备中" flash
+        // New selfie — call Seedream
+        console.log('[cache] Style MISS — calling Seedream, styleKey:', styleKey, '| cached:', Object.keys(styledCache.current));
         setStatus('styling');
         styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
 
@@ -291,7 +297,7 @@ export function useGenerate() {
           console.warn('Could not convert to base64, caching URL:', e.message);
         }
 
-        styledCache.current[selfieHash] = styled;
+        styledCache.current[styleKey] = styled;
         saveCache(styledCache.current);
         saveLastSelfie(selfie);
         currentSelfieHash.current = selfieHash;

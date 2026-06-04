@@ -1365,21 +1365,22 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                   <div style={{fontSize:10,color:'rgba(242,226,192,0.3)',marginBottom:8}}>
                     自拍 → 入画 (compositing前)
                   </div>
-                  <div style={{display:'flex',gap:8,justifyContent:'center',alignItems:'flex-start'}}>
-                    <div style={{textAlign:'center'}}>
+                  <div style={{display:'flex',gap:6,alignItems:'flex-start',overflowX:'auto',width:'100%'}}>
+                    <div style={{textAlign:'center',flexShrink:0}}>
                       <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>自拍</div>
                       {selfie && <img src={selfie} style={{
-                        width:150,height:150,objectFit:'cover',objectPosition:'top',
-                        border:'1px solid rgba(201,168,76,0.2)',
+                        width:120,height:140,objectFit:'cover',objectPosition:'center 15%',
+                        border:'1px solid rgba(201,168,76,0.2)',display:'block',
                       }}/>}
                     </div>
-                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
-                    <div style={{textAlign:'center'}}>
+                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
+                    <div style={{textAlign:'center',flexShrink:0}}>
                       <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画 (裁剪区域)</div>
                       <div style={{position:'relative',display:'inline-block'}}>
                         <img src={styledUrl} style={{
-                          width:150,height:150,objectFit:'cover',objectPosition:'top',
-                          border:'1px solid rgba(201,168,76,0.2)',display:'block',
+                          width:120,height:140,objectFit:'cover',display:'block',
+                          objectPosition:cropBox?`${(cropBox.x+cropBox.w/2)*100}% ${(cropBox.y+cropBox.h/2)*100}%`:'center 35%',
+                          border:'1px solid rgba(201,168,76,0.2)',
                         }}/>
                         {cropBox && (
                           <div style={{
@@ -1395,15 +1396,15 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         )}
                       </div>
                     </div>
-                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
-                    <div style={{textAlign:'center'}}>
+                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
+                    <div style={{textAlign:'center',flexShrink:0}}>
                       <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>原画人物</div>
                     {imgs?.[painting?.id] && figure && (() => {
                         const reg = FACE_REGIONS[painting?.id]?.[figure?.id];
                         if (!reg) return null;
                         return (
                           <div style={{
-                            width:150, height:150,
+                            width:120, height:140,
                             overflow:'hidden',
                             border:'1px solid rgba(201,168,76,0.2)',
                             position:'relative',
@@ -1420,6 +1421,71 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         );
                       })()}
                     </div>
+                  </div>
+                  {/* Download all 3 debug panels */}
+                  <div style={{marginTop:10,display:'flex',gap:8,justifyContent:'center',flexWrap:'wrap'}}>
+                    {selfie && (
+                      <button onClick={() => {
+                        const a = document.createElement('a');
+                        a.href = selfie;
+                        a.download = 'debug_selfie.jpg';
+                        a.click();
+                      }} style={{fontSize:10,color:'rgba(242,226,192,0.5)',background:'none',border:'1px solid rgba(242,226,192,0.15)',padding:'3px 8px',cursor:'pointer',borderRadius:3}}>
+                        ↓ 自拍
+                      </button>
+                    )}
+                    {styledUrl && (
+                      <button onClick={() => {
+                        // Draw styledUrl with cropBox overlay onto a canvas, then download
+                        const img = new Image();
+                        img.onload = () => {
+                          const c = document.createElement('canvas');
+                          c.width = img.width; c.height = img.height;
+                          const ctx = c.getContext('2d');
+                          ctx.drawImage(img, 0, 0);
+                          if (cropBox) {
+                            ctx.strokeStyle = '#e24b4a';
+                            ctx.lineWidth = Math.round(img.width * 0.004);
+                            ctx.strokeRect(
+                              cropBox.x * img.width, cropBox.y * img.height,
+                              cropBox.w * img.width, cropBox.h * img.height
+                            );
+                          }
+                          const a = document.createElement('a');
+                          a.href = c.toDataURL('image/jpeg', 0.92);
+                          a.download = 'debug_styled.jpg';
+                          a.click();
+                        };
+                        img.src = styledUrl;
+                      }} style={{fontSize:10,color:'rgba(242,226,192,0.5)',background:'none',border:'1px solid rgba(242,226,242,0.15)',padding:'3px 8px',cursor:'pointer',borderRadius:3}}>
+                        ↓ 入画 (含裁剪框)
+                      </button>
+                    )}
+                    {imgs?.[painting?.id] && figure && (() => {
+                      const reg = FACE_REGIONS[painting?.id]?.[figure?.id];
+                      if (!reg) return null;
+                      return (
+                        <button onClick={() => {
+                          // Crop original painting to figure region and download
+                          const img = new Image();
+                          img.crossOrigin = 'anonymous';
+                          img.onload = () => {
+                            const sx = reg.x * img.width,  sy = reg.y * img.height;
+                            const sw = reg.w * img.width,  sh = reg.h * img.height;
+                            const c = document.createElement('canvas');
+                            c.width = Math.round(sw); c.height = Math.round(sh);
+                            c.getContext('2d').drawImage(img, sx, sy, sw, sh, 0, 0, c.width, c.height);
+                            const a = document.createElement('a');
+                            a.href = c.toDataURL('image/jpeg', 0.92);
+                            a.download = 'debug_figure.jpg';
+                            a.click();
+                          };
+                          img.src = imgs[painting.id];
+                        }} style={{fontSize:10,color:'rgba(242,226,192,0.5)',background:'none',border:'1px solid rgba(242,226,192,0.15)',padding:'3px 8px',cursor:'pointer',borderRadius:3}}>
+                          ↓ 原画人物
+                        </button>
+                      );
+                    })()}
                   </div>
                 </div>
               )}

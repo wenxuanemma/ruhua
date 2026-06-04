@@ -61,37 +61,24 @@ export default async function handler(req, res) {
         if (detectRes.ok) {
           const { box } = await detectRes.json();
           if (box) {
-            const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
-            const faceLeft = Math.round(box.x  * FW);
-            const faceTop  = Math.round(box.y  * FH);
-            const faceBot  = Math.round(box.y2 * FH);
-            const faceW    = Math.round((box.x2 - box.x) * FW);
-            const faceH    = faceBot - faceTop;
-            const faceRatio = faceH / FH;
+            // Only use bbox CENTER for X — bbox size is unreliable (hair/robes inflate it).
+            // For Y: clamp faceCy to [0.38, 0.52] of image height before computing cropY.
+            // Seedream outputs vary wildly in face Y position (834–1118px observed on 1920px),
+            // but the face is always somewhere in the upper-center. Clamping prevents the crop
+            // window from chasing outlier positions into the chest or hairline.
+            const faceCx = Math.round(((box.x + box.x2) / 2) * FW);
+            const rawCy  = Math.round(((box.y + box.y2) / 2) * FH);
+            const faceCy = Math.max(Math.round(FH * 0.38), Math.min(rawCy, Math.round(FH * 0.55)));
+            const bboxW  = Math.round((box.x2 - box.x) * FW);
+            const bboxH  = Math.round((box.y2 - box.y) * FH);
 
-            let cropSize, cropX, cropY;
+            const cropSize  = Math.round(FW * 0.42); // 806px on 1920 — tight enough to reduce sensitivity
+            const upShift   = Math.round(cropSize * 0.18); // shift up for forehead
+            const leftShift = Math.round(cropSize * 0.02);
+            const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize / 2) - leftShift, FW - cropSize));
+            const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize / 2) - upShift,   FH - cropSize));
 
-            if (faceRatio < 0.60) {
-              const padX    = Math.round(faceW * 0.15);
-              const padTop  = Math.round(faceH * 0.40);
-              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-              const padBot  = Math.round(faceH * (isProfile ? 0.30 : 0.05));
-              cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
-              // Shift left 5% to fix right bias from MediaPipe detection
-              const leftShift = Math.round(faceW * 0.05);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
-              cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
-            } else {
-              // Oversized box — use face WIDTH as basis
-              const padX    = Math.round(faceW * 0.10);
-              const topShift = Math.round(faceH * 0.05); // shift up 5% to include forehead
-              const leftShift = Math.round(faceW * 0.03); // shift left 3% to fix right bias
-              cropSize = faceW + padX * 2;
-              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
-              cropY = Math.max(0, faceTop - topShift);
-              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
-            }
-            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} faceLeft=${Math.round(box.x*FW)} cropX=${cropX} cropY=${cropY} size=${cropSize} padTop=${Math.round(faceH*0.20)}`);
+            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })

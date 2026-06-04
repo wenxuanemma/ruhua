@@ -190,7 +190,7 @@ export default async function handler(req, res) {
           ? [faceImage, paintingFaceCrop]
           : [faceImage];
 
-        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, match the face angle and direction shown in the second reference image, headshot portrait, ${faceAngleDesc}`;
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, match the face angle and direction shown in the second reference image, ${faceAngleDesc}, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, consistent framing, no full body`;
 
         let rawUrl = null;
         for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {
