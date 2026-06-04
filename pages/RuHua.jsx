@@ -1395,6 +1395,31 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         )}
                       </div>
                     </div>
+                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:20,paddingTop:55}}>→</div>
+                    <div style={{textAlign:'center'}}>
+                      <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>原画人物</div>
+                      {imgs?.painting && figure && (() => {
+                        const reg = FACE_REGIONS[painting?.id]?.[figure?.id];
+                        if (!reg) return null;
+                        return (
+                          <div style={{
+                            width:150, height:150,
+                            overflow:'hidden',
+                            border:'1px solid rgba(201,168,76,0.2)',
+                            position:'relative',
+                          }}>
+                            <img src={imgs.painting} style={{
+                              position:'absolute',
+                              width: `${100 / reg.w}%`,
+                              height: `${100 / reg.h}%`,
+                              left: `${-reg.x / reg.w * 100}%`,
+                              top:  `${-reg.y / reg.h * 100}%`,
+                              maxWidth:'none',
+                            }}/>
+                          </div>
+                        );
+                      })()}
+                    </div>
                   </div>
                 </div>
               )}
