@@ -68,17 +68,22 @@ export default async function handler(req, res) {
             // window from chasing outlier positions into the chest or hairline.
             const faceCx = Math.round(((box.x + box.x2) / 2) * FW);
             const rawCy  = Math.round(((box.y + box.y2) / 2) * FH);
-            const faceCy = Math.max(Math.round(FH * 0.38), Math.min(rawCy, Math.round(FH * 0.55)));
+            // Clamp faceCy to observed Seedream face position range.
+            // Empirically faceCy falls 881–1017 on 1920px (46–53% of height).
+            // Tighter clamp [0.44, 0.54] compresses variance from ~136px to ~50px.
+            const faceCy = Math.max(Math.round(FH * 0.44), Math.min(rawCy, Math.round(FH * 0.54)));
             const bboxW  = Math.round((box.x2 - box.x) * FW);
             const bboxH  = Math.round((box.y2 - box.y) * FH);
 
-            const cropSize  = Math.round(FW * 0.42); // 806px on 1920 — tight enough to reduce sensitivity
-            const upShift   = Math.round(cropSize * 0.18); // shift up for forehead
+            // cropSize varies by face angle — profile faces appear narrower in Seedream output
+            const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+            const cropSize  = Math.round(FW * (isProfile ? 0.35 : 0.42)); // 672px profile, 806px front/3q
+            const upShift   = Math.round(cropSize * (isProfile ? 0.10 : 0.18)); // less upshift for profile
             const leftShift = Math.round(cropSize * 0.02);
             const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize / 2) - leftShift, FW - cropSize));
             const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize / 2) - upShift,   FH - cropSize));
 
-            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize} isProfile=${isProfile} cropX=${cropX} cropY=${cropY}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
