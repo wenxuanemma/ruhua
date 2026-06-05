@@ -75,15 +75,17 @@ export default async function handler(req, res) {
             const bboxW  = Math.round((box.x2 - box.x) * FW);
             const bboxH  = Math.round((box.y2 - box.y) * FH);
 
-            // cropSize varies by face angle — profile faces appear narrower in Seedream output
+            // cropSize: fixed per angle, tuned so face fills targetSize well after scaling.
+            // bboxW on gongbi portraits is 1000-1250px (hair-inflated), actual face ~450px.
+            // 700px crop gives ~2.5x face padding for front; 550px tighter for profile.
             const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-            const cropSize  = Math.round(FW * (isProfile ? 0.35 : 0.42)); // 672px profile, 806px front/3q
-            const upShift   = Math.round(cropSize * (isProfile ? 0.10 : 0.18)); // less upshift for profile
+            const cropSize = isProfile ? 550 : 700;
+            const upShift   = Math.round(cropSize * (isProfile ? 0.08 : 0.18));
             const leftShift = Math.round(cropSize * 0.02);
             const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize / 2) - leftShift, FW - cropSize));
             const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize / 2) - upShift,   FH - cropSize));
 
-            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize} isProfile=${isProfile} cropX=${cropX} cropY=${cropY}`);
+            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize}(raw=${rawCropSize}) isProfile=${isProfile} cropX=${cropX} cropY=${cropY}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
