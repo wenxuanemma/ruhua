@@ -1082,15 +1082,9 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               pointerEvents:'none',
               zIndex:10,
             }}>
-              {/* Converted face shown at natural scale — same as what composite.js sees */}
-              {styledUrl && (
-                <img src={styledUrl} style={{
-                  position:'absolute', inset:0,
-                  width:'100%', height:'100%',
-                  objectFit:'cover', objectPosition:'top center',
-                  opacity:0.50,
-                }}/>
-              )}
+              {/* styledUrl preview removed — was showing pre-composite face at region size,
+                  making it look like the composite was smaller than it is.
+                  The debug panel below shows the styled face correctly. */}
               {/* Red box — face region boundary */}
               <div style={{
                 position:'absolute', inset:0,

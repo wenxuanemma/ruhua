@@ -129,12 +129,15 @@ export default async function handler(req, res) {
     const safeW = Math.min(targetW, PW - safeX);
     const safeH = Math.min(targetH, PH - safeY);
 
-    // Sample the CENTER of the face region — avoids dark background at edges
-    const samplePad = Math.round(Math.min(safeW, safeH) * 0.25);
-    const sampleX = safeX + samplePad;
-    const sampleY = safeY + samplePad;
-    const sampleW = Math.max(4, safeW - samplePad * 2);
-    const sampleH = Math.max(4, safeH - samplePad * 2);
+    // Sample a tight patch at the figure's face center (38% down = cheek/nose area)
+    // Much more reliable than the padded bbox which includes hair/clothing/background
+    const faceCenterX = Math.round(safeX + safeW * 0.50);
+    const faceCenterY = Math.round(safeY + safeH * 0.38);
+    const patchSize = Math.max(4, Math.round(Math.min(safeW, safeH) * 0.20));
+    const sampleX = Math.max(0, faceCenterX - Math.round(patchSize / 2));
+    const sampleY = Math.max(0, faceCenterY - Math.round(patchSize / 2));
+    const sampleW = Math.min(patchSize, PW - sampleX);
+    const sampleH = Math.min(patchSize, PH - sampleY);
 
     const paintingRaw = await sharp(paintingBuf)
       .extract({ left: sampleX, top: sampleY, width: sampleW, height: sampleH })
@@ -155,23 +158,22 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // std-dev match capped to avoid blowout
-    const STD_BL = 0.40;
-    const rS = Math.min(1.5, Math.max(0.5, 1 + (ps.rs/fs.rs - 1) * STD_BL));
-    const gS = Math.min(1.5, Math.max(0.5, 1 + (ps.gs/fs.gs - 1) * STD_BL));
-    const bS = Math.min(1.5, Math.max(0.5, 1 + (ps.bs/fs.bs - 1) * STD_BL));
+    // Per-channel mean shift: scale each channel so face mean moves toward painting mean.
+    // Use full SHIFT=1.0 for channels where painting is warmer (R,G push up),
+    // and extra push for blue reduction (warm skin = lower blue relative to red).
+    // Cap at [0.4, 1.8] to prevent blowout.
+    const SHIFT = 0.90;
+    const rM = Math.min(1.8, Math.max(0.4, ps.rm / Math.max(fs.rm, 1) * SHIFT + (1 - SHIFT)));
+    const gM = Math.min(1.8, Math.max(0.4, ps.gm / Math.max(fs.gm, 1) * SHIFT + (1 - SHIFT)));
+    const bM = Math.min(1.8, Math.max(0.4, ps.bm / Math.max(fs.bm, 1) * SHIFT + (1 - SHIFT)));
 
-    // Mean brightness pull — allows face to go as dark as painting needs (floor=0.35)
-    const MEAN_BL = 0.80;
-    const brightRatio = Math.min(1.4, Math.max(0.35,
-      1 + ((ps.rm + ps.gm + ps.bm) / (fs.rm + fs.gm + fs.bm) - 1) * MEAN_BL
-    ));
+    console.log(`[composite color] paintSample=(${Math.round(ps.rm)},${Math.round(ps.gm)},${Math.round(ps.bm)}) faceMean=(${Math.round(fs.rm)},${Math.round(fs.gm)},${Math.round(fs.bm)}) scale=(${rM.toFixed(2)},${gM.toFixed(2)},${bM.toFixed(2)})`);
 
     // Color match — keep exact S x S dimensions
     const colorFace = await sharp(facePng)
       .removeAlpha()
-      .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
-      .modulate({ brightness: brightRatio, saturation: 0.75 })
+      .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
+      .modulate({ saturation: 0.72 })
       .png()
       .toBuffer();
 
