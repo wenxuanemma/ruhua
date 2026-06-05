@@ -80,7 +80,7 @@ export default async function handler(req, res) {
             // 700px crop gives ~2.5x face padding for front; 550px tighter for profile.
             const isProfile = region.faceAngle && region.faceAngle.includes('profile');
             const cropSize = isProfile ? 750 : 700;
-            const upShift   = Math.round(cropSize * (isProfile ? 0.08 : 0.18));
+            const upShift   = Math.round(cropSize * (isProfile ? 0.05 : 0.05)); // small upshift — oval cy=52% matches face at ~55% of crop
             const leftShift = Math.round(cropSize * 0.02);
             const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize / 2) - leftShift, FW - cropSize));
             const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize / 2) - upShift,   FH - cropSize));
