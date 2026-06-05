@@ -61,31 +61,37 @@ export default async function handler(req, res) {
         if (detectRes.ok) {
           const { box } = await detectRes.json();
           if (box) {
-            // Only use bbox CENTER for X — bbox size is unreliable (hair/robes inflate it).
-            // For Y: clamp faceCy to [0.38, 0.52] of image height before computing cropY.
-            // Seedream outputs vary wildly in face Y position (834–1118px observed on 1920px),
-            // but the face is always somewhere in the upper-center. Clamping prevents the crop
-            // window from chasing outlier positions into the chest or hairline.
-            const faceCx = Math.round(((box.x + box.x2) / 2) * FW);
-            const rawCy  = Math.round(((box.y + box.y2) / 2) * FH);
-            // Clamp faceCy to observed Seedream face position range.
-            // Empirically faceCy falls 881–1017 on 1920px (46–53% of height).
-            // Tighter clamp [0.44, 0.54] compresses variance from ~136px to ~50px.
-            const faceCy = Math.max(Math.round(FH * 0.44), Math.min(rawCy, Math.round(FH * 0.54)));
-            const bboxW  = Math.round((box.x2 - box.x) * FW);
-            const bboxH  = Math.round((box.y2 - box.y) * FH);
+            const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
+            const faceLeft = Math.round(box.x  * FW);
+            const faceTop  = Math.round(box.y  * FH);
+            const faceBot  = Math.round(box.y2 * FH);
+            const faceW    = Math.round((box.x2 - box.x) * FW);
+            const faceH    = faceBot - faceTop;
+            const faceRatio = faceH / FH;
 
-            // cropSize: fixed per angle, tuned so face fills targetSize well after scaling.
-            // bboxW on gongbi portraits is 1000-1250px (hair-inflated), actual face ~450px.
-            // 700px crop gives ~2.5x face padding for front; 550px tighter for profile.
-            const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-            const cropSize = isProfile ? 750 : 700;
-            const upShift   = Math.round(cropSize * (isProfile ? 0.05 : 0.05)); // small upshift — oval cy=52% matches face at ~55% of crop
-            const leftShift = Math.round(cropSize * 0.02);
-            const cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize / 2) - leftShift, FW - cropSize));
-            const cropY = Math.max(0, Math.min(faceCy - Math.round(cropSize / 2) - upShift,   FH - cropSize));
+            let cropSize, cropX, cropY;
 
-            console.log(`[composite crop] rawCy=${rawCy} clampedCy=${faceCy} faceCx=${faceCx} bboxW=${bboxW} cropSize=${cropSize} isProfile=${isProfile} cropX=${cropX} cropY=${cropY}`);
+            if (faceRatio < 0.60) {
+              const padX    = Math.round(faceW * 0.15);
+              const padTop  = Math.round(faceH * 0.40);
+              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+              const padBot  = Math.round(faceH * (isProfile ? 0.30 : 0.05));
+              cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
+              const leftShift = Math.round(faceW * 0.05);
+              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
+              cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
+            } else {
+              // Oversized box (faceRatio >= 0.60) — use faceW as basis
+              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+              const padX     = Math.round(faceW * 0.10);
+              const topShift = Math.round(faceH * 0.05);
+              const leftShift = Math.round(faceW * 0.03);
+              cropSize = faceW + padX * 2;
+              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
+              cropY = Math.max(0, faceTop - topShift);
+              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
+            }
+            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} cropX=${cropX} cropY=${cropY} cropSize=${cropSize}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
