@@ -177,8 +177,8 @@ export default async function handler(req, res) {
           'front':               'facing directly forward, frontal view',
           'three_quarter_left':  'three-quarter view facing left',
           'three_quarter_right': 'three-quarter view facing right',
-          'profile_left':        'side profile facing left, only left side of face visible',
-          'profile_right':       'side profile facing right, only right side of face visible',
+          'profile_left':        'strict 90-degree side profile facing left, only left side of face visible, nose pointing left, far eye completely hidden, ear visible on left side',
+          'profile_right':       'strict 90-degree side profile facing right, only right side of face visible, nose pointing right, far eye completely hidden, ear visible on right side',
         }[faceRegion?.faceAngle || 'front'] || 'facing forward';
 
         // Extract painting figure as angle/style reference

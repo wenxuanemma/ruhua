@@ -154,16 +154,24 @@ export default async function handler(req, res) {
     }
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
-    const bl = 0.65; // moderate pull toward painting palette
-    const rS = (ps.rs/fs.rs-1)*bl+1;
-    const gS = (ps.gs/fs.gs-1)*bl+1;
-    const bS = (ps.bs/fs.bs-1)*bl+1;
+
+    // std-dev match capped to avoid blowout
+    const STD_BL = 0.40;
+    const rS = Math.min(1.5, Math.max(0.5, 1 + (ps.rs/fs.rs - 1) * STD_BL));
+    const gS = Math.min(1.5, Math.max(0.5, 1 + (ps.gs/fs.gs - 1) * STD_BL));
+    const bS = Math.min(1.5, Math.max(0.5, 1 + (ps.bs/fs.bs - 1) * STD_BL));
+
+    // Mean brightness pull — allows face to go as dark as painting needs (floor=0.35)
+    const MEAN_BL = 0.80;
+    const brightRatio = Math.min(1.4, Math.max(0.35,
+      1 + ((ps.rm + ps.gm + ps.bm) / (fs.rm + fs.gm + fs.bm) - 1) * MEAN_BL
+    ));
 
     // Color match — keep exact S x S dimensions
     const colorFace = await sharp(facePng)
       .removeAlpha()
       .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
-      .modulate({ saturation: 0.80 }) // reduce vivid Seedream saturation moderately
+      .modulate({ brightness: brightRatio, saturation: 0.75 })
       .png()
       .toBuffer();
 
@@ -178,9 +186,10 @@ export default async function handler(req, res) {
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
-          <stop offset="50%" stop-color="white" stop-opacity="1"/>
-          <stop offset="70%" stop-color="white" stop-opacity="0.7"/>
-          <stop offset="85%" stop-color="white" stop-opacity="0.2"/>
+          <stop offset="55%" stop-color="white" stop-opacity="1"/>
+          <stop offset="72%" stop-color="white" stop-opacity="0.85"/>
+          <stop offset="85%" stop-color="white" stop-opacity="0.25"/>
+          <stop offset="95%" stop-color="white" stop-opacity="0.05"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
