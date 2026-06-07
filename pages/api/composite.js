@@ -81,15 +81,12 @@ export default async function handler(req, res) {
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
-              // Oversized box (faceRatio >= 0.60) — use faceW as basis
-              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-              const padX     = Math.round(faceW * 0.10);
-              const topShift = Math.round(faceH * 0.05);
-              const leftShift = Math.round(faceW * 0.03);
-              cropSize = faceW + padX * 2;
-              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
-              cropY = Math.max(0, faceTop - topShift);
-              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
+              // Oversized box (faceRatio >= 0.60) — MediaPipe detected full body.
+              // Ignore bbox entirely; use fixed crop anchored to image center-top.
+              // Face in Seedream portraits is always in upper-center of 1920px image.
+              cropSize = Math.round(FW * 0.50); // 960px — reliable face+shoulders
+              cropX = Math.round((FW - cropSize) / 2); // horizontal center
+              cropY = Math.round(FH * 0.18);            // start at 18% from top
             }
             console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} cropX=${cropX} cropY=${cropY} cropSize=${cropSize}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
@@ -129,15 +126,12 @@ export default async function handler(req, res) {
     const safeW = Math.min(targetW, PW - safeX);
     const safeH = Math.min(targetH, PH - safeY);
 
-    // Sample a tight patch at the figure's face center (38% down = cheek/nose area)
-    // Much more reliable than the padded bbox which includes hair/clothing/background
-    const faceCenterX = Math.round(safeX + safeW * 0.50);
-    const faceCenterY = Math.round(safeY + safeH * 0.38);
-    const patchSize = Math.max(4, Math.round(Math.min(safeW, safeH) * 0.20));
-    const sampleX = Math.max(0, faceCenterX - Math.round(patchSize / 2));
-    const sampleY = Math.max(0, faceCenterY - Math.round(patchSize / 2));
-    const sampleW = Math.min(patchSize, PW - sampleX);
-    const sampleH = Math.min(patchSize, PH - sampleY);
+    // Sample the CENTER of the face region — avoids dark background at edges
+    const samplePad = Math.round(Math.min(safeW, safeH) * 0.25);
+    const sampleX = safeX + samplePad;
+    const sampleY = safeY + samplePad;
+    const sampleW = Math.max(4, safeW - samplePad * 2);
+    const sampleH = Math.max(4, safeH - samplePad * 2);
 
     const paintingRaw = await sharp(paintingBuf)
       .extract({ left: sampleX, top: sampleY, width: sampleW, height: sampleH })
@@ -158,14 +152,14 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // Per-channel mean shift: scale each channel so face mean moves toward painting mean.
-    // Use full SHIFT=1.0 for channels where painting is warmer (R,G push up),
-    // and extra push for blue reduction (warm skin = lower blue relative to red).
-    // Cap at [0.4, 1.8] to prevent blowout.
-    const SHIFT = 0.90;
-    const rM = Math.min(1.8, Math.max(0.4, ps.rm / Math.max(fs.rm, 1) * SHIFT + (1 - SHIFT)));
-    const gM = Math.min(1.8, Math.max(0.4, ps.gm / Math.max(fs.gm, 1) * SHIFT + (1 - SHIFT)));
-    const bM = Math.min(1.8, Math.max(0.4, ps.bm / Math.max(fs.bm, 1) * SHIFT + (1 - SHIFT)));
+    // Per-channel mean match: scale = 1 + (paintMean/faceMean - 1) * SHIFT
+    // Directly maps each channel toward the painting's sampled skin value.
+    // SHIFT=0.85 means 85% of the way from face color to painting color.
+    // Caps at [0.3, 1.9] to prevent blowout or over-darkening.
+    const SHIFT = 0.60; // gentler pull — Seedream faces are already warm-toned
+    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm,1) - 1) * SHIFT));
+    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm,1) - 1) * SHIFT));
+    const bM = Math.min(1.9, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm,1) - 1) * SHIFT));
 
     console.log(`[composite color] paintSample=(${Math.round(ps.rm)},${Math.round(ps.gm)},${Math.round(ps.bm)}) faceMean=(${Math.round(fs.rm)},${Math.round(fs.gm)},${Math.round(fs.bm)}) scale=(${rM.toFixed(2)},${gM.toFixed(2)},${bM.toFixed(2)})`);
 
