@@ -53,13 +53,16 @@ export default async function handler(req, res) {
     //   Use MediaPipe keypoints on the Seedream output — keypoints are stable
     //   even when the bbox is inflated by hair/robes.
 
-    const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+    const isProfile    = region.faceAngle && region.faceAngle.includes('profile');
+    const isFront      = !region.faceAngle || region.faceAngle === 'front';
     let faceCropBuf = faceBuf;
     let faceCropBox = null;
     let cropX, cropY, cropSize;
     let cropMethod = 'fallback';
 
-    if (!isProfile && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
+    // Selfie-based crop only for front-facing figures — three-quarter and profile
+    // figures have different poses than the selfie so faceBounds doesn't apply.
+    if (isFront && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
       // ── Front/3Q: selfie-based crop ──────────────────────────────────────
       // faceBounds is normalized to selfie dimensions.
       // Seedream is asked to match framing, so we apply same normalized coords
@@ -69,7 +72,7 @@ export default async function handler(req, res) {
       const cy = faceBounds.y + faceBounds.h / 2;
       // Use the larger of w/h for a square crop
       const faceSpan = Math.max(faceBounds.w, faceBounds.h);
-      const cropSpan = Math.min(faceSpan * (1 + PAD * 2) * 1.3, 0.90); // 1.3× for Seedream framing variance
+      const cropSpan = Math.min(faceSpan * (1 + PAD * 2) * 1.1, 0.90); // 1.1× for Seedream framing variance
       cropSize = Math.round(cropSpan * FW);
       cropX = Math.max(0, Math.min(Math.round(cx * FW - cropSize / 2), FW - cropSize));
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
@@ -113,12 +116,17 @@ export default async function handler(req, res) {
                 const landmarkH   = chinBottom - foreheadTop;
                 cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
 
-                // Profile: anchor to back-of-head, extend toward face direction
-                const facingRight = noseTip.x > eyeCx;
-                const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
-                cropX = facingRight
-                  ? Math.max(0, Math.min(backOfHead - 40, FW - cropSize))
-                  : Math.max(0, Math.min(backOfHead - cropSize + 40, FW - cropSize));
+                if (isProfile) {
+                  // Profile: anchor to back-of-head, extend toward face direction
+                  const facingRight = noseTip.x > eyeCx;
+                  const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
+                  cropX = facingRight
+                    ? Math.max(0, Math.min(backOfHead - 40, FW - cropSize))
+                    : Math.max(0, Math.min(backOfHead - cropSize + 40, FW - cropSize));
+                } else {
+                  // Front/3Q: center on eye midpoint
+                  cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
+                }
                 cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
                 cropMethod = 'keypoints';
                 console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);

@@ -104,13 +104,22 @@ async function extractPaintedFace(styleImageUrl, faceRegion) {
     const buf = Buffer.from(await res.arrayBuffer());
     const { width: PW, height: PH } = await sharp(buf).metadata();
 
-    const x = Math.max(0, Math.round(faceRegion.x * PW));
-    const y = Math.max(0, Math.round(faceRegion.y * PH));
-    const w = Math.min(Math.round(faceRegion.w * PW), PW - x);
-    const h = Math.min(Math.round(faceRegion.h * PH), PH - y);
+    // Extract 3× the face region for better pose/direction context.
+    // The tight face crop (86×130px for dancer) is too small for Seedream to read
+    // direction reliably. A wider crop includes hair, body, and background which
+    // all encode pose information.
+    const EXPAND = 3.0;
+    const faceCx = faceRegion.x + faceRegion.w / 2;
+    const faceCy = faceRegion.y + faceRegion.h / 2;
+    const expandW = faceRegion.w * EXPAND;
+    const expandH = faceRegion.h * EXPAND;
+    const ex = Math.max(0, Math.round((faceCx - expandW/2) * PW));
+    const ey = Math.max(0, Math.round((faceCy - expandH/2) * PH));
+    const ew = Math.min(Math.round(expandW * PW), PW - ex);
+    const eh = Math.min(Math.round(expandH * PH), PH - ey);
 
     const cropped = await sharp(buf)
-      .extract({ left: x, top: y, width: w, height: h })
+      .extract({ left: ex, top: ey, width: ew, height: eh })
       .resize(512, 512, { fit: 'contain', background: { r:200, g:170, b:120, alpha:1 } })
       .jpeg({ quality: 92 })
       .toBuffer();
@@ -190,14 +199,7 @@ export default async function handler(req, res) {
           ? [faceImage, paintingFaceCrop]
           : [faceImage];
 
-        // Add framing hint from selfie detection so Seedream matches selfie face position
-        let framingHint = 'face occupies upper half of image, head centered in frame';
-        if (faceBounds && faceBounds.w > 0) {
-          const faceTopPct  = Math.round(faceBounds.y * 100);
-          const faceSizePct = Math.round(faceBounds.h * 100);
-          framingHint = `face starts at ${faceTopPct}% from top of image, face height is ${faceSizePct}% of image height, same framing and scale as reference photo`;
-        }
-        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, match the face angle and direction shown in the second reference image, ${faceAngleDesc}, close-up bust portrait, face and shoulders only, ${framingHint}, consistent framing, no full body`;
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, match the face angle and direction shown in the second reference image, ${faceAngleDesc}, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, consistent framing, no full body`;
 
         let rawUrl = null;
         for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {

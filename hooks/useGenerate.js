@@ -154,6 +154,7 @@ export function useGenerate() {
         const data = await res.json();
         if (!res.ok || data.error) throw new Error(data.error || 'Style transfer failed');
         const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
+        const detectedBounds = data.selfieFaceBounds || null;
 
         // Stage 2: LoRA refinement
         try {
@@ -164,12 +165,12 @@ export function useGenerate() {
           });
           if (refineRes.ok) {
             const refineData = await refineRes.json();
-            if (refineData.outputUrl) return refineData.outputUrl;
+            if (refineData.outputUrl) return { url: refineData.outputUrl, selfieFaceBounds: detectedBounds };
           }
         } catch (e) {
           console.warn('Refine step failed, using InstantID output:', e.message);
         }
-        return instantIdUrl;
+        return { url: instantIdUrl, selfieFaceBounds: detectedBounds };
 
       } catch (e) {
         if (attempt < 2 && e.message.includes('timed out')) {
@@ -219,13 +220,15 @@ export function useGenerate() {
       console.log('[cache] Result HIT — skipping Seedream:', resultKey);
       setStatus('compositing');
       setStyledUrl(cachedResult.styledUrl);
+      // Use cached selfieFaceBounds if available, fall back to passed-in faceBounds
+      const cachedFaceBounds = cachedResult.selfieFaceBounds || faceBounds;
       try {
         const composite = await runComposite({
           styledFaceUrl:    cachedResult.styledUrl,
           painting,
           figure,
           paintingImageUrl: styleImageUrl,
-          faceBounds,
+          faceBounds: cachedFaceBounds,
         });
         setOutputUrl(composite);
         setStatus('succeeded');
@@ -259,7 +262,9 @@ export function useGenerate() {
         // New selfie — call Seedream
         console.log('[cache] Style MISS — calling Seedream, styleKey:', styleKey, '| cached:', Object.keys(styledCache.current));
         setStatus('styling');
-        styled = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
+        const stResult = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
+        styled = stResult.url;
+        if (stResult.selfieFaceBounds) faceBounds = stResult.selfieFaceBounds;
 
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
@@ -294,7 +299,7 @@ export function useGenerate() {
 
       // Save only styledUrl to result cache — compositing is fast (~400ms)
       // Full composite result is too large for localStorage
-      resultCache.current[resultKey] = { styledUrl: styled };
+      resultCache.current[resultKey] = { styledUrl: styled, selfieFaceBounds: faceBounds };
       saveResultCache(resultCache.current);
 
       setOutputUrl(composite);
