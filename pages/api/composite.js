@@ -59,39 +59,67 @@ export default async function handler(req, res) {
           signal: AbortSignal.timeout(15000),
         });
         if (detectRes.ok) {
-          const { box } = await detectRes.json();
+          const { box, keypoints } = await detectRes.json();
           if (box) {
-            const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
-            const faceLeft = Math.round(box.x  * FW);
-            const faceTop  = Math.round(box.y  * FH);
-            const faceBot  = Math.round(box.y2 * FH);
-            const faceW    = Math.round((box.x2 - box.x) * FW);
-            const faceH    = faceBot - faceTop;
-            const faceRatio = faceH / FH;
+            const isProfile = region.faceAngle && region.faceAngle.includes('profile');
 
-            let cropSize, cropX, cropY;
+            // Use keypoints when available — much more stable than bbox for gongbi portraits.
+            // BlazeFace keypoints: 0=right eye, 1=left eye, 2=nose tip, 3=mouth, 4=right ear, 5=left ear
+            // Keypoints are normalized [0,1] relative to the 640×640 detection input,
+            // but MediaPipe returns them normalized to original image dimensions.
+            let cropX, cropY, cropSize;
 
-            if (faceRatio < 0.60) {
-              const padX    = Math.round(faceW * 0.15);
-              const padTop  = Math.round(faceH * 0.40);
-              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-              const padBot  = Math.round(faceH * (isProfile ? 0.30 : 0.05));
-              cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
-              const leftShift = Math.round(faceW * 0.05);
-              cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
-              cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
+            if (keypoints && keypoints.length >= 4) {
+              const kpX = kp => Math.round(kp.x * FW);
+              const kpY = kp => Math.round(kp.y * FH);
+
+              const rightEye = { x: kpX(keypoints[0]), y: kpY(keypoints[0]) };
+              const leftEye  = { x: kpX(keypoints[1]), y: kpY(keypoints[1]) };
+              const noseTip  = { x: kpX(keypoints[2]), y: kpY(keypoints[2]) };
+              const mouth    = { x: kpX(keypoints[3]), y: kpY(keypoints[3]) };
+
+              // Eye center = reliable horizontal anchor
+              const eyeCx = Math.round((rightEye.x + leftEye.x) / 2);
+              const eyeCy = Math.round((rightEye.y + leftEye.y) / 2);
+
+              // Eye-to-mouth distance = stable face height proxy
+              const eyeToMouth = Math.abs(mouth.y - eyeCy);
+
+              // cropSize: face height (eye-to-mouth) × 3.5 gives forehead + chin room
+              // Profile faces need less width padding
+              cropSize = Math.round(eyeToMouth * (isProfile ? 2.8 : 3.5));
+              cropSize = Math.max(400, Math.min(cropSize, 1100)); // sanity clamp
+
+              // Center crop on eye midpoint, shifted up to include forehead
+              // Forehead ≈ 0.9× eyeToMouth above eye center
+              const foreheadShift = Math.round(eyeToMouth * 0.9);
+              cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
+              cropY = Math.max(0, Math.min(eyeCy - foreheadShift, FH - cropSize));
+
+              console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) nose=(${noseTip.x},${noseTip.y}) mouth=(${mouth.x},${mouth.y}) eyeToMouth=${eyeToMouth} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
             } else {
-              // Oversized box (faceRatio >= 0.60) — use faceW as basis
-              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
-              const padX     = Math.round(faceW * 0.10);
-              const topShift = Math.round(faceH * 0.05);
-              const leftShift = Math.round(faceW * 0.03);
-              cropSize = faceW + padX * 2;
-              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
-              cropY = Math.max(0, faceTop - topShift);
-              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
+              // Fallback: bbox-based crop (no keypoints available)
+              const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
+              const faceLeft = Math.round(box.x  * FW);
+              const faceTop  = Math.round(box.y  * FH);
+              const faceW    = Math.round((box.x2 - box.x) * FW);
+              const faceH    = Math.round((box.y2 - box.y) * FH);
+              const faceRatio = faceH / FH;
+
+              if (faceRatio < 0.60) {
+                const padX   = Math.round(faceW * 0.15);
+                const padTop = Math.round(faceH * 0.40);
+                const padBot = Math.round(faceH * (isProfile ? 0.30 : 0.05));
+                cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
+                cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - Math.round(faceW*0.05), FW - cropSize));
+                cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
+              } else {
+                cropSize = Math.round(FW * (isProfile ? 0.38 : 0.50));
+                cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
+                cropY = Math.max(0, Math.min(faceTop - Math.round(cropSize*0.08), FH - cropSize));
+              }
+              console.log(`[composite crop] BBOX faceRatio=${(faceH/FH).toFixed(2)} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
             }
-            console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} cropX=${cropX} cropY=${cropY} cropSize=${cropSize}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
             faceCropBuf = await sharp(faceBuf)
               .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
