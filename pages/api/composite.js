@@ -81,12 +81,15 @@ export default async function handler(req, res) {
               cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - leftShift, FW - cropSize));
               cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
             } else {
-              // Oversized box (faceRatio >= 0.60) — MediaPipe detected full body.
-              // Ignore bbox entirely; use fixed crop anchored to image center-top.
-              // Face in Seedream portraits is always in upper-center of 1920px image.
-              cropSize = Math.round(FW * 0.50); // 960px — reliable face+shoulders
-              cropX = Math.round((FW - cropSize) / 2); // horizontal center
-              cropY = Math.round(FH * 0.18);            // start at 18% from top
+              // Oversized box (faceRatio >= 0.60) — use faceW as basis
+              const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+              const padX     = Math.round(faceW * 0.10);
+              const topShift = Math.round(faceH * 0.05);
+              const leftShift = Math.round(faceW * 0.03);
+              cropSize = faceW + padX * 2;
+              cropX = Math.max(0, Math.min(faceLeft - padX - leftShift, FW - cropSize));
+              cropY = Math.max(0, faceTop - topShift);
+              cropSize = Math.min(cropSize, FW - cropX, FH - cropY);
             }
             console.log(`[composite crop] ratio=${faceRatio.toFixed(2)} faceW=${faceW} faceH=${faceH} faceTop=${faceTop} cropX=${cropX} cropY=${cropY} cropSize=${cropSize}`);
             faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
@@ -137,7 +140,14 @@ export default async function handler(req, res) {
       .extract({ left: sampleX, top: sampleY, width: sampleW, height: sampleH })
       .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
+    // Sample center 30% of facePng — avoids dark hair/background at edges
+    // which artificially darkens faceMean and causes over-correction
+    const fpMeta2 = await sharp(facePng).metadata();
+    const fSampleSize = Math.round(Math.min(fpMeta2.width, fpMeta2.height) * 0.30);
+    const fSampleLeft = Math.round((fpMeta2.width  - fSampleSize) / 2);
+    const fSampleTop  = Math.round((fpMeta2.height - fSampleSize) / 2);
     const faceRaw = await sharp(facePng)
+      .extract({ left: fSampleLeft, top: fSampleTop, width: fSampleSize, height: fSampleSize })
       .resize(8, 8).removeAlpha().raw().toBuffer();
 
     function stats(buf) {
@@ -152,22 +162,23 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // Per-channel mean match: scale = 1 + (paintMean/faceMean - 1) * SHIFT
-    // Directly maps each channel toward the painting's sampled skin value.
-    // SHIFT=0.85 means 85% of the way from face color to painting color.
-    // Caps at [0.3, 1.9] to prevent blowout or over-darkening.
-    const SHIFT = 0.60; // gentler pull — Seedream faces are already warm-toned
-    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm,1) - 1) * SHIFT));
-    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm,1) - 1) * SHIFT));
-    const bM = Math.min(1.9, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm,1) - 1) * SHIFT));
+    // std-dev match capped to avoid blowout
+    const STD_BL = 0.40;
+    const rS = Math.min(1.5, Math.max(0.5, 1 + (ps.rs/fs.rs - 1) * STD_BL));
+    const gS = Math.min(1.5, Math.max(0.5, 1 + (ps.gs/fs.gs - 1) * STD_BL));
+    const bS = Math.min(1.5, Math.max(0.5, 1 + (ps.bs/fs.bs - 1) * STD_BL));
 
-    console.log(`[composite color] paintSample=(${Math.round(ps.rm)},${Math.round(ps.gm)},${Math.round(ps.bm)}) faceMean=(${Math.round(fs.rm)},${Math.round(fs.gm)},${Math.round(fs.bm)}) scale=(${rM.toFixed(2)},${gM.toFixed(2)},${bM.toFixed(2)})`);
+    // Mean brightness pull — allows face to go as dark as painting needs (floor=0.35)
+    const MEAN_BL = 0.80;
+    const brightRatio = Math.min(1.4, Math.max(0.35,
+      1 + ((ps.rm + ps.gm + ps.bm) / (fs.rm + fs.gm + fs.bm) - 1) * MEAN_BL
+    ));
 
     // Color match — keep exact S x S dimensions
     const colorFace = await sharp(facePng)
       .removeAlpha()
-      .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
-      .modulate({ saturation: 0.72 })
+      .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
+      .modulate({ brightness: brightRatio, saturation: 0.75 })
       .png()
       .toBuffer();
 
