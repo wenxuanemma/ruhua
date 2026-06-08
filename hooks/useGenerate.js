@@ -187,6 +187,8 @@ export function useGenerate() {
   // Calibration determines which direction _a corresponds to for each figure.
   function selectPortrait(portraitSet, faceAngle) {
     if (!portraitSet || typeof portraitSet === 'string') return portraitSet;
+    // _a = left-facing (Kontext natural direction)
+    // _b = right-facing (flopped mirror)
     switch (faceAngle) {
       case 'front':               return portraitSet.front;
       case 'three_quarter_left':  return portraitSet.three_quarter_a;
@@ -270,13 +272,31 @@ export function useGenerate() {
       let detectedFaceBounds = faceBounds; // may be updated from generate response
 
       if (isSameSelfie) {
-        // Cached selfie — skip Seedream, straight to compositing
         console.log('[cache] Style HIT — skipping Seedream, styleKey:', styleKey);
         setStatus('submitting');
-        // cachedStyled may be a portrait set {front, three_quarter_a, ...} or just a URL string
-        const cachedPortraitSet = typeof cachedStyled === 'object' ? cachedStyled : { front: cachedStyled };
-        styled = cachedPortraitSet.front || cachedStyled;
+        const cachedPortraitSet = typeof cachedStyled === 'object' ? cachedStyled : null;
+        styled = (cachedPortraitSet?.front) || cachedStyled;
         setStyledUrl(styled);
+
+        // If cached value is just a front URL string (loaded from localStorage after reload),
+        // regenerate angle portraits via Kontext now (no Seedream needed)
+        if (!cachedPortraitSet && styled) {
+          console.log('[angles] Cache hit but no angle portraits — regenerating via Kontext...');
+          try {
+            const anglesRes = await fetch('/api/generate-angles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ frontPortraitUrl: styled }),
+            });
+            if (anglesRes.ok) {
+              const anglePortraits = await anglesRes.json();
+              styledCache.current[styleKey] = anglePortraits;
+              console.log('[angles] Regenerated:', Object.keys(anglePortraits));
+            }
+          } catch (e) {
+            console.warn('[angles] Kontext regen failed:', e.message);
+          }
+        }
         await new Promise(r => setTimeout(r, 400));
         setStatus('compositing');
       } else {
@@ -323,7 +343,14 @@ export function useGenerate() {
         // Cache: store the full angle set (or just front if Kontext failed)
         const portraitSet = anglePortraits || { front: styled };
         styledCache.current[styleKey] = portraitSet;
-        saveCache(styledCache.current);
+        // Only persist the front portrait URL to localStorage (angle portraits are ~15MB total).
+        // On reload, angle portraits will be regenerated via Kontext (~16s).
+        const persistable = {};
+        for (const [k, v] of Object.entries(styledCache.current)) {
+          const val = typeof v === 'object' ? v.front : v;
+          if (val) persistable[k] = val; // just the front URL string
+        }
+        saveCache(persistable);
         saveLastSelfie(selfie);
         currentSelfieHash.current = selfieHash;
         // styledUrl for debug panel = front portrait
@@ -336,6 +363,7 @@ export function useGenerate() {
       const portraitSet = styledCache.current[styleKey];
       const selectedPortrait = selectPortrait(portraitSet, faceAngle) || styled;
       console.log(`[composite] faceAngle=${faceAngle} → portrait selected from set`);
+      setStyledUrl(selectedPortrait); // show angle-selected portrait in debug panel
 
       const composite = await runComposite({
         styledFaceUrl:    selectedPortrait,
