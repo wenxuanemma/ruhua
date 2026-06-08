@@ -111,6 +111,12 @@ export default async function handler(req, res) {
                 const eyeCy      = Math.round((rightEye.y + leftEye.y) / 2);
                 const eyeToMouth = Math.abs(mouth.y - eyeCy);
 
+                // Discard if keypoints are off-image or implausible face size
+                if (eyeCy < 50 || eyeCy > FH * 0.85 || eyeToMouth < 100 || eyeToMouth > FH * 0.60) {
+                  console.warn(`[composite] Invalid keypoints: eyeCy=${eyeCy} eyeToMouth=${eyeToMouth} — using bbox fallback`);
+                  throw new Error('invalid keypoints');
+                }
+
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;

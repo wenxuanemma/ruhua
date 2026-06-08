@@ -182,6 +182,21 @@ export function useGenerate() {
     }
   }, [pollUntilDone]);
 
+  // Map faceAngle to the correct portrait from the angle set.
+  // Kontext naturally produces one direction; _b variants are flopped mirrors.
+  // Calibration determines which direction _a corresponds to for each figure.
+  function selectPortrait(portraitSet, faceAngle) {
+    if (!portraitSet || typeof portraitSet === 'string') return portraitSet;
+    switch (faceAngle) {
+      case 'front':               return portraitSet.front;
+      case 'three_quarter_left':  return portraitSet.three_quarter_a;
+      case 'three_quarter_right': return portraitSet.three_quarter_b;
+      case 'profile_left':        return portraitSet.profile_a;
+      case 'profile_right':       return portraitSet.profile_b;
+      default:                    return portraitSet.front;
+    }
+  }
+
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
     const res = await fetch('/api/composite', {
       method: 'POST',
@@ -210,8 +225,8 @@ export function useGenerate() {
     setError(null);
 
     const selfieHash = quickHash(selfie);
-    const faceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
-    const styleKey = `${selfieHash}_${faceAngle}_${gender || 'woman'}`;
+    // styleKey covers all angles — one Seedream call generates all 5 angle portraits
+    const styleKey = `${selfieHash}_${gender || 'woman'}`;
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
@@ -220,11 +235,14 @@ export function useGenerate() {
       console.log('[cache] Result HIT — skipping Seedream:', resultKey);
       setStatus('compositing');
       setStyledUrl(cachedResult.styledUrl);
-      // Use cached selfieFaceBounds if available, fall back to passed-in faceBounds
       const cachedFaceBounds = cachedResult.selfieFaceBounds || faceBounds;
+      // Select correct angle portrait from cached set
+      const cachedFaceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
+      const cachedPortraitSet = styledCache.current[styleKey];
+      const cachedSelectedPortrait = selectPortrait(cachedPortraitSet, cachedFaceAngle) || cachedResult.styledUrl;
       try {
         const composite = await runComposite({
-          styledFaceUrl:    cachedResult.styledUrl,
+          styledFaceUrl:    cachedSelectedPortrait,
           painting,
           figure,
           paintingImageUrl: styleImageUrl,
@@ -249,12 +267,15 @@ export function useGenerate() {
 
     try {
       let styled;
+      let detectedFaceBounds = faceBounds; // may be updated from generate response
 
       if (isSameSelfie) {
         // Cached selfie — skip Seedream, straight to compositing
         console.log('[cache] Style HIT — skipping Seedream, styleKey:', styleKey);
         setStatus('submitting');
-        styled = cachedStyled;
+        // cachedStyled may be a portrait set {front, three_quarter_a, ...} or just a URL string
+        const cachedPortraitSet = typeof cachedStyled === 'object' ? cachedStyled : { front: cachedStyled };
+        styled = cachedPortraitSet.front || cachedStyled;
         setStyledUrl(styled);
         await new Promise(r => setTimeout(r, 400));
         setStatus('compositing');
@@ -264,7 +285,7 @@ export function useGenerate() {
         setStatus('styling');
         const stResult = await runStyleTransfer({ selfie: compressedSelfie, painting, figure, gender, styleImageUrl, faceBounds });
         styled = stResult.url;
-        if (stResult.selfieFaceBounds) faceBounds = stResult.selfieFaceBounds;
+        detectedFaceBounds = stResult.selfieFaceBounds || faceBounds;
 
         // Convert to base64 for permanent cache (Replicate URLs expire after ~24h)
         try {
@@ -281,25 +302,52 @@ export function useGenerate() {
           console.warn('Could not convert to base64, caching URL:', e.message);
         }
 
-        styledCache.current[styleKey] = styled;
+        // Generate angled portraits via Kontext (2 calls, ~16s parallel)
+        // Returns front + 3/4_a + 3/4_b + profile_a + profile_b
+        setStatus('compositing'); // show progress while angles generate
+        let anglePortraits = null;
+        try {
+          const anglesRes = await fetch('/api/generate-angles', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ frontPortraitUrl: styled }),
+          });
+          if (anglesRes.ok) {
+            anglePortraits = await anglesRes.json();
+            console.log('[angles] Generated:', Object.keys(anglePortraits));
+          }
+        } catch (e) {
+          console.warn('[angles] Angle generation failed, falling back to front only:', e.message);
+        }
+
+        // Cache: store the full angle set (or just front if Kontext failed)
+        const portraitSet = anglePortraits || { front: styled };
+        styledCache.current[styleKey] = portraitSet;
         saveCache(styledCache.current);
         saveLastSelfie(selfie);
         currentSelfieHash.current = selfieHash;
+        // styledUrl for debug panel = front portrait
+        styled = styled; // keep as front for debug display
         setStyledUrl(styled);
-        setStatus('compositing');
       }
 
+      // Select the right angled portrait for this figure
+      const faceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
+      const portraitSet = styledCache.current[styleKey];
+      const selectedPortrait = selectPortrait(portraitSet, faceAngle) || styled;
+      console.log(`[composite] faceAngle=${faceAngle} → portrait selected from set`);
+
       const composite = await runComposite({
-        styledFaceUrl:    styled,
+        styledFaceUrl:    selectedPortrait,
         painting,
         figure,
         paintingImageUrl: styleImageUrl,
-        faceBounds,
+        faceBounds: detectedFaceBounds,
       });
 
       // Save only styledUrl to result cache — compositing is fast (~400ms)
       // Full composite result is too large for localStorage
-      resultCache.current[resultKey] = { styledUrl: styled, selfieFaceBounds: faceBounds };
+      resultCache.current[resultKey] = { styledUrl: styled, selfieFaceBounds: detectedFaceBounds };
       saveResultCache(resultCache.current);
 
       setOutputUrl(composite);

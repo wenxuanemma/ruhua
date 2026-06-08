@@ -8,7 +8,9 @@
     "start": "next start"
   },
   "dependencies": {
+    "form-data": "^4.0.5",
     "next": "16.2.4",
+    "node-fetch": "^3.3.2",
     "react": "19.2.4",
     "react-dom": "19.2.4",
     "sharp": "^0.34.5"
