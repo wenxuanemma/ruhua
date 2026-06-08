@@ -14,7 +14,7 @@ async function fetchBuf(url) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { styledFaceUrl, paintingImageUrl, paintingId, figureId } = req.body;
+  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds } = req.body;
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
@@ -41,96 +41,114 @@ export default async function handler(req, res) {
 
     console.log(`[composite] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
 
-    // ── Step 1: Detect face and crop from full portrait ───────────────────────
+    // ── Step 1: Crop face from Seedream portrait ──────────────────────────────
+    // Strategy depends on face angle:
+    //
+    // FRONT / THREE-QUARTER: use selfie faceBounds to derive crop position.
+    //   Seedream is prompted to match selfie framing, so face position in the
+    //   1920px output correlates with face position in the selfie. This is
+    //   stable across runs for the same selfie.
+    //
+    // PROFILE: selfie framing doesn't match (Seedream generates a side view).
+    //   Use MediaPipe keypoints on the Seedream output — keypoints are stable
+    //   even when the bbox is inflated by hair/robes.
+
+    const isProfile = region.faceAngle && region.faceAngle.includes('profile');
     let faceCropBuf = faceBuf;
-    let faceCropBox = null; // normalized crop box for debug overlay
-    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
-    if (LOCAL_SERVER && (FW > 500 || FH > 500)) {
-      // Only run detection if input is a large portrait (not already cropped)
-      try {
-        const resizedForDetect = await sharp(faceBuf)
-          .resize(640, 640, { fit: 'cover' })
-          .jpeg({ quality: 85 })
-          .toBuffer();
-        const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-mp`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ init_image: `data:image/jpeg;base64,${resizedForDetect.toString('base64')}` }),
-          signal: AbortSignal.timeout(15000),
-        });
-        if (detectRes.ok) {
-          const { box, keypoints } = await detectRes.json();
-          if (box) {
-            const isProfile = region.faceAngle && region.faceAngle.includes('profile');
+    let faceCropBox = null;
+    let cropX, cropY, cropSize;
+    let cropMethod = 'fallback';
 
-            // Use keypoints when available — much more stable than bbox for gongbi portraits.
-            // BlazeFace keypoints: 0=right eye, 1=left eye, 2=nose tip, 3=mouth, 4=right ear, 5=left ear
-            // Keypoints are normalized [0,1] relative to the 640×640 detection input,
-            // but MediaPipe returns them normalized to original image dimensions.
-            let cropX, cropY, cropSize;
+    if (!isProfile && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
+      // ── Front/3Q: selfie-based crop ──────────────────────────────────────
+      // faceBounds is normalized to selfie dimensions.
+      // Seedream is asked to match framing, so we apply same normalized coords
+      // to the 1920px output, with a generous pad to account for imperfect matching.
+      const PAD = 0.10; // 10% padding on each side
+      const cx = faceBounds.x + faceBounds.w / 2;
+      const cy = faceBounds.y + faceBounds.h / 2;
+      // Use the larger of w/h for a square crop
+      const faceSpan = Math.max(faceBounds.w, faceBounds.h);
+      const cropSpan = Math.min(faceSpan * (1 + PAD * 2) * 1.3, 0.90); // 1.3× for Seedream framing variance
+      cropSize = Math.round(cropSpan * FW);
+      cropX = Math.max(0, Math.min(Math.round(cx * FW - cropSize / 2), FW - cropSize));
+      cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
+      cropMethod = 'selfie';
+      console.log(`[composite crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
-            if (keypoints && keypoints.length >= 4) {
-              const kpX = kp => Math.round(kp.x * FW);
-              const kpY = kp => Math.round(kp.y * FH);
+    } else {
+      // ── Profile (or no faceBounds): MediaPipe keypoints on Seedream output ──
+      const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+      if (LOCAL_SERVER && FW > 500) {
+        try {
+          const resizedForDetect = await sharp(faceBuf)
+            .resize(640, 640, { fit: 'cover' })
+            .jpeg({ quality: 85 })
+            .toBuffer();
+          const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-mp`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ init_image: `data:image/jpeg;base64,${resizedForDetect.toString('base64')}` }),
+            signal: AbortSignal.timeout(15000),
+          });
+          if (detectRes.ok) {
+            const { box, keypoints } = await detectRes.json();
+            if (box) {
+              const bboxW  = Math.round((box.x2 - box.x) * FW);
+              const bboxCx = Math.round(((box.x + box.x2) / 2) * FW);
 
-              const rightEye = { x: kpX(keypoints[0]), y: kpY(keypoints[0]) };
-              const leftEye  = { x: kpX(keypoints[1]), y: kpY(keypoints[1]) };
-              const noseTip  = { x: kpX(keypoints[2]), y: kpY(keypoints[2]) };
-              const mouth    = { x: kpX(keypoints[3]), y: kpY(keypoints[3]) };
+              if (keypoints && keypoints.length >= 4) {
+                const kpX = kp => Math.round(kp.x * FW);
+                const kpY = kp => Math.round(kp.y * FH);
+                const rightEye = { x: kpX(keypoints[0]), y: kpY(keypoints[0]) };
+                const leftEye  = { x: kpX(keypoints[1]), y: kpY(keypoints[1]) };
+                const noseTip  = { x: kpX(keypoints[2]), y: kpY(keypoints[2]) };
+                const mouth    = { x: kpX(keypoints[3]), y: kpY(keypoints[3]) };
+                const eyeCx      = Math.round((rightEye.x + leftEye.x) / 2);
+                const eyeCy      = Math.round((rightEye.y + leftEye.y) / 2);
+                const eyeToMouth = Math.abs(mouth.y - eyeCy);
 
-              // Eye center = reliable horizontal anchor
-              const eyeCx = Math.round((rightEye.x + leftEye.x) / 2);
-              const eyeCy = Math.round((rightEye.y + leftEye.y) / 2);
+                const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
+                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
+                const landmarkH   = chinBottom - foreheadTop;
+                cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
 
-              // Eye-to-mouth distance = stable face height proxy
-              const eyeToMouth = Math.abs(mouth.y - eyeCy);
-
-              // cropSize: face height (eye-to-mouth) × 3.5 gives forehead + chin room
-              // Profile faces need less width padding
-              cropSize = Math.round(eyeToMouth * (isProfile ? 2.8 : 3.5));
-              cropSize = Math.max(400, Math.min(cropSize, 1100)); // sanity clamp
-
-              // Center crop on eye midpoint, shifted up to include forehead
-              // Forehead ≈ 0.9× eyeToMouth above eye center
-              const foreheadShift = Math.round(eyeToMouth * 0.9);
-              cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
-              cropY = Math.max(0, Math.min(eyeCy - foreheadShift, FH - cropSize));
-
-              console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) nose=(${noseTip.x},${noseTip.y}) mouth=(${mouth.x},${mouth.y}) eyeToMouth=${eyeToMouth} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
-            } else {
-              // Fallback: bbox-based crop (no keypoints available)
-              const faceCx   = Math.round(((box.x + box.x2) / 2) * FW);
-              const faceLeft = Math.round(box.x  * FW);
-              const faceTop  = Math.round(box.y  * FH);
-              const faceW    = Math.round((box.x2 - box.x) * FW);
-              const faceH    = Math.round((box.y2 - box.y) * FH);
-              const faceRatio = faceH / FH;
-
-              if (faceRatio < 0.60) {
-                const padX   = Math.round(faceW * 0.15);
-                const padTop = Math.round(faceH * 0.40);
-                const padBot = Math.round(faceH * (isProfile ? 0.30 : 0.05));
-                cropSize = Math.max(faceW + padX*2, faceH + padTop + padBot);
-                cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2) - Math.round(faceW*0.05), FW - cropSize));
-                cropY = Math.max(0, Math.min(faceTop - padTop, FH - cropSize));
+                // Profile: anchor to back-of-head, extend toward face direction
+                const facingRight = noseTip.x > eyeCx;
+                const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
+                cropX = facingRight
+                  ? Math.max(0, Math.min(backOfHead - 40, FW - cropSize))
+                  : Math.max(0, Math.min(backOfHead - cropSize + 40, FW - cropSize));
+                cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
+                cropMethod = 'keypoints';
+                console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               } else {
+                // Keypoints unavailable — bbox fallback
+                const faceTop   = Math.round(box.y * FH);
+                const faceH     = Math.round((box.y2 - box.y) * FH);
                 cropSize = Math.round(FW * (isProfile ? 0.38 : 0.50));
-                cropX = Math.max(0, Math.min(faceCx - Math.round(cropSize/2), FW - cropSize));
-                cropY = Math.max(0, Math.min(faceTop - Math.round(cropSize*0.08), FH - cropSize));
+                cropX = Math.max(0, Math.min(bboxCx - Math.round(cropSize / 2), FW - cropSize));
+                cropY = Math.max(0, Math.min(faceTop - Math.round(cropSize * 0.08), FH - cropSize));
+                cropMethod = 'bbox';
+                console.log(`[composite crop] BBOX faceTop=${faceTop} bboxW=${bboxW} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               }
-              console.log(`[composite crop] BBOX faceRatio=${(faceH/FH).toFixed(2)} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
             }
-            faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
-            faceCropBuf = await sharp(faceBuf)
-              .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
-              .jpeg({ quality: 95 })
-              .toBuffer();
           }
+        } catch (e) {
+          console.warn('Composite face detection failed:', e.message);
         }
-      } catch (e) {
-        console.warn('Composite face detection failed:', e.message);
       }
     }
+
+    // Apply crop if we have valid coordinates
+    if (cropSize && cropSize > 0) {
+      faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
+      faceCropBuf = await sharp(faceBuf)
+        .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
+        .jpeg({ quality: 95 })
+        .toBuffer();
+    }
+    console.log(`[composite] cropMethod=${cropMethod} cropSize=${cropSize}`);
 
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
