@@ -1637,7 +1637,9 @@ export default function RuHua() {
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         resetGen();
-                                        clearStyledCache();
+                                        // Don't clearStyledCache — style cache now contains all 5 angle
+                                        // portraits per selfie. Clearing forces a full Seedream+Kontext
+                                        // regeneration. selectPortrait() picks the right angle per figure.
                                         setSkipSelfie(true); // keep existing selfie, skip capture
                                         setGenderNext('figure');
                                         setScreen('gender');
