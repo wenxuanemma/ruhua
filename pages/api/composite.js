@@ -120,22 +120,9 @@ export default async function handler(req, res) {
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;
-                if (isProfile) {
-                  // Profile: square crop sized to face width (ear-to-nose).
-                  // Tighter than landmarkH-based square which extends into background.
-                  const facingRight = noseTip.x > eyeCx;
-                  const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
-                  const faceSpanX   = Math.abs(noseTip.x - backOfHead);
-                  cropSize = Math.min(faceSpanX + 40, 1500);
-                  cropX = facingRight
-                    ? Math.max(0, Math.min(backOfHead - 20, FW - cropSize))
-                    : Math.max(0, Math.min(noseTip.x - cropSize + 20, FW - cropSize));
-                } else {
-                  // Front/3Q: square crop sized to face height (forehead-to-chin).
-                  cropSize = Math.min(landmarkH + 40, 1500);
-                  cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
-                }
-                cropY = Math.max(0, Math.min(foreheadTop - 20, FH - cropSize));
+                cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
+                cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
+                cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
                 cropMethod = 'keypoints';
                 console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               } else {
