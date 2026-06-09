@@ -121,22 +121,27 @@ export default async function handler(req, res) {
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;
                 if (isProfile) {
-                  // Profile: crop tightly from back-of-head bbox edge to nose tip.
-                  // Avoids including empty background behind the head.
+                  // Profile: square crop spanning exactly back-of-head to nose tip.
+                  // Use faceSpanX as the size — landmarkH may be taller but we want
+                  // the square to be face-width, not face-height, to avoid background.
                   const facingRight = noseTip.x > eyeCx;
                   const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
-                  const faceSpanX   = Math.abs(noseTip.x - backOfHead) + 40; // nose-to-ear + small pad
-                  cropSize = Math.min(Math.max(faceSpanX, landmarkH) + 20, 1500);
+                  const faceSpanX   = Math.abs(noseTip.x - backOfHead);
+                  // Square size: face width + small pad. Prefer width over height so
+                  // horizontal bounds are tight. Vertical clipping of chin is acceptable.
+                  cropSize = Math.min(faceSpanX + 40, 1500);
                   cropX = facingRight
                     ? Math.max(0, Math.min(backOfHead - 20, FW - cropSize))
-                    : Math.max(0, Math.min(noseTip.x - 20, FW - cropSize));
+                    : Math.max(0, Math.min(noseTip.x - cropSize + 20, FW - cropSize));
                 } else {
                   // Front/3Q: use landmarkH only — bboxW includes background on the turned side.
                   // Center on eye midpoint horizontally.
                   cropSize = Math.min(landmarkH + 40, 1500);
                   cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
                 }
-                cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
+                // Anchor cropY to foreheadTop, but cap so crop doesn't extend far below chin
+                const maxCropY = Math.max(0, chinBottom + 20 - cropSize);
+                cropY = Math.max(maxCropY, Math.min(foreheadTop - 20, FH - cropSize));
                 cropMethod = 'keypoints';
                 console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               } else {
@@ -248,19 +253,20 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Oval: use circular mask — region aspect ratio handled by paste position, not oval shape
-    const ovalR = S * 0.42;
+    // Oval mask: hard center, tight fade zone to minimize halo at color boundaries.
+    // ovalR controls how much of the square is covered; gradient stops control fade width.
+    // cx/cy slightly off-center (52%) to favor forehead over chin.
+    const ovalR = S * 0.40;
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
-        <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
-          <stop offset="70%" stop-color="white" stop-opacity="1"/>
-          <stop offset="82%" stop-color="white" stop-opacity="0.80"/>
-          <stop offset="91%" stop-color="white" stop-opacity="0.20"/>
-          <stop offset="97%" stop-color="white" stop-opacity="0.04"/>
+        <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
+          <stop offset="78%" stop-color="white" stop-opacity="1"/>
+          <stop offset="88%" stop-color="white" stop-opacity="0.60"/>
+          <stop offset="94%" stop-color="white" stop-opacity="0.10"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.52}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
+      <ellipse cx="${S*0.50}" cy="${S*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(ovalSvg))
