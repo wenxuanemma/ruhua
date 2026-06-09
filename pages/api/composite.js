@@ -120,17 +120,20 @@ export default async function handler(req, res) {
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;
-                cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
-
                 if (isProfile) {
-                  // Profile: anchor to back-of-head, extend toward face direction
+                  // Profile: crop tightly from back-of-head bbox edge to nose tip.
+                  // Avoids including empty background behind the head.
                   const facingRight = noseTip.x > eyeCx;
                   const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
+                  const faceSpanX   = Math.abs(noseTip.x - backOfHead) + 40; // nose-to-ear + small pad
+                  cropSize = Math.min(Math.max(faceSpanX, landmarkH) + 20, 1500);
                   cropX = facingRight
-                    ? Math.max(0, Math.min(backOfHead - 40, FW - cropSize))
-                    : Math.max(0, Math.min(backOfHead - cropSize + 40, FW - cropSize));
+                    ? Math.max(0, Math.min(backOfHead - 20, FW - cropSize))
+                    : Math.max(0, Math.min(noseTip.x - 20, FW - cropSize));
                 } else {
-                  // Front/3Q: center on eye midpoint
+                  // Front/3Q: use landmarkH only — bboxW includes background on the turned side.
+                  // Center on eye midpoint horizontally.
+                  cropSize = Math.min(landmarkH + 40, 1500);
                   cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
                 }
                 cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
@@ -200,11 +203,11 @@ export default async function handler(req, res) {
       .extract({ left: sampleX, top: sampleY, width: patchSize, height: patchSize })
       .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
-    // Sample center 30% of facePng — avoids dark hair/background at edges.
-    // Sample from facePng (pre-color-correction) so ratios reflect true face color.
-    const fSampleSize = Math.round(S * 0.30);
+    // Sample a 20% patch shifted up 10% from center — lands on cheeks/nose,
+    // avoids hair at top and neck/clothing at bottom. Tighter than 30% to stay on skin.
+    const fSampleSize = Math.round(S * 0.20);
     const fSampleLeft = Math.round((S - fSampleSize) / 2);
-    const fSampleTop  = Math.round((S - fSampleSize) / 2);
+    const fSampleTop  = Math.round(S * 0.35);  // 35% from top = upper cheek area
     const faceRaw = await sharp(facePng)
       .extract({ left: fSampleLeft, top: fSampleTop, width: fSampleSize, height: fSampleSize })
       .resize(8, 8).removeAlpha().raw().toBuffer();
@@ -221,11 +224,13 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // Per-channel mean ratio scaling — SHIFT blends between identity (0) and full match (1)
-    const SHIFT = 0.75;
-    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));
-    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
-    const bM = Math.min(1.9, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
+    // Per-channel mean ratio scaling with per-channel SHIFT.
+    // R/G pull more toward painting tone; B is gentler to avoid blue crushing
+    // on warm dark paintings (where paintBlue << faceBue).
+    const SHIFT_R = 0.55, SHIFT_G = 0.55, SHIFT_B = 0.35;
+    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT_R));
+    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT_G));
+    const bM = Math.min(1.9, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT_B));
 
     console.log(`[composite color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
@@ -248,10 +253,10 @@ export default async function handler(req, res) {
     const ovalSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="52%" rx="50%" ry="50%">
-          <stop offset="55%" stop-color="white" stop-opacity="1"/>
-          <stop offset="72%" stop-color="white" stop-opacity="0.85"/>
-          <stop offset="85%" stop-color="white" stop-opacity="0.25"/>
-          <stop offset="95%" stop-color="white" stop-opacity="0.05"/>
+          <stop offset="70%" stop-color="white" stop-opacity="1"/>
+          <stop offset="82%" stop-color="white" stop-opacity="0.80"/>
+          <stop offset="91%" stop-color="white" stop-opacity="0.20"/>
+          <stop offset="97%" stop-color="white" stop-opacity="0.04"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
