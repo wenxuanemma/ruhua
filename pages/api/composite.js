@@ -57,7 +57,7 @@ export default async function handler(req, res) {
     const isFront      = !region.faceAngle || region.faceAngle === 'front';
     let faceCropBuf = faceBuf;
     let faceCropBox = null;
-    let cropX, cropY, cropSize, cropW, cropH;
+    let cropX, cropY, cropSize;
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -121,24 +121,21 @@ export default async function handler(req, res) {
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;
                 if (isProfile) {
-                  // Profile: rectangular crop — width = ear-to-nose, height = forehead-to-chin.
+                  // Profile: square crop sized to face width (ear-to-nose).
+                  // Tighter than landmarkH-based square which extends into background.
                   const facingRight = noseTip.x > eyeCx;
                   const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
                   const faceSpanX   = Math.abs(noseTip.x - backOfHead);
-                  cropW = Math.min(faceSpanX + 40, FW);
-                  cropH = Math.min(landmarkH + 40, FH);
-                  cropSize = Math.max(cropW, cropH); // for faceCropBox reporting only
+                  cropSize = Math.min(faceSpanX + 40, 1500);
                   cropX = facingRight
-                    ? Math.max(0, Math.min(backOfHead - 20, FW - cropW))
-                    : Math.max(0, Math.min(noseTip.x - cropW + 20, FW - cropW));
+                    ? Math.max(0, Math.min(backOfHead - 20, FW - cropSize))
+                    : Math.max(0, Math.min(noseTip.x - cropSize + 20, FW - cropSize));
                 } else {
-                  // Front/3Q: rectangular crop — width = landmarkH (face approx square), height = landmarkH.
-                  cropW = Math.min(landmarkH + 40, FW);
-                  cropH = Math.min(landmarkH + 40, FH);
-                  cropSize = cropW;
-                  cropX = Math.max(0, Math.min(eyeCx - Math.round(cropW / 2), FW - cropW));
+                  // Front/3Q: square crop sized to face height (forehead-to-chin).
+                  cropSize = Math.min(landmarkH + 40, 1500);
+                  cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
                 }
-                cropY = Math.max(0, Math.min(foreheadTop - 20, FH - cropH));
+                cropY = Math.max(0, Math.min(foreheadTop - 20, FH - cropSize));
                 cropMethod = 'keypoints';
                 console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               } else {
@@ -161,15 +158,13 @@ export default async function handler(req, res) {
 
     // Apply crop if we have valid coordinates
     if (cropSize && cropSize > 0) {
-      const extW = cropW || cropSize;
-      const extH = cropH || cropSize;
-      faceCropBox = { x: cropX/FW, y: cropY/FH, w: extW/FW, h: extH/FH };
+      faceCropBox = { x: cropX/FW, y: cropY/FH, w: cropSize/FW, h: cropSize/FH };
       faceCropBuf = await sharp(faceBuf)
-        .extract({ left: cropX, top: cropY, width: extW, height: extH })
+        .extract({ left: cropX, top: cropY, width: cropSize, height: cropSize })
         .jpeg({ quality: 95 })
         .toBuffer();
     }
-    console.log(`[composite] cropMethod=${cropMethod} cropSize=${cropSize} cropW=${cropW} cropH=${cropH}`);
+    console.log(`[composite] cropMethod=${cropMethod} cropSize=${cropSize}`);
 
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
@@ -179,16 +174,9 @@ export default async function handler(req, res) {
       faceImg = faceImg.rotate(region.angle, { background: { r:200, g:170, b:140, alpha:1 } });
     }
 
-    // Resize to exact targetSize x targetSize square.
-    // For rectangular crops (profile/3Q), use 'contain' with skin-tone background
-    // so the full face fits without cropping. For square crops, 'cover' is fine.
-    const isRect = cropW && cropH && Math.abs(cropW - cropH) > 20;
+    // Resize to exact targetSize x targetSize square
     const facePng = await faceImg
-      .resize(targetSize, targetSize, {
-        fit: isRect ? 'contain' : 'cover',
-        position: 'centre',
-        background: { r: 200, g: 170, b: 140, alpha: 1 },
-      })
+      .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
 
       .png()
       .toBuffer();
@@ -259,53 +247,19 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Mask: for front faces use oval gradient; for profile/3Q use a rectangle
-    // with soft edges only — oval cuts into the face when it's letterboxed in the square.
-    let maskSvg;
-    if (isRect) {
-      // Profile/3Q: rectangular mask fitted to the face's actual aspect ratio within S×S.
-      // Compute how large the face image is after 'contain' resize.
-      const extW = cropW || S, extH = cropH || S;
-      const scale = Math.min(S / extW, S / extH);
-      const faceW = Math.round(extW * scale);
-      const faceH = Math.round(extH * scale);
-      const faceL = Math.round((S - faceW) / 2);
-      const faceT = Math.round((S - faceH) / 2);
-      const fade = Math.round(Math.min(faceW, faceH) * 0.08); // 8% soft edge
-      maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <linearGradient id="lx" x1="0" y1="0" x2="1" y2="0">
-            <stop offset="0%" stop-color="white" stop-opacity="0"/>
-            <stop offset="${Math.round(fade/faceW*100)}%" stop-color="white" stop-opacity="1"/>
-            <stop offset="${100-Math.round(fade/faceW*100)}%" stop-color="white" stop-opacity="1"/>
-            <stop offset="100%" stop-color="white" stop-opacity="0"/>
-          </linearGradient>
-          <linearGradient id="ly" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stop-color="white" stop-opacity="0"/>
-            <stop offset="${Math.round(fade/faceH*100)}%" stop-color="white" stop-opacity="1"/>
-            <stop offset="${100-Math.round(fade/faceH*100)}%" stop-color="white" stop-opacity="1"/>
-            <stop offset="100%" stop-color="white" stop-opacity="0"/>
-          </linearGradient>
-          <mask id="mx"><rect x="${faceL}" y="${faceT}" width="${faceW}" height="${faceH}" fill="url(#lx)"/></mask>
-          <mask id="my"><rect x="${faceL}" y="${faceT}" width="${faceW}" height="${faceH}" fill="url(#ly)"/></mask>
-        </defs>
-        <rect x="${faceL}" y="${faceT}" width="${faceW}" height="${faceH}" fill="white" mask="url(#mx)"/>
-      </svg>`;
-    } else {
-      // Front: oval gradient mask
-      const ovalR = S * 0.40;
-      maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
-        <defs>
-          <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
-            <stop offset="78%" stop-color="white" stop-opacity="1"/>
-            <stop offset="88%" stop-color="white" stop-opacity="0.60"/>
-            <stop offset="94%" stop-color="white" stop-opacity="0.10"/>
-            <stop offset="100%" stop-color="white" stop-opacity="0"/>
-          </radialGradient>
-        </defs>
-        <ellipse cx="${S*0.50}" cy="${S*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
-      </svg>`;
-    }
+    // Oval mask: hard center, tight fade zone
+    const ovalR = S * 0.40;
+    const maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
+      <defs>
+        <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
+          <stop offset="78%" stop-color="white" stop-opacity="1"/>
+          <stop offset="88%" stop-color="white" stop-opacity="0.60"/>
+          <stop offset="94%" stop-color="white" stop-opacity="0.10"/>
+          <stop offset="100%" stop-color="white" stop-opacity="0"/>
+        </radialGradient>
+      </defs>
+      <ellipse cx="${S*0.50}" cy="${S*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
+    </svg>`;
 
     const ovalMask = await sharp(Buffer.from(maskSvg))
       .resize(S, S, { fit: 'fill' })
