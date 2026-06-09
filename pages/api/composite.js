@@ -175,7 +175,7 @@ export default async function handler(req, res) {
     // Resize to exact targetSize x targetSize square — cover preserves aspect
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
-      .linear(0.75, 0)  // mild contrast reduction, no brightness shift
+
       .png()
       .toBuffer();
 
@@ -189,23 +189,22 @@ export default async function handler(req, res) {
     const safeW = Math.min(targetW, PW - safeX);
     const safeH = Math.min(targetH, PH - safeY);
 
-    // Sample the CENTER of the face region — avoids dark background at edges
-    const samplePad = Math.round(Math.min(safeW, safeH) * 0.25);
-    const sampleX = safeX + samplePad;
-    const sampleY = safeY + samplePad;
-    const sampleW = Math.max(4, safeW - samplePad * 2);
-    const sampleH = Math.max(4, safeH - samplePad * 2);
+    // Sample painting: tight 20% patch centered at face center, 38% down (cheek/nose area)
+    const faceCenterX = Math.round(safeX + safeW * 0.50);
+    const faceCenterY = Math.round(safeY + safeH * 0.38);
+    const patchSize   = Math.max(4, Math.round(Math.min(safeW, safeH) * 0.20));
+    const sampleX = Math.max(0, Math.min(faceCenterX - Math.round(patchSize / 2), PW - patchSize));
+    const sampleY = Math.max(0, Math.min(faceCenterY - Math.round(patchSize / 2), PH - patchSize));
 
     const paintingRaw = await sharp(paintingBuf)
-      .extract({ left: sampleX, top: sampleY, width: sampleW, height: sampleH })
+      .extract({ left: sampleX, top: sampleY, width: patchSize, height: patchSize })
       .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
-    // Sample center 30% of facePng — avoids dark hair/background at edges
-    // which artificially darkens faceMean and causes over-correction
-    const fpMeta2 = await sharp(facePng).metadata();
-    const fSampleSize = Math.round(Math.min(fpMeta2.width, fpMeta2.height) * 0.30);
-    const fSampleLeft = Math.round((fpMeta2.width  - fSampleSize) / 2);
-    const fSampleTop  = Math.round((fpMeta2.height - fSampleSize) / 2);
+    // Sample center 30% of facePng — avoids dark hair/background at edges.
+    // Sample from facePng (pre-color-correction) so ratios reflect true face color.
+    const fSampleSize = Math.round(S * 0.30);
+    const fSampleLeft = Math.round((S - fSampleSize) / 2);
+    const fSampleTop  = Math.round((S - fSampleSize) / 2);
     const faceRaw = await sharp(facePng)
       .extract({ left: fSampleLeft, top: fSampleTop, width: fSampleSize, height: fSampleSize })
       .resize(8, 8).removeAlpha().raw().toBuffer();
@@ -222,23 +221,19 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // std-dev match capped to avoid blowout
-    const STD_BL = 0.40;
-    const rS = Math.min(1.5, Math.max(0.5, 1 + (ps.rs/fs.rs - 1) * STD_BL));
-    const gS = Math.min(1.5, Math.max(0.5, 1 + (ps.gs/fs.gs - 1) * STD_BL));
-    const bS = Math.min(1.5, Math.max(0.5, 1 + (ps.bs/fs.bs - 1) * STD_BL));
+    // Per-channel mean ratio scaling — SHIFT blends between identity (0) and full match (1)
+    const SHIFT = 0.75;
+    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));
+    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
+    const bM = Math.min(1.9, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
 
-    // Mean brightness pull — allows face to go as dark as painting needs (floor=0.35)
-    const MEAN_BL = 0.80;
-    const brightRatio = Math.min(1.4, Math.max(0.35,
-      1 + ((ps.rm + ps.gm + ps.bm) / (fs.rm + fs.gm + fs.bm) - 1) * MEAN_BL
-    ));
+    console.log(`[composite color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
     // Color match — keep exact S x S dimensions
     const colorFace = await sharp(facePng)
       .removeAlpha()
-      .recomb([[rS,0,0],[0,gS,0],[0,0,bS]])
-      .modulate({ brightness: brightRatio, saturation: 0.75 })
+      .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
+      .modulate({ saturation: 0.72 })
       .png()
       .toBuffer();
 
