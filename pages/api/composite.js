@@ -120,11 +120,32 @@ export default async function handler(req, res) {
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
                 const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
                 const landmarkH   = chinBottom - foreheadTop;
-                cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
-                cropX = Math.max(0, Math.min(eyeCx - Math.round(cropSize / 2), FW - cropSize));
-                cropY = Math.max(0, Math.min(foreheadTop, FH - cropSize));
+                // cropSize and face center depend on face angle:
+                // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
+                // - 3/4: landmarkH + 40 (bboxW includes background); X centered on near eye (closer to audience)
+                // - Front: landmarkH + 40, centered on eyeCx
+                // Y center always = (foreheadTop + chinBottom) / 2
+                const faceCenterY = Math.round((foreheadTop + chinBottom) / 2);
+                let faceCenterX;
+                if (isProfile) {
+                  const facingRight = noseTip.x > eyeCx;
+                  const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
+                  faceCenterX = Math.round((backOfHead + noseTip.x) / 2);
+                  cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
+                } else if (!isFront) {
+                  // 3/4: near eye (facing direction determines which eye is closer to audience)
+                  const facingRight = noseTip.x > eyeCx;
+                  const nearEye = facingRight ? rightEye : leftEye;
+                  faceCenterX = nearEye.x;
+                  cropSize = Math.min(landmarkH + 40, 1500);
+                } else {
+                  faceCenterX = eyeCx;
+                  cropSize = Math.min(landmarkH + 40, 1500);
+                }
+                cropX = Math.max(0, Math.min(faceCenterX - Math.round(cropSize / 2), FW - cropSize));
+                cropY = Math.max(0, Math.min(faceCenterY - Math.round(cropSize / 2), FH - cropSize));
                 cropMethod = 'keypoints';
-                console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+                console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               } else {
                 // Keypoints unavailable — bbox fallback
                 const faceTop   = Math.round(box.y * FH);
