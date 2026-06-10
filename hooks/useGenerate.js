@@ -238,12 +238,12 @@ export function useGenerate() {
     if (cachedResult?.styledUrl) {
       console.log('[cache] Result HIT — skipping Seedream:', resultKey);
       setStatus('compositing');
-      setStyledUrl(cachedResult.styledUrl);
       const cachedFaceBounds = cachedResult.selfieFaceBounds || faceBounds;
       // Select correct angle portrait from cached set
       const cachedFaceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
       const cachedPortraitSet = styledCache.current[styleKey];
       const cachedSelectedPortrait = selectPortrait(cachedPortraitSet, cachedFaceAngle) || cachedResult.styledUrl;
+      setStyledUrl(cachedSelectedPortrait); // show angle-selected portrait in debug panel
       try {
         const composite = await runComposite({
           styledFaceUrl:    cachedSelectedPortrait,

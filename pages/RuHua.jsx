@@ -1317,7 +1317,26 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 
         {/* Action buttons */}
         <div style={{ marginTop:26, display:'flex', flexDirection:'column', gap:10 }}>
-          <button className="btn" style={{
+          <button className="btn" onClick={async () => {
+            if (!imgUrl) return;
+            try {
+              // Draw clean image (no red box overlays) onto canvas and download
+              const img = await new Promise((res, rej) => {
+                const i = new Image(); i.crossOrigin = 'anonymous';
+                i.onload = () => res(i); i.onerror = rej; i.src = imgUrl;
+              });
+              const canvas = document.createElement('canvas');
+              canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
+              canvas.getContext('2d').drawImage(img, 0, 0);
+              const a = document.createElement('a');
+              a.href = canvas.toDataURL('image/jpeg', 0.95);
+              a.download = `ruhua_${painting?.id || 'painting'}.jpg`;
+              a.click();
+            } catch (e) {
+              // Fallback: open in new tab
+              window.open(imgUrl, '_blank');
+            }
+          }} style={{
             background:C.vermillion, color:'#f5e8c4',
             fontFamily:F.brush, fontSize:19, padding:'14px', letterSpacing:'.38em',
             boxShadow:`0 4px 22px rgba(191,36,41,.32)`,
@@ -1450,7 +1469,16 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         ↓ 自拍
                       </button>
                     )}
-                    {styledUrl && (
+                    {styledUrl && (<>
+                      <button onClick={() => {
+                        // Clean download — no red box
+                        const a = document.createElement('a');
+                        a.href = styledUrl;
+                        a.download = 'debug_styled.jpg';
+                        a.click();
+                      }} style={{fontSize:10,color:'rgba(242,226,192,0.5)',background:'none',border:'1px solid rgba(242,226,242,0.15)',padding:'3px 8px',cursor:'pointer',borderRadius:3}}>
+                        ↓ 入画
+                      </button>
                       <button onClick={() => {
                         // Draw styledUrl with cropBox overlay onto a canvas, then download
                         const img = new Image();
@@ -1469,14 +1497,14 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                           }
                           const a = document.createElement('a');
                           a.href = c.toDataURL('image/jpeg', 0.92);
-                          a.download = 'debug_styled.jpg';
+                          a.download = 'debug_styled_box.jpg';
                           a.click();
                         };
                         img.src = styledUrl;
                       }} style={{fontSize:10,color:'rgba(242,226,192,0.5)',background:'none',border:'1px solid rgba(242,226,242,0.15)',padding:'3px 8px',cursor:'pointer',borderRadius:3}}>
                         ↓ 入画 (含裁剪框)
                       </button>
-                    )}
+                    </>)}
                     {imgs?.[painting?.id] && figure && (() => {
                       const reg = FACE_REGIONS[painting?.id]?.[figure?.id];
                       if (!reg) return null;

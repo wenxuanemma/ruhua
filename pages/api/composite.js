@@ -286,8 +286,8 @@ export default async function handler(req, res) {
     // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
     const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
     const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
-    const _oRx = (ovalRx != null && isFinite(ovalRx)) ? Math.min(ovalRx * 0.85, S * 0.44) : S * 0.38;
-    const _oRy = (ovalRy != null && isFinite(ovalRy)) ? Math.min(ovalRy * 0.85, S * 0.44) : S * 0.38;
+    const _oRx = (ovalRx != null && isFinite(ovalRx)) ? Math.min(ovalRx, S * 0.48) : S * 0.40;
+    const _oRy = (ovalRy != null && isFinite(ovalRy)) ? Math.min(ovalRy, S * 0.48) : S * 0.40;
     // Softer gradient: wider fade zone for more gradual blend into painting
     const maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
@@ -306,15 +306,13 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Step 4: Paste onto painting — align oval face center over region center ──
+    // ── Step 4: Paste onto painting — center square on region center ────────────
     const cx = targetX + Math.round(targetW / 2);
     const cy = targetY + Math.round(targetH / 2);
-    // Offset paste position so oval face center aligns with painting region center,
-    // not the square center. Corrects for oval being off-center within the square.
-    const ovalCxFinal = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
-    const ovalCyFinal = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
-    const px = Math.max(0, Math.min(cx - Math.round(ovalCxFinal), PW - S));
-    const py = Math.max(0, Math.min(cy - Math.round(ovalCyFinal), PH - S));
+    // Center the square on the painting region center. The oval mask handles
+    // which part of the square is visible — no need to offset by oval center.
+    const px = Math.max(0, Math.min(cx - Math.round(S / 2), PW - S));
+    const py = Math.max(0, Math.min(cy - Math.round(S / 2), PH - S));
 
     // Extract the painting patch behind the face — used as blend backdrop so
     // the oval fade zone transitions into actual painting pixels, not transparency.
