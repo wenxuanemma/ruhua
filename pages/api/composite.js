@@ -39,7 +39,7 @@ export default async function handler(req, res) {
     // Use square target — max of width/height
     const targetSize = Math.max(targetW, targetH);
 
-    console.log(`[composite] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
+    console.log(`[composite:${figureId}] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
 
     // ── Step 1: Crop face from Seedream portrait ──────────────────────────────
     // Strategy depends on face angle:
@@ -58,6 +58,7 @@ export default async function handler(req, res) {
     let faceCropBuf = faceBuf;
     let faceCropBox = null;
     let cropX, cropY, cropSize;
+    let ovalCx, ovalCy, ovalRx, ovalRy; // face-fitted oval params
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -77,7 +78,15 @@ export default async function handler(req, res) {
       cropX = Math.max(0, Math.min(Math.round(cx * FW - cropSize / 2), FW - cropSize));
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
       cropMethod = 'selfie';
-      console.log(`[composite crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+      console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+      // Oval params: map faceBounds into resized square
+      const _sfScale = targetSize / cropSize;
+      const _sfFaceX = faceBounds.x * FW, _sfFaceY = faceBounds.y * FH;
+      const _sfFaceW = faceBounds.w * FW, _sfFaceH = faceBounds.h * FH;
+      ovalCx = (_sfFaceX + _sfFaceW/2 - cropX) * _sfScale;
+      ovalCy = (_sfFaceY + _sfFaceH/2 - cropY) * _sfScale;
+      ovalRx = (_sfFaceW / 2) * _sfScale * 0.90; // slight narrowing to reduce hair bleed
+      ovalRy = (_sfFaceH / 2) * _sfScale;
 
     } else {
       // ── Profile (or no faceBounds): MediaPipe keypoints on Seedream output ──
@@ -145,7 +154,13 @@ export default async function handler(req, res) {
                 cropX = Math.max(0, Math.min(faceCenterX - Math.round(cropSize / 2), FW - cropSize));
                 cropY = Math.max(0, Math.min(faceCenterY - Math.round(cropSize / 2), FH - cropSize));
                 cropMethod = 'keypoints';
-                console.log(`[composite crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+                console.log(`[composite:${figureId} crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+                // Oval params: map face landmarks into resized square
+                const _kpScale = targetSize / cropSize;
+                ovalCx = (faceCenterX - cropX) * _kpScale;
+                ovalCy = (faceCenterY - cropY) * _kpScale;
+                ovalRy = (landmarkH / 2) * _kpScale;
+                ovalRx = ovalRy * 0.72; // faces are taller than wide — narrow oval excludes hair
               } else {
                 // Keypoints unavailable — bbox fallback
                 const faceTop   = Math.round(box.y * FH);
@@ -154,7 +169,7 @@ export default async function handler(req, res) {
                 cropX = Math.max(0, Math.min(bboxCx - Math.round(cropSize / 2), FW - cropSize));
                 cropY = Math.max(0, Math.min(faceTop - Math.round(cropSize * 0.08), FH - cropSize));
                 cropMethod = 'bbox';
-                console.log(`[composite crop] BBOX faceTop=${faceTop} bboxW=${bboxW} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+                console.log(`[composite:${figureId} crop] BBOX faceTop=${faceTop} bboxW=${bboxW} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
               }
             }
           }
@@ -172,7 +187,7 @@ export default async function handler(req, res) {
         .jpeg({ quality: 95 })
         .toBuffer();
     }
-    console.log(`[composite] cropMethod=${cropMethod} cropSize=${cropSize}`);
+    console.log(`[composite:${figureId}] cropMethod=${cropMethod} cropSize=${cropSize}`);
 
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
@@ -238,7 +253,7 @@ export default async function handler(req, res) {
     const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
     const bM = Math.min(1.10, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
 
-    console.log(`[composite color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
+    console.log(`[composite:${figureId} color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
     // Color match — keep exact S x S dimensions
     const colorFace = await sharp(facePng)
@@ -254,18 +269,26 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // Oval mask: hard center, tight fade zone
-    const ovalR = S * 0.40;
+    // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
+    // ovalCx/Cy/Rx/Ry are computed from faceBounds (selfie path) or keypoints (keypoints path),
+    // mapped into the resized targetSize square. Falls back to centered oval if params missing.
+    // Face-fitted oval: shrink by 15% to add padding inside crop boundary,
+    // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
+    const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
+    const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
+    const _oRx = (ovalRx != null && isFinite(ovalRx)) ? Math.min(ovalRx * 0.85, S * 0.44) : S * 0.38;
+    const _oRy = (ovalRy != null && isFinite(ovalRy)) ? Math.min(ovalRy * 0.85, S * 0.44) : S * 0.38;
+    // Softer gradient: wider fade zone for more gradual blend into painting
     const maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
-          <stop offset="78%" stop-color="white" stop-opacity="1"/>
-          <stop offset="88%" stop-color="white" stop-opacity="0.60"/>
-          <stop offset="94%" stop-color="white" stop-opacity="0.10"/>
+          <stop offset="65%" stop-color="white" stop-opacity="1"/>
+          <stop offset="80%" stop-color="white" stop-opacity="0.70"/>
+          <stop offset="90%" stop-color="white" stop-opacity="0.20"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${S*0.50}" cy="${S*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
+      <ellipse cx="${_oCx}" cy="${_oCy}" rx="${_oRx}" ry="${_oRy}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(maskSvg))
@@ -273,24 +296,52 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // ── Step 4: Paste onto painting — align oval face center over region center ──
+    const cx = targetX + Math.round(targetW / 2);
+    const cy = targetY + Math.round(targetH / 2);
+    // Offset paste position so oval face center aligns with painting region center,
+    // not the square center. Corrects for oval being off-center within the square.
+    const ovalCxFinal = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
+    const ovalCyFinal = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
+    const px = Math.max(0, Math.min(cx - Math.round(ovalCxFinal), PW - S));
+    const py = Math.max(0, Math.min(cy - Math.round(ovalCyFinal), PH - S));
+
+    // Extract the painting patch behind the face — used as blend backdrop so
+    // the oval fade zone transitions into actual painting pixels, not transparency.
+    // This eliminates the color gradient halo at the face boundary.
+    const ppW = Math.min(S, PW - px);
+    const ppH = Math.min(S, PH - py);
+    const paintPatchRaw = await sharp(paintingBuf)
+      .extract({ left: px, top: py, width: ppW, height: ppH })
+      .png()
+      .toBuffer();
+    // Pad to S×S if clamped (rare edge case near painting border)
+    const paintPatch = (ppW === S && ppH === S)
+      ? paintPatchRaw
+      : await sharp(paintPatchRaw)
+          .extend({ right: S - ppW, bottom: S - ppH, background: { r:0,g:0,b:0,alpha:0 } })
+          .png().toBuffer();
+
+    // Blend: start with painting patch, composite color-corrected face over it using oval mask.
+    // The mask alpha controls how much face vs painting shows — fade zone smoothly transitions
+    // into painting rather than leaving semi-transparent face pixels over a different background.
     const masked = await sharp(colorFaceExact)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // ── Step 4: Paste onto painting — center over region ─────────────────────
-    const cx = targetX + Math.round(targetW / 2);
-    const cy = targetY + Math.round(targetH / 2);
-    const px = Math.max(0, Math.min(cx - Math.round(S/2), PW - S));
-    const py = Math.max(0, Math.min(cy - Math.round(S/2), PH - S));
+    const blended = await sharp(paintPatch)
+      .composite([{ input: masked, blend: 'over' }])
+      .png()
+      .toBuffer();
 
     // Clamp without squashing — extract if overflows
     const cW = Math.min(S, PW - px);
     const cH = Math.min(S, PH - py);
     const pasteBuf = (cW === S && cH === S)
-      ? masked
-      : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
+      ? blended
+      : await sharp(blended).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
 
     const composited = await sharp(paintingBuf)
       .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
