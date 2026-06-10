@@ -246,9 +246,10 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // Uniform SHIFT=0.65 across R/G/B — pulls face tone 65% toward painting sample.
+    // SHIFT controls how far to pull face tone toward painting sample (0=none, 1=full match).
+    // Global default 0.75; per-figure override via region.colorShift in faceRegions.js.
     // B is capped at 1.10 to avoid blue oversaturation on cooler paintings (e.g. Dancer).
-    const SHIFT = 0.65;
+    const SHIFT = region.colorShift ?? 0.75;
     const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));
     const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
     const bM = Math.min(1.10, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
