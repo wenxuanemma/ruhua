@@ -12,9 +12,11 @@ export default function handler(req, res) {
 
   const filePath = path.join(process.cwd(), 'lib/faceRegions.js');
 
-  // Read existing angles and faceAngles from current file
+  // Read existing fields to preserve from current file
   const existingAngles = {};
   const existingFaceAngles = {};
+  const existingColorShifts = {};
+  const existingSkinSamples = {};
   let existingFooter = ''; // preserve GUEST_SPOTS and anything after FACE_REGIONS
   try {
     const existing = fs.readFileSync(filePath, 'utf8');
@@ -24,6 +26,12 @@ export default function handler(req, res) {
     // Extract faceAngles
     const faceAngleMatches = existing.matchAll(/(\w+)\s*:\s*\{[^}]*faceAngle\s*:\s*'([^']+)'/g);
     for (const m of faceAngleMatches) existingFaceAngles[m[1]] = m[2];
+    // Extract colorShift
+    const colorShiftMatches = existing.matchAll(/(\w+)\s*:\s*\{[^}]*colorShift\s*:\s*([\d.]+)/g);
+    for (const m of colorShiftMatches) existingColorShifts[m[1]] = parseFloat(m[2]);
+    // Extract skinSample
+    const skinSampleMatches = existing.matchAll(/(\w+)\s*:.*skinSample\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)\s*,\s*r\s*:\s*([\d.]+)/g);
+    for (const m of skinSampleMatches) existingSkinSamples[m[1]] = { cx:parseFloat(m[2]), cy:parseFloat(m[3]), r:parseFloat(m[4]) };
     // Preserve everything after FACE_REGIONS closing
     const footerMatch = existing.match(/\};\s*\n([\s\S]*)$/);
     if (footerMatch) existingFooter = '\n' + footerMatch[1].trim();
@@ -47,7 +55,11 @@ export default function handler(req, res) {
         ? existingAngle
         : (v.angle ?? 0);
       const faceAngle = existingFaceAngles[figId] || 'front';
-      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}' },`);
+      const colorShift = v.colorShift ?? existingColorShifts[figId];
+      const skinSample = v.skinSample ?? existingSkinSamples[figId];
+      const colorShiftStr = colorShift != null ? `, colorShift:${colorShift}` : '';
+      const skinSampleStr = skinSample ? `, skinSample:{ cx:${skinSample.cx.toFixed(4)}, cy:${skinSample.cy.toFixed(4)}, r:${skinSample.r.toFixed(4)} }` : '';
+      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${colorShiftStr}${skinSampleStr} },`);
     }
     lines.push(`  },`);
   }

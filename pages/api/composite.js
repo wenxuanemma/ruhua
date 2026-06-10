@@ -214,10 +214,19 @@ export default async function handler(req, res) {
     const safeW = Math.min(targetW, PW - safeX);
     const safeH = Math.min(targetH, PH - safeY);
 
-    // Sample painting: tight 20% patch centered at face center, 38% down (cheek/nose area)
-    const faceCenterX = Math.round(safeX + safeW * 0.50);
-    const faceCenterY = Math.round(safeY + safeH * 0.38);
-    const patchSize   = Math.max(4, Math.round(Math.min(safeW, safeH) * 0.20));
+    // Sample painting: use per-figure skinSample if defined (points to actual painted skin),
+    // otherwise fall back to tight 20% patch at 38% down the region (may hit hair/hat).
+    let faceCenterX, faceCenterY, patchSize;
+    if (region.skinSample) {
+      // skinSample.cx/cy are painting fractions; r is patch radius fraction
+      faceCenterX = Math.round(region.skinSample.cx * PW);
+      faceCenterY = Math.round(region.skinSample.cy * PH);
+      patchSize   = Math.max(4, Math.round(region.skinSample.r * 2 * Math.min(PW, PH)));
+    } else {
+      faceCenterX = Math.round(safeX + safeW * 0.50);
+      faceCenterY = Math.round(safeY + safeH * 0.65);  // 65% down = cheek/lower face area
+      patchSize   = Math.max(4, Math.round(Math.min(safeW, safeH) * 0.20));
+    }
     const sampleX = Math.max(0, Math.min(faceCenterX - Math.round(patchSize / 2), PW - patchSize));
     const sampleY = Math.max(0, Math.min(faceCenterY - Math.round(patchSize / 2), PH - patchSize));
 

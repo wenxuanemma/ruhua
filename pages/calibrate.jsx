@@ -74,7 +74,10 @@ export default function Calibrate() {
         for (const [paintingId, figures] of Object.entries(regions)) {
           for (const [figId, v] of Object.entries(figures)) {
             if (v.x !== undefined) { // skip nested objects like visitor
-              loaded[`${paintingId}_${figId}`] = { x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0 };
+              loaded[`${paintingId}_${figId}`] = {
+                x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
+                skinSample: v.skinSample || null,
+              };
             }
           }
         }
@@ -134,6 +137,11 @@ export default function Calibrate() {
       const key = `${drag.paintingId}_${drag.figId}`;
 
       setVals(prev => {
+        if (drag.type === 'skinSample') {
+          return { ...prev, [key]: { ...ob,
+            skinSample: { cx: Math.max(0,Math.min(1,ob.skinSample.cx+dx)), cy: Math.max(0,Math.min(1,ob.skinSample.cy+dy)), r: ob.skinSample.r||0.008 }
+          }};
+        }
         const b = drag.type === 'move' ? {
           x: Math.max(0, Math.min(1-ob.w, ob.x+dx)),
           y: Math.max(0, Math.min(1-ob.h, ob.y+dy)),
@@ -167,6 +175,21 @@ export default function Calibrate() {
     e.preventDefault();
     const pos = getMousePos(e);
     const CORNER_HIT = 0.025;
+    const DOT_HIT = 0.018;
+
+    // Check skinSample dot drag first
+    for (let fi = 0; fi < painting.figures.length; fi++) {
+      const fig = painting.figures[fi];
+      const v = getVal(fig.id);
+      if (v.skinSample) {
+        const { cx, cy } = v.skinSample;
+        if (Math.abs(pos.x - cx) < DOT_HIT && Math.abs(pos.y - cy) < DOT_HIT) {
+          const d = { type:'skinSample', paintingId:painting.id, figId:fig.id,
+                      startX:pos.x, startY:pos.y, origBox:{...v} };
+          draggingRef.current = d; setDragging(d); return;
+        }
+      }
+    }
 
     for (let fi = 0; fi < painting.figures.length; fi++) {
       const fig = painting.figures[fi];
@@ -281,6 +304,34 @@ export default function Calibrate() {
             </div>
           );
         })}
+        {/* skinSample dots */}
+        {painting.figures.map((fig, fi) => {
+          const v = getVal(fig.id);
+          const color = FIG_COLORS[fi % FIG_COLORS.length];
+          if (!v.skinSample) return null;
+          const { cx, cy } = v.skinSample;
+          const dotX = cx * imgSize.w;
+          const dotY = cy * imgSize.h;
+          const dotR = Math.max(6, (v.skinSample.r||0.008) * imgSize.w);
+          return (
+            <div key={`skin_${fig.id}`} style={{
+              position:'absolute',
+              left: dotX - dotR, top: dotY - dotR,
+              width: dotR*2, height: dotR*2,
+              borderRadius:'50%',
+              border: `2px solid ${color}`,
+              background: `${color}55`,
+              cursor:'move',
+              boxSizing:'border-box',
+              pointerEvents:'all',
+              zIndex:20,
+            }}>
+              {/* crosshair */}
+              <div style={{position:'absolute',left:'50%',top:0,bottom:0,width:1,background:color,transform:'translateX(-50%)'}}/>
+              <div style={{position:'absolute',top:'50%',left:0,right:0,height:1,background:color,transform:'translateY(-50%)'}}/>
+            </div>
+          );
+        })}
       </div>
 
       {/* Legend + Angle sliders */}
@@ -298,6 +349,22 @@ export default function Calibrate() {
                 <span style={{marginLeft:8,color:C.dim,fontSize:10}}>
                   x:{v.x?.toFixed(3)} y:{v.y?.toFixed(3)} w:{v.w?.toFixed(3)} h:{v.h?.toFixed(3)}
                 </span>
+                {v.skinSample
+                  ? <span style={{marginLeft:8,color:'#00ff88',fontSize:10}}>
+                      🎨 skin:({v.skinSample.cx.toFixed(3)},{v.skinSample.cy.toFixed(3)})
+                    </span>
+                  : <button onClick={() => {
+                      const key = `${painting.id}_${fig.id}`;
+                      // Place dot at center of face region as starting point
+                      setVals(prev => ({...prev, [key]: {...prev[key],
+                        skinSample: { cx: v.x+v.w*0.5, cy: v.y+v.h*0.65, r:0.008 }
+                      }}));
+                    }} style={{marginLeft:8,fontSize:9,padding:'1px 5px',cursor:'pointer',
+                      background:'rgba(0,255,136,0.1)',border:'1px solid rgba(0,255,136,0.4)',
+                      color:'#00ff88',borderRadius:2}}>
+                      + skin sample
+                    </button>
+                }
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontSize:11,color:C.dim,width:40}}>angle:</span>
@@ -331,7 +398,10 @@ export default function Calibrate() {
             for (const f of p.figures) {
               const key = `${p.id}_${f.id}`;
               const v = vals[key];
-              if (v) regions[p.id][f.id] = { x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0 };
+              if (v) regions[p.id][f.id] = {
+                x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0,
+                ...(v.skinSample ? { skinSample: v.skinSample } : {}),
+              };
             }
           }
           const res = await fetch('/api/save-face-regions', {
