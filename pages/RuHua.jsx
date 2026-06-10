@@ -1009,7 +1009,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, selfie, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const imgUrl = generatedUrl || imgs?.[painting?.id];
@@ -1411,6 +1411,28 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                               top:  `${-reg.y / reg.h * 100}%`,
                               maxWidth:'none',
                             }}/>
+                            {paintSampleBox && (() => {
+                              // Map paintSampleBox (painting coords) into the thumbnail's coordinate space
+                              // Thumbnail shows the region [reg.x, reg.y, reg.w, reg.h] of the painting
+                              // scaled to 120×140px
+                              const thumbW = 120, thumbH = 140;
+                              const scaleX = thumbW / reg.w;
+                              const scaleY = thumbH / reg.h;
+                              const boxL = (paintSampleBox.x - reg.x) * scaleX;
+                              const boxT = (paintSampleBox.y - reg.y) * scaleY;
+                              const boxW = paintSampleBox.w * scaleX;
+                              const boxH = paintSampleBox.h * scaleY;
+                              return (
+                                <div style={{
+                                  position:'absolute',
+                                  left: boxL, top: boxT,
+                                  width: boxW, height: boxH,
+                                  border: '2px solid #00ff88',
+                                  boxSizing:'border-box',
+                                  pointerEvents:'none',
+                                }}/>
+                              );
+                            })()}
                           </div>
                         );
                       })()}
@@ -1505,7 +1527,7 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false); // 'generate' | 'figure'
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, cropBox, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -1633,6 +1655,8 @@ export default function RuHua() {
                                       profileUrl={profileUrl}
                                       styledUrl={styledUrl}
                                       cropBox={cropBox}
+                                      paintSampleBox={paintSampleBox}
+                                      paintSampleBox={paintSampleBox}
                                       selfie={selfie}
                                       onReset={reset}
                                       onChangeFigure={() => {

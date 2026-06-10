@@ -366,6 +366,13 @@ export default async function handler(req, res) {
       outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
       cropBox: faceCropBox,
+      // Debug: painting sample region as fractions of painting dimensions
+      paintSampleBox: {
+        x: sampleX / PW,
+        y: sampleY / PH,
+        w: patchSize / PW,
+        h: patchSize / PH,
+      },
     });
 
   } catch (err) {
