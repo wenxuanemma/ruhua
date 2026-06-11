@@ -127,12 +127,13 @@ export default async function handler(req, res) {
                   throw new Error('invalid keypoints');
                 }
 
-                // Use outline detection for vertical bounds if available and valid.
-                // Falls back to eyeToMouth estimates if outline was rejected or unavailable.
-                const foreheadTop = (outline && outline.foreheadTop)
+                // Use outline detection for vertical bounds only for profile/3Q figures.
+                // Front-facing figures that fall through here (no faceBounds) use estimates only.
+                const useOutline = outline && !isFront;
+                const foreheadTop = (useOutline && outline.foreheadTop)
                   ? Math.max(0, Math.round(outline.foreheadTop * FH))
                   : Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
-                const chinBottom = (outline && outline.chinBottom)
+                const chinBottom = (useOutline && outline.chinBottom)
                   ? Math.min(FH, Math.round(outline.chinBottom * FH))
                   : Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
                 const landmarkH   = chinBottom - foreheadTop;
