@@ -127,17 +127,21 @@ export default async function handler(req, res) {
                   throw new Error('invalid keypoints');
                 }
 
-                // Use outline detection for vertical bounds only for profile/3Q figures.
-                // Front-facing figures that fall through here (no faceBounds) use estimates only.
-                const useOutline = outline && !isFront;
-                const foreheadTop = (useOutline && outline.foreheadTop)
-                  ? Math.max(0, Math.round(outline.foreheadTop * FH))
+                // Use outline for vertical bounds only for profile/3Q, and only if
+                // it passes sanity check: foreheadTop above eyes, chinBottom below mouth.
+                const outlineFt = outline ? Math.round(outline.foreheadTop * FH) : null;
+                const outlineCb = outline ? Math.round(outline.chinBottom  * FH) : null;
+                const outlineValid = !isFront && outlineFt !== null && outlineCb !== null
+                  && outlineFt < eyeCy    // forehead must be above eyes
+                  && outlineCb > mouth.y; // chin must be below mouth
+                const foreheadTop = outlineValid
+                  ? Math.max(0, outlineFt)
                   : Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
-                const chinBottom = (useOutline && outline.chinBottom)
-                  ? Math.min(FH, Math.round(outline.chinBottom * FH))
+                const chinBottom = outlineValid
+                  ? Math.min(FH, outlineCb)
                   : Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
                 const landmarkH   = chinBottom - foreheadTop;
-                console.log(`[composite:${figureId} bounds] ${outline ? 'outline' : 'estimated'} foreheadTop=${foreheadTop} chinBottom=${chinBottom} landmarkH=${landmarkH}`);
+                console.log(`[composite:${figureId} bounds] ${outlineValid ? 'outline' : 'estimated'} foreheadTop=${foreheadTop} chinBottom=${chinBottom} landmarkH=${landmarkH} (outline=${outlineFt !== null ? `ft=${outlineFt} cb=${outlineCb} valid=${outlineValid}` : 'null'})`);
                 // cropSize and face center depend on face angle:
                 // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
                 // - 3/4: landmarkH + 40 (bboxW includes background); X centered on near eye (closer to audience)
