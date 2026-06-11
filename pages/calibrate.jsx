@@ -76,7 +76,9 @@ export default function Calibrate() {
             if (v.x !== undefined) { // skip nested objects like visitor
               loaded[`${paintingId}_${figId}`] = {
                 x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
-                skinSample: v.skinSample || null,
+                skinSample:  v.skinSample  || null,
+                colorShift:  v.colorShift  ?? null,
+                faceSize:    v.faceSize    ?? null,
               };
             }
           }
@@ -400,7 +402,9 @@ export default function Calibrate() {
               const v = vals[key];
               if (v) regions[p.id][f.id] = {
                 x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0,
-                ...(v.skinSample ? { skinSample: v.skinSample } : {}),
+                ...(v.skinSample  ? { skinSample:  v.skinSample  } : {}),
+                ...(v.colorShift  != null ? { colorShift:  v.colorShift  } : {}),
+                ...(v.faceSize    != null ? { faceSize:    v.faceSize    } : {}),
               };
             }
           }

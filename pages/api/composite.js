@@ -127,7 +127,7 @@ export default async function handler(req, res) {
                 }
 
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
-                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.55));
+                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.75));  // 0.75 to include full chin
                 const landmarkH   = chinBottom - foreheadTop;
                 // cropSize and face center depend on face angle:
                 // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
@@ -320,9 +320,11 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // ── Step 4: Paste onto painting — center pasteS square on region center ──────
+    // ── Step 4: Paste onto painting ───────────────────────────────────────────
+    // Calibrate oval center is at 55% of region height (top=13%, height=84%),
+    // not 50%. Match that offset so composite aligns with calibrate preview.
     const cx = targetX + Math.round(targetW / 2);
-    const cy = targetY + Math.round(targetH / 2);
+    const cy = targetY + Math.round(targetH * 0.55);  // 55% down, matching calibrate oval
     const px = Math.max(0, Math.min(cx - Math.round(pasteS / 2), PW - pasteS));
     const py = Math.max(0, Math.min(cy - Math.round(pasteS / 2), PH - pasteS));
 

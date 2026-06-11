@@ -21,13 +21,13 @@ export default function handler(req, res) {
   try {
     const existing = fs.readFileSync(filePath, 'utf8');
     // Extract rotation angles
-    const angleMatches = existing.matchAll(/(\w+)\s*:\s*\{[^}]*angle\s*:\s*(-?\d+)/g);
+    const angleMatches = existing.matchAll(/(\w+)\s*:[^\n]*[^e]angle\s*:\s*(-?\d+)/g);
     for (const m of angleMatches) existingAngles[m[1]] = parseInt(m[2]);
     // Extract faceAngles
-    const faceAngleMatches = existing.matchAll(/(\w+)\s*:\s*\{[^}]*faceAngle\s*:\s*'([^']+)'/g);
+    const faceAngleMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceAngle\s*:\s*'([^']+)'/g);
     for (const m of faceAngleMatches) existingFaceAngles[m[1]] = m[2];
     // Extract colorShift
-    const colorShiftMatches = existing.matchAll(/(\w+)\s*:\s*\{[^}]*colorShift\s*:\s*([\d.]+)/g);
+    const colorShiftMatches = existing.matchAll(/(\w+)\s*:[^\n]*colorShift\s*:\s*([\d.]+)/g);
     for (const m of colorShiftMatches) existingColorShifts[m[1]] = parseFloat(m[2]);
     // Extract skinSample
     const skinSampleMatches = existing.matchAll(/(\w+)\s*:.*skinSample\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)\s*,\s*r\s*:\s*([\d.]+)/g);
