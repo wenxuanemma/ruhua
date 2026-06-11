@@ -93,18 +93,19 @@ export default async function handler(req, res) {
       const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
       if (LOCAL_SERVER && FW > 500) {
         try {
-          const resizedForDetect = await sharp(faceBuf)
-            .resize(640, 640, { fit: 'cover' })
-            .jpeg({ quality: 85 })
-            .toBuffer();
-          const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-mp`, {
+          // Send full resolution for outline detection accuracy (v6 validated at 1024px).
+          // MediaPipe also works better at full resolution.
+          const detectBuf = await sharp(faceBuf).jpeg({ quality: 85 }).toBuffer();
+          const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-full`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ init_image: `data:image/jpeg;base64,${resizedForDetect.toString('base64')}` }),
-            signal: AbortSignal.timeout(15000),
+            body: JSON.stringify({ init_image: `data:image/jpeg;base64,${detectBuf.toString('base64')}` }),
+            signal: AbortSignal.timeout(20000),
           });
           if (detectRes.ok) {
-            const { box, keypoints } = await detectRes.json();
+            const detectData = await detectRes.json();
+            const { box, keypoints } = detectData.mediapipe || {};
+            const outline = detectData.outline || null;
             if (box) {
               const bboxW  = Math.round((box.x2 - box.x) * FW);
               const bboxCx = Math.round(((box.x + box.x2) / 2) * FW);
@@ -126,9 +127,16 @@ export default async function handler(req, res) {
                   throw new Error('invalid keypoints');
                 }
 
-                const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
-                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
+                // Use outline detection for vertical bounds if available and valid.
+                // Falls back to eyeToMouth estimates if outline was rejected or unavailable.
+                const foreheadTop = (outline && outline.foreheadTop)
+                  ? Math.max(0, Math.round(outline.foreheadTop * FH))
+                  : Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
+                const chinBottom = (outline && outline.chinBottom)
+                  ? Math.min(FH, Math.round(outline.chinBottom * FH))
+                  : Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
                 const landmarkH   = chinBottom - foreheadTop;
+                console.log(`[composite:${figureId} bounds] ${outline ? 'outline' : 'estimated'} foreheadTop=${foreheadTop} chinBottom=${chinBottom} landmarkH=${landmarkH}`);
                 // cropSize and face center depend on face angle:
                 // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
                 // - 3/4: landmarkH + 40 (bboxW includes background); X centered on near eye (closer to audience)
