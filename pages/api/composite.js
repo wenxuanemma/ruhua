@@ -127,7 +127,7 @@ export default async function handler(req, res) {
                 }
 
                 const foreheadTop = Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
-                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.75));  // 0.75 to include full chin
+                const chinBottom  = Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
                 const landmarkH   = chinBottom - foreheadTop;
                 // cropSize and face center depend on face angle:
                 // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2

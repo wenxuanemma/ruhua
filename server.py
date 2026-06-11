@@ -153,3 +153,173 @@ async def detect_face_mp(req: DetectRequest):
     except Exception as e:
         print(f"MediaPipe detect error: {e}")
         return {"box": None}
+
+
+# ── Outline-based face detection (combined with MediaPipe) ───────────────────
+# Finds precise foreheadTop and chinBottom via ink contour detection,
+# combined with MediaPipe keypoints for horizontal bounds and face direction.
+
+def _find_face_contour_bbox(img_cv2):
+    """
+    Find the main face contour bbox using ink outline detection.
+    Returns (x, y, w, h) in pixels, or None.
+    """
+    H, W = img_cv2.shape[:2]
+    gray = cv2.cvtColor(img_cv2, cv2.COLOR_BGR2GRAY)
+    blur = cv2.GaussianBlur(gray, (3, 3), 0)
+    edges = cv2.Canny(blur, 40, 120)
+    k = cv2.getStructuringElement(cv2.MORPH_ELLIPSE, (3, 3))
+    edges = cv2.morphologyEx(edges, cv2.MORPH_CLOSE, k, iterations=2)
+    contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
+
+    min_area = W * H * 0.01
+    max_area = W * H * 0.35
+    candidates = []
+    for cnt in contours:
+        area = cv2.contourArea(cnt)
+        if area < min_area or area > max_area:
+            continue
+        x, y, w, h = cv2.boundingRect(cnt)
+        aspect = w / max(h, 1)
+        if aspect < 0.25 or aspect > 1.5:
+            continue
+        if (y + h / 2) > H * 0.75:
+            continue
+        hull = cv2.convexHull(cnt)
+        hull_area = cv2.contourArea(hull)
+        solidity = area / max(hull_area, 1)
+        if solidity < 0.3:
+            continue
+        perimeter = cv2.arcLength(cnt, True)
+        circularity = 4 * np.pi * area / max(perimeter ** 2, 1)
+        if circularity < 0.05:
+            continue
+        cx_norm = (x + w / 2) / W
+        cy_norm = (y + h / 2) / H
+        pos_score = (1 - abs(cx_norm - 0.55)) * (1 - abs(cy_norm - 0.35))
+        size_score = min(area / (W * H * 0.08), 1.0)
+        score = pos_score * 0.35 + size_score * 0.25 + circularity * 3 * 0.20 + solidity * 0.20
+        candidates.append((score, x, y, w, h, cnt))
+
+    if not candidates:
+        return None, None
+    candidates.sort(reverse=True)
+    _, x, y, w, h, cnt = candidates[0]
+    return (x, y, w, h), cnt
+
+
+def _find_chin_y(cnt, bbox_w):
+    """
+    Find chin Y by detecting where the face profile right edge peaks
+    then starts narrowing (neck begins).
+    """
+    pts = cnt.reshape(-1, 2)
+    min_y = int(pts[:, 1].min())
+    max_y = int(pts[:, 1].max())
+    face_h = max_y - min_y
+    lower_start = int(min_y + face_h * 0.40)
+    band = 8
+    right_edge = []
+    for y0 in range(lower_start, max_y - band, band):
+        mask = (pts[:, 1] >= y0) & (pts[:, 1] < y0 + band)
+        if mask.sum() == 0:
+            continue
+        right_edge.append((y0, int(pts[mask, 0].max())))
+    if not right_edge:
+        return max_y
+    peak_y, peak_x = max(right_edge, key=lambda p: p[1])
+    drop_threshold = bbox_w * 0.08
+    chin_y = peak_y
+    for y0, rx in right_edge:
+        if y0 <= peak_y:
+            continue
+        if peak_x - rx > drop_threshold:
+            chin_y = y0
+            break
+    return chin_y
+
+
+@app.post("/detect-face-full")
+async def detect_face_full(req: DetectRequest):
+    """
+    Combined face detection:
+    - MediaPipe: keypoints (eyes, nose, mouth, ears) + bbox for horizontal bounds
+    - Outline detection: foreheadTop and chinBottom from ink contour
+    Returns both raw results and a combined 'faceBounds' ready for cropping.
+    """
+    if not req.init_image:
+        return {"error": "no image"}
+    try:
+        raw = req.init_image.split(',', 1)[1] if ',' in req.init_image else req.init_image
+        raw += '=' * (-len(raw) % 4)
+        img_data = base64.b64decode(raw)
+        img_pil = Image.open(io.BytesIO(img_data)).convert("RGB")
+        W, H = img_pil.size
+        img_cv2 = cv2.cvtColor(np.array(img_pil), cv2.COLOR_RGB2BGR)
+
+        # ── MediaPipe ──────────────────────────────────────────────────────────
+        import mediapipe as mp
+        mp_image = mp.Image(image_format=mp.ImageFormat.SRGB, data=np.array(img_pil))
+        mp_result = mp_detector.detect(mp_image)
+
+        mp_data = None
+        if mp_result.detections:
+            best = max(mp_result.detections,
+                       key=lambda d: d.bounding_box.width * d.bounding_box.height)
+            bb = best.bounding_box
+            kps = best.keypoints
+            keypoints = [{"x": float(kp.x), "y": float(kp.y)} for kp in kps] if kps else []
+            mp_data = {
+                "box": {
+                    "x":  float(max(0, bb.origin_x / W)),
+                    "y":  float(max(0, bb.origin_y / H)),
+                    "x2": float(min(1, (bb.origin_x + bb.width) / W)),
+                    "y2": float(min(1, (bb.origin_y + bb.height) / H)),
+                },
+                "keypoints": keypoints,
+            }
+
+        # ── Outline detection ─────────────────────────────────────────────────
+        outline_data = None
+        bbox_px, cnt = _find_face_contour_bbox(img_cv2)
+        if bbox_px is not None:
+            ox, oy, ow, oh = bbox_px
+            chin_y = _find_chin_y(cnt, ow)
+            outline_data = {
+                "foreheadTop": float(oy / H),       # normalized
+                "chinBottom":  float(chin_y / H),
+                "raw_bbox":    [ox/W, oy/H, ow/W, oh/H],
+            }
+
+        # ── Combined faceBounds ───────────────────────────────────────────────
+        # Vertical: from outline (precise ink boundary)
+        # Horizontal: from MediaPipe bbox (includes back of head)
+        combined = None
+        if mp_data and outline_data:
+            foreheadTop_px = outline_data["foreheadTop"] * H
+            chinBottom_px  = outline_data["chinBottom"]  * H
+            box_x_px  = mp_data["box"]["x"]  * W
+            box_x2_px = mp_data["box"]["x2"] * W
+            combined = {
+                "x":  float(box_x_px / W),
+                "y":  float(foreheadTop_px / H),
+                "x2": float(box_x2_px / W),
+                "y2": float(chinBottom_px / H),
+                "w":  float((box_x2_px - box_x_px) / W),
+                "h":  float((chinBottom_px - foreheadTop_px) / H),
+            }
+        elif mp_data:
+            combined = mp_data["box"]
+            combined["w"] = combined["x2"] - combined["x"]
+            combined["h"] = combined["y2"] - combined["y"]
+
+        return {
+            "mediapipe": mp_data,
+            "outline":   outline_data,
+            "faceBounds": combined,   # ready to use for cropping
+        }
+
+    except Exception as e:
+        import traceback
+        print(f"detect-face-full error: {e}\n{traceback.format_exc()}")
+        return {"error": str(e)}
