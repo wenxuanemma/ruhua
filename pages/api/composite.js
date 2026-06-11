@@ -279,6 +279,15 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // If faceSize < 1, shrink the face so it matches the actual painted face size
+    // within the region (e.g. dancer face is ~50% of the region height).
+    // pasteS is the final paste size; S remains the crop size for oval param calculations.
+    const faceSize = region.faceSize ?? 1.0;
+    const pasteS = Math.max(20, Math.round(S * faceSize));
+    const pasteFace = (pasteS === S) ? colorFaceExact : await sharp(colorFaceExact)
+      .resize(pasteS, pasteS, { fit: 'fill' })
+      .png().toBuffer();
+
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
     // ovalCx/Cy/Rx/Ry are computed from faceBounds (selfie path) or keypoints (keypoints path),
     // mapped into the resized targetSize square. Falls back to centered oval if params missing.
@@ -286,10 +295,9 @@ export default async function handler(req, res) {
     // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
     const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
     const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
-    const _oRx = (ovalRx != null && isFinite(ovalRx)) ? Math.min(ovalRx, S * 0.48) : S * 0.40;
-    const _oRy = (ovalRy != null && isFinite(ovalRy)) ? Math.min(ovalRy, S * 0.48) : S * 0.40;
-    // Softer gradient: wider fade zone for more gradual blend into painting
-    const maskSvg = `<svg width="${S}" height="${S}" xmlns="http://www.w3.org/2000/svg">
+    // Simple centered oval mask, sized to pasteS
+    const ovalR = pasteS * 0.42;
+    const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
           <stop offset="65%" stop-color="white" stop-opacity="1"/>
@@ -298,59 +306,34 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${_oCx}" cy="${_oCy}" rx="${_oRx}" ry="${_oRy}" fill="url(#g)"/>
+      <ellipse cx="${pasteS*0.50}" cy="${pasteS*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(maskSvg))
-      .resize(S, S, { fit: 'fill' })
+      .resize(pasteS, pasteS, { fit: 'fill' })
       .png()
       .toBuffer();
 
-    // ── Step 4: Paste onto painting — center square on region center ────────────
-    const cx = targetX + Math.round(targetW / 2);
-    const cy = targetY + Math.round(targetH / 2);
-    // Center the square on the painting region center. The oval mask handles
-    // which part of the square is visible — no need to offset by oval center.
-    const px = Math.max(0, Math.min(cx - Math.round(S / 2), PW - S));
-    const py = Math.max(0, Math.min(cy - Math.round(S / 2), PH - S));
-
-    // Extract the painting patch behind the face — used as blend backdrop so
-    // the oval fade zone transitions into actual painting pixels, not transparency.
-    // This eliminates the color gradient halo at the face boundary.
-    const ppW = Math.min(S, PW - px);
-    const ppH = Math.min(S, PH - py);
-    const paintPatchRaw = await sharp(paintingBuf)
-      .extract({ left: px, top: py, width: ppW, height: ppH })
-      .png()
-      .toBuffer();
-    // Pad to S×S if clamped (rare edge case near painting border)
-    const paintPatch = (ppW === S && ppH === S)
-      ? paintPatchRaw
-      : await sharp(paintPatchRaw)
-          .extend({ right: S - ppW, bottom: S - ppH, background: { r:0,g:0,b:0,alpha:0 } })
-          .png().toBuffer();
-
-    // Blend: start with painting patch, composite color-corrected face over it using oval mask.
-    // The mask alpha controls how much face vs painting shows — fade zone smoothly transitions
-    // into painting rather than leaving semi-transparent face pixels over a different background.
-    const masked = await sharp(colorFaceExact)
+    const masked = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    const blended = await sharp(paintPatch)
-      .composite([{ input: masked, blend: 'over' }])
-      .png()
-      .toBuffer();
+    // ── Step 4: Paste onto painting — center pasteS square on region center ──────
+    const cx = targetX + Math.round(targetW / 2);
+    const cy = targetY + Math.round(targetH / 2);
+    const px = Math.max(0, Math.min(cx - Math.round(pasteS / 2), PW - pasteS));
+    const py = Math.max(0, Math.min(cy - Math.round(pasteS / 2), PH - pasteS));
 
-    // Clamp without squashing — extract if overflows
-    const cW = Math.min(S, PW - px);
-    const cH = Math.min(S, PH - py);
-    const pasteBuf = (cW === S && cH === S)
-      ? blended
-      : await sharp(blended).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
+    // Clamp without squashing — extract if overflows painting bounds
+    const cW = Math.min(pasteS, PW - px);
+    const cH = Math.min(pasteS, PH - py);
+    const pasteBuf = (cW === pasteS && cH === pasteS)
+      ? masked
+      : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
 
+    console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalR=${ovalR.toFixed(0)}`);
     const composited = await sharp(paintingBuf)
       .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
       .jpeg({ quality: 92 })
