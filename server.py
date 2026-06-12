@@ -364,3 +364,85 @@ async def detect_face_full(req: DetectRequest):
         import traceback
         print(f"detect-face-full error: {e}\n{traceback.format_exc()}")
         return {"error": str(e)}
+
+
+# ── Poisson face compositing ─────────────────────────────────────────────────
+class CompositeFaceRequest(BaseModel):
+    face_b64:     str   # base64 JPEG/PNG of color-corrected face (pasteS x pasteS)
+    painting_b64: str   # base64 JPEG of full painting
+    paste_x:      int   # top-left x of paste region on painting
+    paste_y:      int   # top-left y of paste region on painting
+    oval_rx:      float # oval x-radius as fraction of face width (default 0.42)
+    oval_ry:      float # oval y-radius as fraction of face height (default 0.42)
+    oval_cx:      float # oval center x as fraction of face width (default 0.50)
+    oval_cy:      float # oval center y as fraction of face height (default 0.50)
+
+
+@app.post("/composite-face")
+async def composite_face(req: CompositeFaceRequest):
+    """
+    Poisson blending (seamlessClone) of a face crop onto a painting.
+    Uses a hard oval mask — seamlessClone handles color/gradient matching internally,
+    so the portrait background inside the oval gets blended into painting tones.
+    """
+    try:
+        def decode_b64(s):
+            raw = s.split(",", 1)[1] if "," in s else s
+            raw += "=" * (-len(raw) % 4)
+            return base64.b64decode(raw)
+
+        face_data = decode_b64(req.face_b64)
+        paint_data = decode_b64(req.painting_b64)
+
+        face_arr  = cv2.imdecode(np.frombuffer(face_data,  np.uint8), cv2.IMREAD_COLOR)
+        paint_arr = cv2.imdecode(np.frombuffer(paint_data, np.uint8), cv2.IMREAD_COLOR)
+
+        if face_arr is None or paint_arr is None:
+            return {"error": "failed to decode images"}
+
+        fH, fW = face_arr.shape[:2]
+        pH, pW = paint_arr.shape[:2]
+
+        # Crop painting to just the paste region + padding for Poisson solver.
+        # This constrains the solver to a small area, reducing color bleed artifacts.
+        pad = max(fW, fH)
+        rx1 = max(0, req.paste_x - pad)
+        ry1 = max(0, req.paste_y - pad)
+        rx2 = min(pW, req.paste_x + fW + pad)
+        ry2 = min(pH, req.paste_y + fH + pad)
+        patch = paint_arr[ry1:ry2, rx1:rx2].copy()
+
+        # Adjust paste coordinates to patch-local space
+        local_x = req.paste_x - rx1
+        local_y = req.paste_y - ry1
+
+        # Build hard oval mask (white inside, black outside)
+        mask = np.zeros((fH, fW), dtype=np.uint8)
+        mcx = int(fW * req.oval_cx)
+        mcy = int(fH * req.oval_cy)
+        mrx = int(fW * req.oval_rx)
+        mry = int(fH * req.oval_ry)
+        cv2.ellipse(mask, (mcx, mcy), (mrx, mry), 0, 0, 360, 255, -1)
+
+        # seamlessClone center in patch-local space
+        center = (local_x + fW // 2, local_y + fH // 2)
+        patchH, patchW = patch.shape[:2]
+        center = (
+            max(fW // 2, min(patchW - fW // 2, center[0])),
+            max(fH // 2, min(patchH - fH // 2, center[1])),
+        )
+
+        cloned_patch = cv2.seamlessClone(face_arr, patch, mask, center, cv2.NORMAL_CLONE)
+
+        # Paste cloned patch back into full painting
+        result = paint_arr.copy()
+        result[ry1:ry2, rx1:rx2] = cloned_patch
+
+        _, buf = cv2.imencode(".jpg", result, [cv2.IMWRITE_JPEG_QUALITY, 92])
+        b64 = base64.b64encode(buf).decode()
+        return {"outputB64": f"data:image/jpeg;base64,{b64}"}
+
+    except Exception as e:
+        import traceback
+        print(f"composite-face error: {e}\n{traceback.format_exc()}")
+        return {"error": str(e)}

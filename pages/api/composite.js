@@ -93,19 +93,20 @@ export default async function handler(req, res) {
       const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
       if (LOCAL_SERVER && FW > 500) {
         try {
-          // Send full resolution for outline detection accuracy (v6 validated at 1024px).
-          // MediaPipe also works better at full resolution.
+          // Front figures: detect-face-mp (fast, no outline needed).
+          // Profile/3Q: detect-face-full (outline + MediaPipe for precise vertical bounds).
           const detectBuf = await sharp(faceBuf).jpeg({ quality: 85 }).toBuffer();
-          const detectRes = await fetch(`${LOCAL_SERVER}/detect-face-full`, {
+          const detectEndpoint = isFront ? 'detect-face-mp' : 'detect-face-full';
+          const detectRes = await fetch(`${LOCAL_SERVER}/${detectEndpoint}`, {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ init_image: `data:image/jpeg;base64,${detectBuf.toString('base64')}` }),
             signal: AbortSignal.timeout(20000),
           });
           if (detectRes.ok) {
-            const detectData = await detectRes.json();
-            const { box, keypoints } = detectData.mediapipe || {};
-            const outline = detectData.outline || null;
+            const detectRaw = await detectRes.json();
+            const { box, keypoints } = isFront ? detectRaw : (detectRaw.mediapipe || {});
+            const outline = isFront ? null : (detectRaw.outline || null);
             if (box) {
               const bboxW  = Math.round((box.x2 - box.x) * FW);
               const bboxCx = Math.round(((box.x + box.x2) / 2) * FW);

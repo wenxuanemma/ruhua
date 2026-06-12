@@ -1430,6 +1430,25 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                               top:  `${-reg.y / reg.h * 100}%`,
                               maxWidth:'none',
                             }}/>
+                            {/* Blue oval showing where converted face will be pasted */}
+                            {generatedUrl && (() => {
+                              const thumbW = 120, thumbH = 140;
+                              const pasteR = Math.min(thumbW, thumbH) * 0.40;
+                              const pasteCx = thumbW * 0.50;
+                              const pasteCy = thumbH * 0.55;
+                              return (
+                                <div style={{
+                                  position:'absolute',
+                                  left: pasteCx - pasteR, top: pasteCy - pasteR,
+                                  width: pasteR*2, height: pasteR*2,
+                                  borderRadius:'50%',
+                                  background:'rgba(100,160,255,0.25)',
+                                  border:'2px solid rgba(100,160,255,0.7)',
+                                  boxSizing:'border-box',
+                                  pointerEvents:'none',
+                                }}/>
+                              );
+                            })()}
                             {paintSampleBox && (() => {
                               // Map paintSampleBox (painting coords) into the thumbnail's coordinate space
                               // Thumbnail shows the region [reg.x, reg.y, reg.w, reg.h] of the painting
