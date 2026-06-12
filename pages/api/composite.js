@@ -81,10 +81,8 @@ export default async function handler(req, res) {
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
       cropMethod = 'selfie';
       // Face center for selfie path
-      if (cropX != null) {
-        faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
-        faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
-      }
+      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
+      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
       console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
 
@@ -304,12 +302,17 @@ export default async function handler(req, res) {
     const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
-    const ovalCx = faceCenterInCropX != null
-      ? Math.round(faceCenterInCropX / S * pasteS)
+    // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
+    // Divide by cropSize to normalize, then scale to pasteS.
+    const ovalCxRaw = faceCenterInCropX != null && isFinite(faceCenterInCropX) && cropSize
+      ? Math.round((faceCenterInCropX / cropSize) * pasteS)
       : pasteS * 0.50;
-    const ovalCy = faceCenterInCropY != null
-      ? Math.round(faceCenterInCropY / S * pasteS)
+    const ovalCyRaw = faceCenterInCropY != null && isFinite(faceCenterInCropY) && cropSize
+      ? Math.round((faceCenterInCropY / cropSize) * pasteS)
       : pasteS * 0.50;
+    // Clamp oval center so ellipse stays within SVG bounds
+    const ovalCx = Math.max(ovalRx, Math.min(pasteS - ovalRx, ovalCxRaw));
+    const ovalCy = Math.max(ovalRy, Math.min(pasteS - ovalRy, ovalCyRaw));
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
