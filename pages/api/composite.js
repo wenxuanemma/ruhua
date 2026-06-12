@@ -60,6 +60,8 @@ export default async function handler(req, res) {
     let faceCropBuf = faceBuf;
     let faceCropBox = null;
     let cropX, cropY, cropSize;
+    let faceCenterInCropX = null, faceCenterInCropY = null;
+    let faceCenterInCropX = null, faceCenterInCropY = null;
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -80,6 +82,12 @@ export default async function handler(req, res) {
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
       cropMethod = 'selfie';
       console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+      // Face center for selfie path: center of faceBounds
+      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
+      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
+      // Face center for selfie path: center of faceBounds
+      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
+      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
 
 
     } else {
@@ -160,6 +168,12 @@ export default async function handler(req, res) {
                 }
                 cropX = Math.max(0, Math.min(faceCenterX - Math.round(cropSize / 2), FW - cropSize));
                 cropY = Math.max(0, Math.min(faceCenterY - Math.round(cropSize / 2), FH - cropSize));
+                // Store face center position within crop for oval alignment
+                faceCenterInCropX = faceCenterX - cropX;
+                faceCenterInCropY = faceCenterY - cropY;
+                // Store face center position within crop for oval alignment
+                faceCenterInCropX = faceCenterX - cropX;
+                faceCenterInCropY = faceCenterY - cropY;
                 cropMethod = 'keypoints';
                 console.log(`[composite:${figureId} crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
@@ -295,6 +309,13 @@ export default async function handler(req, res) {
     const ovalRx = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
     const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
+    // Oval center: map face center from crop space to pasteS space
+    const ovalCx = faceCenterInCropX != null
+      ? Math.round(faceCenterInCropX / S * pasteS)
+      : pasteS * 0.50;
+    const ovalCy = faceCenterInCropY != null
+      ? Math.round(faceCenterInCropY / S * pasteS)
+      : pasteS * 0.50;
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -304,7 +325,7 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${pasteS*0.50}" cy="${pasteS*0.50}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
+      <ellipse cx="${ovalCx}" cy="${ovalCy}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(maskSvg))
