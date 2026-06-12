@@ -173,13 +173,13 @@ def _find_face_contour_bbox(img_cv2):
     contours, _ = cv2.findContours(edges, cv2.RETR_LIST, cv2.CHAIN_APPROX_SIMPLE)
 
     min_area = W * H * 0.01
-    max_area = W * H * 0.35
+    max_area = W * H * 0.30
     candidates = []
     for cnt in contours:
         area = cv2.contourArea(cnt)
+        x, y, w, h = cv2.boundingRect(cnt)
         if area < min_area or area > max_area:
             continue
-        x, y, w, h = cv2.boundingRect(cnt)
         aspect = w / max(h, 1)
         if aspect < 0.25 or aspect > 1.5:
             continue
@@ -196,47 +196,80 @@ def _find_face_contour_bbox(img_cv2):
             continue
         cx_norm = (x + w / 2) / W
         cy_norm = (y + h / 2) / H
-        pos_score = (1 - abs(cx_norm - 0.55)) * (1 - abs(cy_norm - 0.35))
+        # Face can be left or right facing — score based on distance from either side center
+        # Prefer upper half of image for face position
+        pos_x_score = max(1 - abs(cx_norm - 0.35), 1 - abs(cx_norm - 0.65))  # left or right face
+        pos_y_score = 1 - abs(cy_norm - 0.35)  # prefer upper portion
+        pos_score = pos_x_score * pos_y_score
         size_score = min(area / (W * H * 0.08), 1.0)
         score = pos_score * 0.35 + size_score * 0.25 + circularity * 3 * 0.20 + solidity * 0.20
         candidates.append((score, x, y, w, h, cnt))
 
     if not candidates:
+        print(f"[outline] No candidates found")
         return None, None
     candidates.sort(reverse=True)
     _, x, y, w, h, cnt = candidates[0]
     return (x, y, w, h), cnt
 
 
-def _find_chin_y(cnt, bbox_w):
-    """
-    Find chin Y by detecting where the face profile right edge peaks
-    then starts narrowing (neck begins).
-    """
+def _find_chin_y(cnt, bbox_x, bbox_w, img_w):
+    # Find chin Y for a profile face contour.
+    # Strategy: scan the lower 60% of the contour for the profile edge.
+    # The chin is the LAST local protrusion before the neck narrows permanently.
+    # We scan from bottom upward and find where the edge protrudes outward,
+    # which gives the chin tip (below the mouth recess).
     pts = cnt.reshape(-1, 2)
     min_y = int(pts[:, 1].min())
     max_y = int(pts[:, 1].max())
     face_h = max_y - min_y
+
+    # Only look in lower 60% of face for chin (above = nose/forehead)
     lower_start = int(min_y + face_h * 0.40)
-    band = 8
-    right_edge = []
+    band = 6
+    drop_threshold = bbox_w * 0.06
+
+    bbox_cx = bbox_x + bbox_w / 2
+    facing_left = bbox_cx < img_w / 2  # nose on left = track right edge
+
+    # Build profile edge from lower_start to max_y
+    profile_edge = []
     for y0 in range(lower_start, max_y - band, band):
         mask = (pts[:, 1] >= y0) & (pts[:, 1] < y0 + band)
         if mask.sum() == 0:
             continue
-        right_edge.append((y0, int(pts[mask, 0].max())))
-    if not right_edge:
+        edge_x = int(pts[mask, 0].max()) if facing_left else int(pts[mask, 0].min())
+        profile_edge.append((y0, edge_x))
+
+    if not profile_edge:
         return max_y
-    peak_y, peak_x = max(right_edge, key=lambda p: p[1])
-    drop_threshold = bbox_w * 0.08
-    chin_y = peak_y
-    for y0, rx in right_edge:
-        if y0 <= peak_y:
+
+    # Smooth the edge to reduce noise
+    if len(profile_edge) > 4:
+        smoothed = []
+        for i in range(len(profile_edge)):
+            window = profile_edge[max(0,i-2):i+3]
+            avg_x = sum(p[1] for p in window) // len(window)
+            smoothed.append((profile_edge[i][0], avg_x))
+        profile_edge = smoothed
+
+    # Find the last local maximum (chin) — scan from bottom up
+    # looking for where edge protrudes then recedes (neck)
+    best_chin_y = max_y
+    for i in range(len(profile_edge) - 1, 0, -1):
+        y0, ex = profile_edge[i]
+        # Check if this is a local protrusion relative to points below it
+        below = profile_edge[i+1:i+4] if i+1 < len(profile_edge) else []
+        if not below:
             continue
-        if peak_x - rx > drop_threshold:
-            chin_y = y0
+        avg_below = sum(p[1] for p in below) / len(below)
+        protrusion = (ex - avg_below) if facing_left else (avg_below - ex)
+        if protrusion > drop_threshold:
+            best_chin_y = y0 + band  # chin is just past this protrusion
             break
-    return chin_y
+
+    return best_chin_y
+
 
 
 @app.post("/detect-face-full")
@@ -284,7 +317,7 @@ async def detect_face_full(req: DetectRequest):
         bbox_px, cnt = _find_face_contour_bbox(img_cv2)
         if bbox_px is not None:
             ox, oy, ow, oh = bbox_px
-            chin_y = _find_chin_y(cnt, ow)
+            chin_y = _find_chin_y(cnt, ox, ow, W)
             # Validity: face should be 10-55% of image in each dimension.
             # Larger detections are likely the background rectangle or full border.
             face_h_frac = (chin_y - oy) / H
