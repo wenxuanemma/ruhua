@@ -432,7 +432,7 @@ async def composite_face(req: CompositeFaceRequest):
             max(fH // 2, min(patchH - fH // 2, center[1])),
         )
 
-        cloned_patch = cv2.seamlessClone(face_arr, patch, mask, center, cv2.NORMAL_CLONE)
+        cloned_patch = cv2.seamlessClone(face_arr, patch, mask, center, cv2.MIXED_CLONE)
 
         # Paste cloned patch back into full painting
         result = paint_arr.copy()

@@ -337,53 +337,19 @@ export default async function handler(req, res) {
 
     console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalR=${ovalR.toFixed(0)}`);
 
-    // Try Poisson blending (seamlessClone) via ersha — handles background inside oval.
-    // Falls back to sharp oval paste if unavailable or error.
-    let composited;
-    if (LOCAL_SERVER) {
-      try {
-        const faceB64  = `data:image/png;base64,${pasteFace.toString('base64')}`;
-        const paintB64 = `data:image/jpeg;base64,${paintingBuf.toString('base64')}`;
-        const poissonRes = await fetch(`${LOCAL_SERVER}/composite-face`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            face_b64: faceB64, painting_b64: paintB64,
-            paste_x: px, paste_y: py,
-            oval_rx: ovalR / pasteS, oval_ry: ovalR / pasteS,
-            oval_cx: 0.50, oval_cy: 0.50,
-          }),
-          signal: AbortSignal.timeout(15000),
-        });
-        if (poissonRes.ok) {
-          const { outputB64, error } = await poissonRes.json();
-          if (outputB64 && !error) {
-            composited = Buffer.from(outputB64.split(',')[1], 'base64');
-            console.log(`[composite:${figureId}] seamlessClone OK`);
-          } else {
-            console.warn(`[composite:${figureId}] seamlessClone error: ${error}`);
-          }
-        }
-      } catch(e) {
-        console.warn(`[composite:${figureId}] seamlessClone failed: ${e.message}`);
-      }
-    }
-
-    // Fallback: sharp paste with oval gradient mask
-    if (!composited) {
-      const masked = await sharp(pasteFace)
-        .ensureAlpha()
-        .composite([{ input: ovalMask, blend: 'dest-in' }])
-        .png().toBuffer();
-      const cW = Math.min(pasteS, PW - px);
-      const cH = Math.min(pasteS, PH - py);
-      const pasteBuf = (cW === pasteS && cH === pasteS)
-        ? masked
-        : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
-      composited = await sharp(paintingBuf)
-        .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
-        .jpeg({ quality: 92 }).toBuffer();
-    }
+    // Sharp paste with oval gradient mask
+    const masked = await sharp(pasteFace)
+      .ensureAlpha()
+      .composite([{ input: ovalMask, blend: 'dest-in' }])
+      .png().toBuffer();
+    const cW = Math.min(pasteS, PW - px);
+    const cH = Math.min(pasteS, PH - py);
+    const pasteBuf = (cW === pasteS && cH === pasteS)
+      ? masked
+      : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
+    const composited = await sharp(paintingBuf)
+      .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
+      .jpeg({ quality: 92 }).toBuffer();
 
     // ── Step 5: Profile crop ──────────────────────────────────────────────────
     const pad = Math.round(targetH * 1.5);
