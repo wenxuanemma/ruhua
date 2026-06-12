@@ -117,38 +117,31 @@ export default function Calibrate() {
     return valsRef.current[key] || { x:0.45, y:0.45, w:0.10, h:0.10 }; // placeholder until API loads
   };
 
-  // Auto-detect faceSize by running MediaPipe on the painting figure crop
+  // Auto-detect faceSize by running MediaPipe on the painting figure crop.
+  // Image is fetched server-side to avoid canvas CORS tainted error.
   const autoDetectFaceSize = async (figId) => {
-    if (!imgRef.current || !imgUrl) return;
+    if (!imgUrl) return;
     const key = `${painting.id}_${figId}`;
     const v = getVal(figId);
     if (!v.x) return;
 
-    // Draw painting crop to canvas
-    const img = imgRef.current;
-    const naturalW = img.naturalWidth, naturalH = img.naturalHeight;
-    const cropX = Math.round(v.x * naturalW);
-    const cropY = Math.round(v.y * naturalH);
-    const cropW = Math.round(v.w * naturalW);
-    const cropH = Math.round(v.h * naturalH);
-
-    const canvas = document.createElement('canvas');
-    canvas.width = cropW; canvas.height = cropH;
-    canvas.getContext('2d').drawImage(img, cropX, cropY, cropW, cropH, 0, 0, cropW, cropH);
-    const b64 = canvas.toDataURL('image/jpeg', 0.90).split(',')[1];
-
     try {
+      // Send painting URL + crop region to server — server fetches + crops + detects
       const res = await fetch(`/api/detect-face`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_image: `data:image/jpeg;base64,${b64}` }),
+        body: JSON.stringify({
+          painting_url: imgUrl,
+          crop: { x: v.x, y: v.y, w: v.w, h: v.h },
+        }),
       });
       if (!res.ok) throw new Error('detect failed');
-      const { box } = await res.json();
+      const { box, error } = await res.json();
+      if (error) throw new Error(error);
       if (!box) throw new Error('no face detected');
-      // faceSize = face height as fraction of region height
-      const faceH = box.y2 - box.y;  // fraction of crop height
-      const faceSize = Math.round(faceH * 100) / 100;
+      // faceSize = detected face height as fraction of region height
+      const faceH = box.y2 - box.y;
+      const faceSize = Math.min(1.0, Math.round(faceH * 100) / 100);
       setVals(prev => ({ ...prev, [key]: { ...prev[key], faceSize } }));
       alert(`Auto faceSize for ${figId}: ${faceSize}`);
     } catch(e) {

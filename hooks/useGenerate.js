@@ -96,6 +96,7 @@ export function useGenerate() {
   const [styledUrl, setStyledUrl]   = useState(null);
   const [cropBox, setCropBox]        = useState(null);
   const [paintSampleBox, setPaintSampleBox] = useState(null);
+  const [maskedFaceUrl, setMaskedFaceUrl] = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]           = useState(null);
 
@@ -218,6 +219,7 @@ export function useGenerate() {
     if (data.profileUrl) setProfileUrl(data.profileUrl);
     if (data.cropBox)       setCropBox(data.cropBox);
     if (data.paintSampleBox) setPaintSampleBox(data.paintSampleBox);
+    if (data.maskedFaceUrl) setMaskedFaceUrl(data.maskedFaceUrl);
     if (data.outputUrl) return data.outputUrl;
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
@@ -435,5 +437,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }

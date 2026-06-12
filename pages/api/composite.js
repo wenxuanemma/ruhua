@@ -364,9 +364,17 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
+    // Build masked face for debug panel
+    const maskedDebug = await sharp(pasteFace)
+      .ensureAlpha()
+      .composite([{ input: ovalMask, blend: 'dest-in' }])
+      .png()
+      .toBuffer();
+
     return res.status(200).json({
       outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
+      maskedFaceUrl: `data:image/png;base64,${maskedDebug.toString('base64')}`,
       cropBox: faceCropBox,
       // Debug: painting sample region as fractions of painting dimensions
       paintSampleBox: {
