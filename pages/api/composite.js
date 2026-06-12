@@ -60,7 +60,6 @@ export default async function handler(req, res) {
     let faceCropBuf = faceBuf;
     let faceCropBox = null;
     let cropX, cropY, cropSize;
-    let ovalCx, ovalCy, ovalRx, ovalRy; // face-fitted oval params
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -81,14 +80,7 @@ export default async function handler(req, res) {
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
       cropMethod = 'selfie';
       console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
-      // Oval params: map faceBounds into resized square
-      const _sfScale = targetSize / cropSize;
-      const _sfFaceX = faceBounds.x * FW, _sfFaceY = faceBounds.y * FH;
-      const _sfFaceW = faceBounds.w * FW, _sfFaceH = faceBounds.h * FH;
-      ovalCx = (_sfFaceX + _sfFaceW/2 - cropX) * _sfScale;
-      ovalCy = (_sfFaceY + _sfFaceH/2 - cropY) * _sfScale;
-      ovalRx = (_sfFaceW / 2) * _sfScale * 0.90; // slight narrowing to reduce hair bleed
-      ovalRy = (_sfFaceH / 2) * _sfScale;
+
 
     } else {
       // ── Profile (or no faceBounds): MediaPipe keypoints on Seedream output ──
@@ -170,12 +162,7 @@ export default async function handler(req, res) {
                 cropY = Math.max(0, Math.min(faceCenterY - Math.round(cropSize / 2), FH - cropSize));
                 cropMethod = 'keypoints';
                 console.log(`[composite:${figureId} crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
-                // Oval params: map face landmarks into resized square
-                const _kpScale = targetSize / cropSize;
-                ovalCx = (faceCenterX - cropX) * _kpScale;
-                ovalCy = (faceCenterY - cropY) * _kpScale;
-                ovalRy = (landmarkH / 2) * _kpScale;
-                ovalRx = ovalRy * 0.72; // faces are taller than wide — narrow oval excludes hair
+
               } else {
                 // Keypoints unavailable — bbox fallback
                 const faceTop   = Math.round(box.y * FH);
@@ -310,8 +297,11 @@ export default async function handler(req, res) {
     // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
     const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
     const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
-    // Oval radius: 0.38 for profile/3Q (face doesn't fill square), 0.42 for front
-    const ovalR = pasteS * (isFront ? 0.42 : 0.35);
+    // Oval rx/ry: match calibrate tool oval (82% width, 84% height of region).
+    // Map region dimensions into pasteS space.
+    const ovalRx = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
+    const ovalR  = Math.min(ovalRx, ovalRy); // keep for logging
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -321,7 +311,7 @@ export default async function handler(req, res) {
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
-      <ellipse cx="${pasteS*0.50}" cy="${pasteS*0.50}" rx="${ovalR}" ry="${ovalR}" fill="url(#g)"/>
+      <ellipse cx="${pasteS*0.50}" cy="${pasteS*0.50}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
     </svg>`;
 
     const ovalMask = await sharp(Buffer.from(maskSvg))
@@ -364,37 +354,18 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    // Build debug composite: painting region crop with masked face pasted on top
+    // Debug: color-corrected face with oval mask applied — shows exactly what gets pasted
+    // and at what transparency level (alpha channel shows the oval gradient).
     const maskedDebug = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // Extract painting region at same scale as 原画人物 thumbnail (120x140)
-    const dbThumbW = 120, dbThumbH = 140;
-    const dbRegionBuf = await sharp(paintingBuf)
-      .extract({ left: targetX, top: targetY, width: targetW, height: targetH })
-      .resize(dbThumbW, dbThumbH, { fit: 'fill' })
-      .png()
-      .toBuffer();
-    // Paste masked face onto region crop — scale px/py to thumbnail space
-    const dbScaleX = dbThumbW / targetW, dbScaleY = dbThumbH / targetH;
-    const dbFaceX = Math.round((px - targetX) * dbScaleX);
-    const dbFaceY = Math.round((py - targetY) * dbScaleY);
-    const dbFaceSize = Math.round(pasteS * Math.min(dbScaleX, dbScaleY));
-    const dbFaceResized = await sharp(maskedDebug)
-      .resize(dbFaceSize, dbFaceSize, { fit: 'fill' })
-      .png().toBuffer();
-    const dbComposite = await sharp(dbRegionBuf)
-      .composite([{ input: dbFaceResized, left: Math.max(0,dbFaceX), top: Math.max(0,dbFaceY), blend: 'over' }])
-      .jpeg({ quality: 90 })
-      .toBuffer();
-
     return res.status(200).json({
       outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
-      maskedFaceUrl: `data:image/jpeg;base64,${dbComposite.toString('base64')}`,
+      maskedFaceUrl: `data:image/png;base64,${maskedDebug.toString('base64')}`,
       cropBox: faceCropBox,
       // Debug: painting sample region as fractions of painting dimensions
       paintSampleBox: {
