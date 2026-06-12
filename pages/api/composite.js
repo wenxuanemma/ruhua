@@ -291,17 +291,10 @@ export default async function handler(req, res) {
       .png().toBuffer();
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
-    // ovalCx/Cy/Rx/Ry are computed from faceBounds (selfie path) or keypoints (keypoints path),
-    // mapped into the resized targetSize square. Falls back to centered oval if params missing.
-    // Face-fitted oval: shrink by 15% to add padding inside crop boundary,
-    // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
-    const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
-    const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
     // Oval rx/ry: match calibrate tool oval (82% width, 84% height of region).
-    // Map region dimensions into pasteS space.
     const ovalRx = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
     const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
-    const ovalR  = Math.min(ovalRx, ovalRy); // keep for logging
+    const ovalR  = Math.min(ovalRx, ovalRy);
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -354,8 +347,8 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    // Debug: color-corrected face with oval mask applied — shows exactly what gets pasted
-    // and at what transparency level (alpha channel shows the oval gradient).
+    // Build debug composite: painting region crop with masked face pasted on top
+    // Debug: color-corrected face with oval mask — shows what gets pasted and transparency
     const maskedDebug = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
