@@ -61,7 +61,6 @@ export default async function handler(req, res) {
     let faceCropBox = null;
     let cropX, cropY, cropSize;
     let faceCenterInCropX = null, faceCenterInCropY = null;
-    let faceCenterInCropX = null, faceCenterInCropY = null;
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -81,13 +80,12 @@ export default async function handler(req, res) {
       cropX = Math.max(0, Math.min(Math.round(cx * FW - cropSize / 2), FW - cropSize));
       cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
       cropMethod = 'selfie';
+      // Face center for selfie path
+      if (cropX != null) {
+        faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
+        faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
+      }
       console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
-      // Face center for selfie path: center of faceBounds
-      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
-      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
-      // Face center for selfie path: center of faceBounds
-      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
-      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
 
 
     } else {
@@ -168,10 +166,6 @@ export default async function handler(req, res) {
                 }
                 cropX = Math.max(0, Math.min(faceCenterX - Math.round(cropSize / 2), FW - cropSize));
                 cropY = Math.max(0, Math.min(faceCenterY - Math.round(cropSize / 2), FH - cropSize));
-                // Store face center position within crop for oval alignment
-                faceCenterInCropX = faceCenterX - cropX;
-                faceCenterInCropY = faceCenterY - cropY;
-                // Store face center position within crop for oval alignment
                 faceCenterInCropX = faceCenterX - cropX;
                 faceCenterInCropY = faceCenterY - cropY;
                 cropMethod = 'keypoints';
