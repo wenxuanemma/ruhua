@@ -22,6 +22,8 @@ export default async function handler(req, res) {
   if (!region) return res.status(400).json({ error: `No region for ${paintingId}/${figureId}` });
 
   try {
+    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
+
     const [paintingBuf, faceBuf] = await Promise.all([
       fetchBuf(paintingImageUrl),
       fetchBuf(styledFaceUrl),
@@ -90,7 +92,6 @@ export default async function handler(req, res) {
 
     } else {
       // ── Profile (or no faceBounds): MediaPipe keypoints on Seedream output ──
-      const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
       if (LOCAL_SERVER && FW > 500) {
         try {
           // Front figures: detect-face-mp (fast, no outline needed).
