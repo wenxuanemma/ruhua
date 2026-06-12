@@ -310,8 +310,8 @@ export default async function handler(req, res) {
     // preventing the oval from reaching the square edge (which causes hat removal / neck cut).
     const _oCx = (ovalCx != null && isFinite(ovalCx)) ? ovalCx : S * 0.50;
     const _oCy = (ovalCy != null && isFinite(ovalCy)) ? ovalCy : S * 0.50;
-    // Simple centered oval mask, sized to pasteS
-    const ovalR = pasteS * 0.42;
+    // Oval radius: 0.38 for profile/3Q (face doesn't fill square), 0.42 for front
+    const ovalR = pasteS * (isFront ? 0.42 : 0.35);
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -364,17 +364,37 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    // Build masked face for debug panel
+    // Build debug composite: painting region crop with masked face pasted on top
     const maskedDebug = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
+    // Extract painting region at same scale as 原画人物 thumbnail (120x140)
+    const dbThumbW = 120, dbThumbH = 140;
+    const dbRegionBuf = await sharp(paintingBuf)
+      .extract({ left: targetX, top: targetY, width: targetW, height: targetH })
+      .resize(dbThumbW, dbThumbH, { fit: 'fill' })
+      .png()
+      .toBuffer();
+    // Paste masked face onto region crop — scale px/py to thumbnail space
+    const dbScaleX = dbThumbW / targetW, dbScaleY = dbThumbH / targetH;
+    const dbFaceX = Math.round((px - targetX) * dbScaleX);
+    const dbFaceY = Math.round((py - targetY) * dbScaleY);
+    const dbFaceSize = Math.round(pasteS * Math.min(dbScaleX, dbScaleY));
+    const dbFaceResized = await sharp(maskedDebug)
+      .resize(dbFaceSize, dbFaceSize, { fit: 'fill' })
+      .png().toBuffer();
+    const dbComposite = await sharp(dbRegionBuf)
+      .composite([{ input: dbFaceResized, left: Math.max(0,dbFaceX), top: Math.max(0,dbFaceY), blend: 'over' }])
+      .jpeg({ quality: 90 })
+      .toBuffer();
+
     return res.status(200).json({
       outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
-      maskedFaceUrl: `data:image/png;base64,${maskedDebug.toString('base64')}`,
+      maskedFaceUrl: `data:image/jpeg;base64,${dbComposite.toString('base64')}`,
       cropBox: faceCropBox,
       // Debug: painting sample region as fractions of painting dimensions
       paintSampleBox: {
