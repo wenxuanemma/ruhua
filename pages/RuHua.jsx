@@ -1445,19 +1445,21 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                               top:  `${-reg.y / reg.h * 100}%`,
                               maxWidth:'none',
                             }}/>
-                            {/* Blue oval showing where converted face will be pasted */}
+                            {/* Oval showing where converted face will be pasted — matches calibrate oval */}
                             {generatedUrl && (() => {
                               const thumbW = 120, thumbH = 140;
-                              const pasteR = Math.min(thumbW, thumbH) * 0.40;
-                              const pasteCx = thumbW * 0.50;
-                              const pasteCy = thumbH * 0.55;
+                              // Match calibrate oval: 82% width, 84% height of region
+                              const ovalW = thumbW * 0.82;
+                              const ovalH = thumbH * 0.84;
+                              const ovalL = (thumbW - ovalW) / 2;
+                              const ovalT = thumbH * 0.13; // calibrate top offset = (1-0.84)/2 + 5% = 13%
                               return (
                                 <div style={{
                                   position:'absolute',
-                                  left: pasteCx - pasteR, top: pasteCy - pasteR,
-                                  width: pasteR*2, height: pasteR*2,
+                                  left: ovalL, top: ovalT,
+                                  width: ovalW, height: ovalH,
                                   borderRadius:'50%',
-                                  background:'rgba(100,160,255,0.25)',
+                                  background:'rgba(100,160,255,0.20)',
                                   border:'2px solid rgba(100,160,255,0.7)',
                                   boxSizing:'border-box',
                                   pointerEvents:'none',

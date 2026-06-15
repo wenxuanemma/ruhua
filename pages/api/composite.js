@@ -298,7 +298,9 @@ export default async function handler(req, res) {
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
     // Oval rx/ry: match calibrate tool oval (82% width, 84% height of region).
-    const ovalRx = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    // Profile faces get wider rx to cover nose tip (nose protrudes beyond face center).
+    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
     const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
