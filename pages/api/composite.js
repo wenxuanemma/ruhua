@@ -287,18 +287,16 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // If faceSize < 1, shrink the face so it matches the actual painted face size
-    // within the region (e.g. dancer face is ~50% of the region height).
-    // pasteS is the final paste size; S remains the crop size for oval param calculations.
+    // pasteS always equals S — we paste at full targetSize.
+    // faceSize and faceCenter are used only to position/size the oval mask.
     const faceSize = region.faceSize ?? 1.0;
-    const pasteS = Math.max(20, Math.round(S * faceSize));
-    const pasteFace = (pasteS === S) ? colorFaceExact : await sharp(colorFaceExact)
-      .resize(pasteS, pasteS, { fit: 'fill' })
-      .png().toBuffer();
+    const pasteS = S;
+    const pasteFace = colorFaceExact;
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
-    // Oval rx/ry: match calibrate tool oval (82% width, 84% height of region).
-    // Profile faces get wider rx to cover nose tip (nose protrudes beyond face center).
+    // Oval rx/ry: calibrate oval (82% width, 84% height of region).
+    // Profile faces get wider rx to cover nose tip.
+    // faceSize is used only for paste position (via faceCenter), not oval size.
     const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
     const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
     const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);

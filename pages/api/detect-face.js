@@ -31,7 +31,7 @@ export default async function handler(req, res) {
       const height = Math.round(crop.h * H);
       const cropped = await sharp(imgBuf)
         .extract({ left, top, width, height })
-        .resize(256, 256, { fit: 'fill' })  // resize for faster detection
+        .resize(256, 256, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
         .jpeg({ quality: 85 })
         .toBuffer();
       imageB64 = `data:image/jpeg;base64,${cropped.toString('base64')}`;
