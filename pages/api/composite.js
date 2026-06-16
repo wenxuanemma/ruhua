@@ -299,10 +299,10 @@ export default async function handler(req, res) {
     // pasteS is already scaled by faceSize so oval naturally matches painted face.
     // Profile faces get wider rx to cover nose tip.
     // Scale oval by faceSize to match painted face area (not full region)
-    const fs = region.faceSize ?? 1.0;
-    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41 * fs, pasteS * 0.48);
+    const faceSizeScale = region.faceSize ?? 1.0;
+    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41 * faceSizeScale, pasteS * 0.48);
     const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
-    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42 * fs, pasteS * 0.48);
+    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42 * faceSizeScale, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
     // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
