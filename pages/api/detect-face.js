@@ -48,13 +48,34 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(10000),
     });
     const data = await r.json();
-    // Compute faceSize and faceCenter from detected box (fractions within the crop)
+    // Compute faceSize and faceCenter from detected box.
+    // Must remap from 256x256 contain space back to original crop aspect ratio.
     if (data.box && req.body.crop) {
       const { box } = data;
-      data.faceSize   = Math.min(1.0, Math.round((box.y2 - box.y) * 100) / 100);
+      const { w: cw, h: ch } = req.body.crop;  // crop fractions of painting
+      // Actual crop pixel dimensions (before resizing to 256x256)
+      // fit:contain scale factor and padding offsets
+      const DETECT_SIZE = 256;
+      const cropAspect = cw / ch; // width/height ratio of original crop
+      let scaleW, scaleH, padX, padY;
+      if (cropAspect > 1) {
+        // wider than tall — constrained by width
+        scaleW = DETECT_SIZE; scaleH = DETECT_SIZE / cropAspect;
+        padX = 0; padY = (DETECT_SIZE - scaleH) / 2;
+      } else {
+        // taller than wide — constrained by height
+        scaleH = DETECT_SIZE; scaleW = DETECT_SIZE * cropAspect;
+        padX = (DETECT_SIZE - scaleW) / 2; padY = 0;
+      }
+      // Remap box from 256x256 space to original crop fraction space
+      const remapX = x => Math.max(0, Math.min(1, (x * DETECT_SIZE - padX) / scaleW));
+      const remapY = y => Math.max(0, Math.min(1, (y * DETECT_SIZE - padY) / scaleH));
+      const rx1 = remapX(box.x), ry1 = remapY(box.y);
+      const rx2 = remapX(box.x2), ry2 = remapY(box.y2);
+      data.faceSize   = Math.min(1.0, Math.round((ry2 - ry1) * 100) / 100);
       data.faceCenter = {
-        cx: Math.round(((box.x + box.x2) / 2) * 100) / 100,  // fraction of crop width
-        cy: Math.round(((box.y + box.y2) / 2) * 100) / 100,  // fraction of crop height
+        cx: Math.round(((rx1 + rx2) / 2) * 100) / 100,
+        cy: Math.round(((ry1 + ry2) / 2) * 100) / 100,
       };
     }
     return res.status(r.ok ? 200 : 500).json(data);

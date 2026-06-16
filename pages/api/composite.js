@@ -137,7 +137,7 @@ export default async function handler(req, res) {
                   : Math.max(0, eyeCy - Math.round(eyeToMouth * 1.2));
                 const chinBottom = outlineValid
                   ? Math.min(FH, outlineCb)
-                  : Math.round(mouth.y + Math.round(eyeToMouth * 0.75));
+                  : Math.round(mouth.y + Math.round(eyeToMouth * 0.90));
                 const landmarkH   = chinBottom - foreheadTop;
                 console.log(`[composite:${figureId} bounds] ${outlineValid ? 'outline' : 'estimated'} foreheadTop=${foreheadTop} chinBottom=${chinBottom} landmarkH=${landmarkH} (outline=${outlineFt !== null ? `ft=${outlineFt} cb=${outlineCb} valid=${outlineValid}` : 'null'})`);
                 // cropSize and face center depend on face angle:
@@ -298,9 +298,11 @@ export default async function handler(req, res) {
     // Oval rx/ry: calibrate proportions (82%/84%) applied to pasteS.
     // pasteS is already scaled by faceSize so oval naturally matches painted face.
     // Profile faces get wider rx to cover nose tip.
-    const ovalRxBase = Math.min(pasteS * 0.41, pasteS * 0.48);
+    // Scale oval by faceSize to match painted face area (not full region)
+    const fs = region.faceSize ?? 1.0;
+    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41 * fs, pasteS * 0.48);
     const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
-    const ovalRy = Math.min(pasteS * 0.42, pasteS * 0.48);
+    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42 * fs, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
     // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
