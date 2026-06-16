@@ -287,32 +287,27 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // pasteS always equals S — we paste at full targetSize.
-    // faceSize and faceCenter are used only to position/size the oval mask.
+    // pasteS = S * faceSize — scales converted face to match painted face size.
     const faceSize = region.faceSize ?? 1.0;
-    const pasteS = S;
-    const pasteFace = colorFaceExact;
+    const pasteS = Math.max(20, Math.round(S * faceSize));
+    const pasteFace = (pasteS === S) ? colorFaceExact : await sharp(colorFaceExact)
+      .resize(pasteS, pasteS, { fit: 'cover', position: 'centre' })
+      .png().toBuffer();
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
-    // Oval rx/ry: calibrate oval (82% width, 84% height of region).
+    // Oval rx/ry: calibrate proportions (82%/84%) applied to pasteS.
+    // pasteS is already scaled by faceSize so oval naturally matches painted face.
     // Profile faces get wider rx to cover nose tip.
-    // faceSize is used only for paste position (via faceCenter), not oval size.
-    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    const ovalRxBase = Math.min(pasteS * 0.41, pasteS * 0.48);
     const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
-    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
+    const ovalRy = Math.min(pasteS * 0.42, pasteS * 0.48);
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
     // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
     // Divide by cropSize to normalize, then scale to pasteS.
-    const ovalCxRaw = faceCenterInCropX != null && isFinite(faceCenterInCropX) && cropSize
-      ? Math.round((faceCenterInCropX / cropSize) * pasteS)
-      : pasteS * 0.50;
-    const ovalCyRaw = faceCenterInCropY != null && isFinite(faceCenterInCropY) && cropSize
-      ? Math.round((faceCenterInCropY / cropSize) * pasteS)
-      : pasteS * 0.50;
-    // Clamp oval center so ellipse stays within SVG bounds
-    const ovalCx = Math.max(ovalRx, Math.min(pasteS - ovalRx, ovalCxRaw));
-    const ovalCy = Math.max(ovalRy, Math.min(pasteS - ovalRy, ovalCyRaw));
+    // Oval centered in pasteS square — converted face is resized to fill pasteS.
+    const ovalCx = pasteS * 0.50;
+    const ovalCy = pasteS * 0.50;
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
