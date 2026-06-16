@@ -79,6 +79,7 @@ export default function Calibrate() {
                 skinSample:  v.skinSample  || null,
                 colorShift:  v.colorShift  ?? null,
                 faceSize:    v.faceSize    ?? null,
+                faceCenter:  v.faceCenter  || null,
               };
             }
           }
@@ -136,14 +137,14 @@ export default function Calibrate() {
         }),
       });
       if (!res.ok) throw new Error('detect failed');
-      const { box, error } = await res.json();
+      const { box, faceSize, faceCenter, error } = await res.json();
       if (error) throw new Error(error);
       if (!box) throw new Error('no face detected');
-      // faceSize = detected face height as fraction of region height
-      const faceH = box.y2 - box.y;
-      const faceSize = Math.min(1.0, Math.round(faceH * 100) / 100);
-      setVals(prev => ({ ...prev, [key]: { ...prev[key], faceSize } }));
-      alert(`Auto faceSize for ${figId}: ${faceSize}`);
+      const updates = {};
+      if (faceSize != null) updates.faceSize = faceSize;
+      if (faceCenter != null) updates.faceCenter = faceCenter;
+      setVals(prev => ({ ...prev, [key]: { ...prev[key], ...updates } }));
+      alert(`Auto detect for ${figId}: faceSize=${faceSize} faceCenter=(${faceCenter?.cx},${faceCenter?.cy})`);
     } catch(e) {
       alert(`Auto detect failed: ${e.message}`);
     }
@@ -447,6 +448,7 @@ export default function Calibrate() {
                 ...(v.skinSample  ? { skinSample:  v.skinSample  } : {}),
                 ...(v.colorShift  != null ? { colorShift:  v.colorShift  } : {}),
                 ...(v.faceSize    != null ? { faceSize:    v.faceSize    } : {}),
+                ...(v.faceCenter  ? { faceCenter:  v.faceCenter  } : {}),
               };
             }
           }

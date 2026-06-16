@@ -48,6 +48,15 @@ export default async function handler(req, res) {
       signal: AbortSignal.timeout(10000),
     });
     const data = await r.json();
+    // Compute faceSize and faceCenter from detected box (fractions within the crop)
+    if (data.box && req.body.crop) {
+      const { box } = data;
+      data.faceSize   = Math.min(1.0, Math.round((box.y2 - box.y) * 100) / 100);
+      data.faceCenter = {
+        cx: Math.round(((box.x + box.x2) / 2) * 100) / 100,  // fraction of crop width
+        cy: Math.round(((box.y + box.y2) / 2) * 100) / 100,  // fraction of crop height
+      };
+    }
     return res.status(r.ok ? 200 : 500).json(data);
   } catch(e) {
     console.error('detect-face error:', e.message);

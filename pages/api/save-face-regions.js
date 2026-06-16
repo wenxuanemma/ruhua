@@ -17,6 +17,7 @@ export default function handler(req, res) {
   const existingFaceAngles = {};
   const existingColorShifts = {};
   const existingFaceSizes = {};
+  const existingFaceCenters = {};
   const existingSkinSamples = {};
   let existingFooter = ''; // preserve GUEST_SPOTS and anything after FACE_REGIONS
   try {
@@ -33,6 +34,9 @@ export default function handler(req, res) {
     // Extract faceSize
     const faceSizeMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceSize\s*:\s*([\d.]+)/g);
     for (const m of faceSizeMatches) existingFaceSizes[m[1]] = parseFloat(m[2]);
+    // Extract faceCenter
+    const faceCenterMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceCenter\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)/g);
+    for (const m of faceCenterMatches) existingFaceCenters[m[1]] = { cx: parseFloat(m[2]), cy: parseFloat(m[3]) };
     // Extract skinSample
     const skinSampleMatches = existing.matchAll(/(\w+)\s*:.*skinSample\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)\s*,\s*r\s*:\s*([\d.]+)/g);
     for (const m of skinSampleMatches) existingSkinSamples[m[1]] = { cx:parseFloat(m[2]), cy:parseFloat(m[3]), r:parseFloat(m[4]) };
@@ -64,8 +68,10 @@ export default function handler(req, res) {
       const skinSample = v.skinSample ?? existingSkinSamples[figId];
       const colorShiftStr = colorShift != null ? `, colorShift:${colorShift}` : '';
       const faceSizeStr   = faceSize   != null ? `, faceSize:${faceSize}`     : '';
+      const faceCenter  = v.faceCenter  ?? existingFaceCenters[figId];
+      const faceCenterStr = faceCenter ? `, faceCenter:{ cx:${faceCenter.cx.toFixed(4)}, cy:${faceCenter.cy.toFixed(4)} }` : '';
       const skinSampleStr = skinSample ? `, skinSample:{ cx:${skinSample.cx.toFixed(4)}, cy:${skinSample.cy.toFixed(4)}, r:${skinSample.r.toFixed(4)} }` : '';
-      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${colorShiftStr}${faceSizeStr}${skinSampleStr} },`);
+      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${colorShiftStr}${faceSizeStr}${faceCenterStr}${skinSampleStr} },`);
     }
     lines.push(`  },`);
   }
