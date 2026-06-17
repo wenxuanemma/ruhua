@@ -225,6 +225,7 @@ export function useGenerate() {
   }, [pollUntilDone]);
 
   const generate = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
+    const needAngles = Object.values(FACE_REGIONS[painting.id] || {}).some(f => !f.disabled && f.faceAngle && f.faceAngle !== 'front');
     stopPolling();
     setOutputUrl(null);
     setProfileUrl(null);
@@ -326,22 +327,25 @@ export function useGenerate() {
           console.warn('Could not convert to base64, caching URL:', e.message);
         }
 
-        // Generate angled portraits via Kontext (2 calls, ~16s parallel)
-        // Returns front + 3/4_a + 3/4_b + profile_a + profile_b
-        setStatus('compositing'); // show progress while angles generate
+        // Generate angled portraits via Kontext only if painting has non-front figures
+        setStatus('compositing');
         let anglePortraits = null;
-        try {
-          const anglesRes = await fetch('/api/generate-angles', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ frontPortraitUrl: styled }),
-          });
-          if (anglesRes.ok) {
-            anglePortraits = await anglesRes.json();
-            console.log('[angles] Generated:', Object.keys(anglePortraits));
+        if (needAngles) {
+          try {
+            const anglesRes = await fetch('/api/generate-angles', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ frontPortraitUrl: styled }),
+            });
+            if (anglesRes.ok) {
+              anglePortraits = await anglesRes.json();
+              console.log('[angles] Generated:', Object.keys(anglePortraits));
+            }
+          } catch (e) {
+            console.warn('[angles] Angle generation failed, falling back to front only:', e.message);
           }
-        } catch (e) {
-          console.warn('[angles] Angle generation failed, falling back to front only:', e.message);
+        } else {
+          console.log('[angles] Skipped — all available figures are front-facing');
         }
 
         // Cache: store the full angle set (or just front if Kontext failed)
