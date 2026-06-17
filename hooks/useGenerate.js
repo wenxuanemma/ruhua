@@ -285,7 +285,7 @@ export function useGenerate() {
 
         // If cached value is just a front URL string (loaded from localStorage after reload),
         // regenerate angle portraits via Kontext now (no Seedream needed)
-        if (!cachedPortraitSet && styled) {
+        if (needAngles && !cachedPortraitSet && styled) {
           console.log('[angles] Cache hit but no angle portraits — regenerating via Kontext...');
           try {
             const anglesRes = await fetch('/api/generate-angles', {
