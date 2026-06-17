@@ -331,19 +331,11 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Step 4: Paste onto painting ──────────────────────────────────────────
-    // If faceCenter is available, align paste so converted face covers the painted face.
-    // faceCenter.cx/cy are fractions of the region (from auto-detect on painting).
-    // Otherwise fall back to calibrate oval center (50% x, 55% y of region).
-    const fc = region.faceCenter;
-    const faceCenterPx = fc
-      ? targetX + Math.round(fc.cx * targetW)
-      : targetX + Math.round(targetW * 0.50);
-    const faceCenterPy = fc
-      ? targetY + Math.round(fc.cy * targetH)
-      : targetY + Math.round(targetH * 0.55);
-    // Paste pasteS square centered on painted face center
-    const px = Math.max(0, Math.min(faceCenterPx - Math.round(pasteS / 2), PW - pasteS));
-    const py = Math.max(0, Math.min(faceCenterPy - Math.round(pasteS / 2), PH - pasteS));
+    // Paste centered on region center (50% x, 55% y — matches calibrate oval position)
+    const cx = targetX + Math.round(targetW * 0.50);
+    const cy = targetY + Math.round(targetH * 0.55);
+    const px = Math.max(0, Math.min(cx - Math.round(pasteS / 2), PW - pasteS));
+    const py = Math.max(0, Math.min(cy - Math.round(pasteS / 2), PH - pasteS));
 
     console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalRx=${ovalRx.toFixed(0)} ovalRy=${ovalRy.toFixed(0)} ovalCx=${ovalCx.toFixed(0)} ovalCy=${ovalCy.toFixed(0)} profileFaceWidthFrac=${profileFaceWidthFrac?.toFixed(2)??'null'} faceCenterInCropX=${faceCenterInCropX?.toFixed(0)??'null'} cropSize=${cropSize}`);
 

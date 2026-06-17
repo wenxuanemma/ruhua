@@ -456,8 +456,10 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
         </div>
 
         <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
-          {painting.figures.map((fig, i) => (
-            <div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
+          {painting.figures.map((fig, i) => {
+            const figRegion = FACE_REGIONS[painting.id]?.[fig.id];
+            if (figRegion?.disabled) return null;
+            return (<div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
               style={{
                 border:`1px solid ${fig.rec ? 'rgba(201,168,76,.38)' : C.border}`,
                 background: fig.rec ? C.goldFaint : 'transparent',
@@ -487,7 +489,8 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
                 )}
               </div>
             </div>
-          ))}
+          );
+          })}
         </div>
 
         <div className="r6" style={{ marginTop:20, padding:'12px 14px',
