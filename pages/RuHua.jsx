@@ -112,8 +112,8 @@ const PAINTINGS = [
     color: '#8a4020',
     figures: [
       { id:'guest',  name:'宾客',    en:'Honored Guest',    pose:'Near-frontal', rec:true },
-      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true },
-      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false },
+      { id:'host',   name:'韩熙载',  en:'Han Xizai (Host)', pose:'Near-frontal', rec:true,  disabled:true },
+      { id:'dancer', name:'舞伎',    en:'Court Dancer',     pose:'Profile',      rec:false, disabled:true },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
@@ -458,7 +458,7 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
         <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
           {painting.figures.map((fig, i) => {
             const figRegion = FACE_REGIONS[painting.id]?.[fig.id];
-            if (figRegion?.disabled) return null;
+            if (fig.disabled || figRegion?.disabled) return null;
             return (<div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
               style={{
                 border:`1px solid ${fig.rec ? 'rgba(201,168,76,.38)' : C.border}`,

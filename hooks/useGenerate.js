@@ -226,6 +226,7 @@ export function useGenerate() {
 
   const generate = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
     const needAngles = Object.values(FACE_REGIONS[painting.id] || {}).some(f => !f.disabled && f.faceAngle && f.faceAngle !== 'front');
+    console.log('[needAngles]', painting.id, needAngles, Object.entries(FACE_REGIONS[painting.id]||{}).map(([k,v])=>k+':disabled='+v.disabled+',angle='+v.faceAngle));
     stopPolling();
     setOutputUrl(null);
     setProfileUrl(null);
