@@ -40,8 +40,15 @@ async function runKontext(imageUrl, prompt) {
     signal: AbortSignal.timeout(60000),
   });
   const data = await res.json();
-  if (!res.ok || data.error) throw new Error(data.error || `Kontext failed: ${res.status}`);
-  return data.images?.[0]?.url || data.data?.[0]?.url;
+  if (!res.ok || data.error) {
+    const errMsg = typeof data.error === 'string' ? data.error
+      : data.error ? JSON.stringify(data.error) : `Kontext failed: ${res.status}`;
+    console.error('[generate-angles] Kontext API error:', errMsg, 'full response:', JSON.stringify(data).slice(0,300));
+    throw new Error(errMsg);
+  }
+  const url = data.images?.[0]?.url || data.data?.[0]?.url;
+  if (!url) throw new Error(`Kontext returned no URL. Response: ${JSON.stringify(data).slice(0,200)}`);
+  return url;
 }
 
 async function bufToDataUrl(buf) {
@@ -138,7 +145,8 @@ export default async function handler(req, res) {
     });
 
   } catch (err) {
-    console.error('[generate-angles] error:', err.message);
-    return res.status(500).json({ error: err.message });
+    const msg = err?.message || JSON.stringify(err) || 'unknown error';
+    console.error('[generate-angles] error:', msg);
+    return res.status(500).json({ error: msg });
   }
 }
