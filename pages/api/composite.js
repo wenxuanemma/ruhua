@@ -291,12 +291,10 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // pasteS = S * faceSize — scales converted face to match painted face size.
+    // pasteS always = S — paste at full targetSize.
     const faceSize = region.faceSize ?? 1.0;
-    const pasteS = Math.max(20, Math.round(S * faceSize));
-    const pasteFace = (pasteS === S) ? colorFaceExact : await sharp(colorFaceExact)
-      .resize(pasteS, pasteS, { fit: 'cover', position: 'centre' })
-      .png().toBuffer();
+    const pasteS = S;
+    const pasteFace = colorFaceExact;
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
     // Oval rx/ry: calibrate proportions (82%/84%) applied to pasteS.
