@@ -61,6 +61,7 @@ export default async function handler(req, res) {
     let faceCropBox = null;
     let cropX, cropY, cropSize;
     let faceCenterInCropX = null, faceCenterInCropY = null;
+    let profileFaceWidthFrac = null;
     let cropMethod = 'fallback';
 
     // Selfie-based crop only for front-facing figures — three-quarter and profile
@@ -151,7 +152,10 @@ export default async function handler(req, res) {
                   const facingRight = noseTip.x > eyeCx;
                   const backOfHead  = facingRight ? Math.round(box.x * FW) : Math.round(box.x2 * FW);
                   faceCenterX = Math.round((backOfHead + noseTip.x) / 2);
-                  cropSize = Math.min(Math.max(landmarkH, bboxW) + 40, 1500);
+                  const faceSpanX = Math.abs(noseTip.x - backOfHead);
+                  profileFaceWidthFrac = faceSpanX / Math.max(landmarkH, 1);
+                  // Use landmarkH only — bboxW inflates crop unnecessarily for profile faces
+                  cropSize = Math.min(landmarkH + 40, 1500);
                 } else if (!isFront) {
                   // 3/4: near eye (facing direction determines which eye is closer to audience)
                   const facingRight = noseTip.x > eyeCx;
@@ -298,11 +302,12 @@ export default async function handler(req, res) {
     // Oval rx/ry: calibrate proportions (82%/84%) applied to pasteS.
     // pasteS is already scaled by faceSize so oval naturally matches painted face.
     // Profile faces get wider rx to cover nose tip.
-    // Scale oval by faceSize to match painted face area (not full region)
-    const faceSizeScale = region.faceSize ?? 1.0;
-    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41 * faceSizeScale, pasteS * 0.48);
-    const ovalRx = isProfile ? Math.min(ovalRxBase * 1.3, pasteS * 0.48) : ovalRxBase;
-    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42 * faceSizeScale, pasteS * 0.48);
+    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
+    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    // Profile: use actual face width (noseTip-to-ear fraction of landmarkH) for rx
+    const ovalRx = (isProfile && profileFaceWidthFrac)
+      ? Math.min(profileFaceWidthFrac * ovalRy * 1.1, pasteS * 0.48)
+      : ovalRxBase;
     const ovalR  = Math.min(ovalRx, ovalRy);
     // Oval center: map face center from crop space to pasteS space
     // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
@@ -342,7 +347,7 @@ export default async function handler(req, res) {
     const px = Math.max(0, Math.min(faceCenterPx - Math.round(pasteS / 2), PW - pasteS));
     const py = Math.max(0, Math.min(faceCenterPy - Math.round(pasteS / 2), PH - pasteS));
 
-    console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalR=${ovalR.toFixed(0)}`);
+    console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalRx=${ovalRx.toFixed(0)} ovalRy=${ovalRy.toFixed(0)} ovalCx=${ovalCx.toFixed(0)} ovalCy=${ovalCy.toFixed(0)} profileFaceWidthFrac=${profileFaceWidthFrac?.toFixed(2)??'null'} faceCenterInCropX=${faceCenterInCropX?.toFixed(0)??'null'} cropSize=${cropSize}`);
 
     // Sharp paste with oval gradient mask
     const masked = await sharp(pasteFace)

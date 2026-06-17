@@ -1445,19 +1445,17 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                               top:  `${-reg.y / reg.h * 100}%`,
                               maxWidth:'none',
                             }}/>
-                            {/* Oval showing paste area — uses faceSize/faceCenter from faceRegions */}
+                            {/* Oval showing paste area — matches calibrate oval */}
                             {generatedUrl && (() => {
                               const thumbW = 120, thumbH = 140;
-                              const fs = reg?.faceSize ?? 1.0;
-                              const fc = reg?.faceCenter;
-                              const ovalW = thumbW * 0.82 * fs;
-                              const ovalH = thumbH * 0.84 * fs;
-                              const cx = fc ? fc.cx * thumbW : thumbW * 0.50;
-                              const cy = fc ? fc.cy * thumbH : thumbH * 0.55;
+                              const ovalW = thumbW * 0.82;
+                              const ovalH = thumbH * 0.84;
+                              const ovalL = (thumbW - ovalW) / 2;
+                              const ovalT = thumbH * 0.13;
                               return (
                                 <div style={{
                                   position:'absolute',
-                                  left: cx - ovalW/2, top: cy - ovalH/2,
+                                  left: ovalL, top: ovalT,
                                   width: ovalW, height: ovalH,
                                   borderRadius:'50%',
                                   background:'rgba(100,160,255,0.20)',
