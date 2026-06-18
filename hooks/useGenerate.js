@@ -4,6 +4,7 @@
 //   Stage 1 — InstantID style transfer  → styledFaceUrl (cached per selfie)
 //   Stage 2 — Sharp composite           → outputUrl + profileUrl
 import { FACE_REGIONS } from '../lib/faceRegions';
+import { detectSelfie } from '../lib/detectFaceClient';
 //
 // Caching: if the same selfie is reused (switching painting/figure),
 // Stage 1 is skipped and only Stage 2 reruns (~3s instead of ~35s).
@@ -248,12 +249,18 @@ export function useGenerate() {
       const cachedSelectedPortrait = selectPortrait(cachedPortraitSet, cachedFaceAngle) || cachedResult.styledUrl;
       setStyledUrl(cachedSelectedPortrait); // show angle-selected portrait in debug panel
       try {
+        const cachedRegion = FACE_REGIONS[painting.id]?.[figure.id];
+        const cachedIsFront = !cachedRegion?.faceAngle || cachedRegion?.faceAngle === 'front';
+        let cachedPortraitFaceBounds = null;
+        if (cachedIsFront) {
+          cachedPortraitFaceBounds = await detectSelfie(cachedSelectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
+        }
         const composite = await runComposite({
           styledFaceUrl:    cachedSelectedPortrait,
           painting,
           figure,
           paintingImageUrl: styleImageUrl,
-          faceBounds: cachedFaceBounds,
+          faceBounds: cachedPortraitFaceBounds || cachedFaceBounds,
         });
         setOutputUrl(composite);
         setStatus('succeeded');
@@ -373,12 +380,21 @@ export function useGenerate() {
       console.log(`[composite] faceAngle=${faceAngle} → portrait selected from set`);
       setStyledUrl(selectedPortrait); // show angle-selected portrait in debug panel
 
+      // Detect face in portrait directly — stable across runs, no selfie correlation.
+      const region = FACE_REGIONS[painting.id]?.[figure.id];
+      const isFrontFacing = !region?.faceAngle || region?.faceAngle === 'front';
+      let portraitFaceBounds = null;
+      if (isFrontFacing) {
+        portraitFaceBounds = await detectSelfie(selectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
+        if (portraitFaceBounds) console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
+        else console.log('[portrait] face detection failed, using fallback');
+      }
       const composite = await runComposite({
         styledFaceUrl:    selectedPortrait,
         painting,
         figure,
         paintingImageUrl: styleImageUrl,
-        faceBounds: detectedFaceBounds,
+        faceBounds: portraitFaceBounds || detectedFaceBounds,
       });
 
       // Save only styledUrl to result cache — compositing is fast (~400ms)

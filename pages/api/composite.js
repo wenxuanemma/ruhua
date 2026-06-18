@@ -67,24 +67,23 @@ export default async function handler(req, res) {
     // Selfie-based crop only for front-facing figures — three-quarter and profile
     // figures have different poses than the selfie so faceBounds doesn't apply.
     if (isFront && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
-      // ── Front/3Q: selfie-based crop ──────────────────────────────────────
-      // faceBounds is normalized to selfie dimensions.
-      // Seedream is asked to match framing, so we apply same normalized coords
-      // to the 1920px output, with a generous pad to account for imperfect matching.
-      const PAD = 0.10; // 10% padding on each side
-      const cx = faceBounds.x + faceBounds.w / 2;
-      const cy = faceBounds.y + faceBounds.h / 2;
-      // Use the larger of w/h for a square crop
-      const faceSpan = Math.max(faceBounds.w, faceBounds.h);
-      const cropSpan = Math.min(faceSpan * (1 + PAD * 2) * 1.1, 0.90); // 1.1× for Seedream framing variance
-      cropSize = Math.round(cropSpan * FW);
-      cropX = Math.max(0, Math.min(Math.round(cx * FW - cropSize / 2), FW - cropSize));
-      cropY = Math.max(0, Math.min(Math.round(cy * FH - cropSize / 2), FH - cropSize));
-      cropMethod = 'selfie';
-      // Face center for selfie path
-      faceCenterInCropX = Math.round(faceBounds.x * FW + faceBounds.w * FW / 2) - cropX;
-      faceCenterInCropY = Math.round(faceBounds.y * FH + faceBounds.h * FH / 2) - cropY;
-      console.log(`[composite:${figureId} crop] SELFIE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+      // ── Front/3Q: portrait face bounds crop ─────────────────────────────
+      // faceBounds detected directly from portrait via client MediaPipe.
+      // Asymmetric padding: large top (40%) for forehead, small bottom (5%) to avoid neck.
+      const padTop = 0.40, padBot = 0.05, padX = 0.15;
+      const faceW = faceBounds.w, faceH = faceBounds.h;
+      const cx = faceBounds.x + faceW / 2;
+      const cropTop  = Math.max(0, faceBounds.y - faceH * padTop);
+      const cropBot  = Math.min(1, faceBounds.y + faceH * (1 + padBot));
+      const cropLeft = Math.max(0, cx - faceW * (0.5 + padX));
+      const cropRight= Math.min(1, cx + faceW * (0.5 + padX));
+      cropSize = Math.round(Math.max(cropBot - cropTop, cropRight - cropLeft) * FW);
+      cropX = Math.max(0, Math.min(Math.round(cropLeft * FW), FW - cropSize));
+      cropY = Math.max(0, Math.min(Math.round(cropTop * FH), FH - cropSize));
+      cropMethod = 'portrait-face';
+      faceCenterInCropX = Math.round(cx * FW) - cropX;
+      faceCenterInCropY = Math.round((faceBounds.y + faceH / 2) * FH) - cropY;
+      console.log(`[composite:${figureId} crop] PORTRAIT-FACE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
 
     } else {

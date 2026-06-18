@@ -173,41 +173,8 @@ export default async function handler(req, res) {
   // Use selfie directly — face bounds pre-crop disabled temporarily for debugging
   let faceImage = selfie;
 
-  // Detect face in selfie server-side for reliable faceBounds.
-  // Used by composite.js to crop Seedream output at matching position.
-  let selfieFaceBounds = faceBounds || null;
-  const LOCAL_SERVER_GEN = process.env.LOCAL_INFERENCE_URL;
-  if (!selfieFaceBounds && LOCAL_SERVER_GEN) {
-    try {
-      const selfieData = selfie.startsWith('data:') ? selfie : `data:image/jpeg;base64,${selfie}`;
-      const detectRes = await fetch(`${LOCAL_SERVER_GEN}/detect-face-mp`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ init_image: selfieData }),
-        signal: AbortSignal.timeout(8000),
-      });
-      if (detectRes.ok) {
-        const { box } = await detectRes.json();
-        if (box) {
-          const rawW = box.x2 - box.x;
-          const rawH = box.y2 - box.y;
-          const cx = box.x + rawW / 2;
-          const cy = box.y + rawH / 2;
-          const clampedW = Math.min(rawW, 0.40);
-          const clampedH = Math.min(rawH, 0.38);
-          selfieFaceBounds = {
-            x: Math.max(0, cx - clampedW / 2),
-            y: Math.max(0, cy - clampedH / 2),
-            w: clampedW,
-            h: clampedH,
-          };
-          console.log(`[generate] selfieFaceBounds: y=${selfieFaceBounds.y.toFixed(2)} h=${selfieFaceBounds.h.toFixed(2)}`);
-        }
-      }
-    } catch (e) {
-      console.warn('[generate] selfie face detection failed:', e.message);
-    }
-  }
+  // Portrait face detected client-side in useGenerate.js after generation.
+  const selfieFaceBounds = null;
 
   try {
     const AIML_KEY = process.env.AIML_API_KEY;
