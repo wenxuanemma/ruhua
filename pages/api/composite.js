@@ -69,19 +69,21 @@ export default async function handler(req, res) {
     if (isFront && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
       // ── Front/3Q: portrait face bounds crop ─────────────────────────────
       // faceBounds detected directly from portrait via client MediaPipe.
-      // Asymmetric padding: large top (40%) for forehead, small bottom (5%) to avoid neck.
-      const padTop = 0.40, padBot = 0.05, padX = 0.15;
-      const faceW = faceBounds.w, faceH = faceBounds.h;
-      const cx = faceBounds.x + faceW / 2;
-      const cropTop  = Math.max(0, faceBounds.y - faceH * padTop);
-      const cropBot  = Math.min(1, faceBounds.y + faceH * (1 + padBot));
-      const cropLeft = Math.max(0, cx - faceW * (0.5 + padX));
-      const cropRight= Math.min(1, cx + faceW * (0.5 + padX));
-      cropSize = Math.round(Math.max(cropBot - cropTop, cropRight - cropLeft) * FW);
-      cropX = Math.max(0, Math.min(Math.round(cropLeft * FW), FW - cropSize));
+      // Horizontal: always center on portrait midpoint (Seedream always generates
+      // a centered face — detected x is unreliable due to hair/background inflation).
+      // Vertical: use faceBounds.y for forehead position with asymmetric padding.
+      const padTop = 0.40, padBot = 0.05;
+      const faceH = faceBounds.h;
+      const cropTop = Math.max(0, faceBounds.y - faceH * padTop);
+      const cropBot = Math.min(1, faceBounds.y + faceH * (1 + padBot));
+      const cropHeightFrac = cropBot - cropTop;
+      // Use face height * (1 + padTop + padBot) as crop size, but at least 50% of portrait
+      cropSize = Math.round(Math.max(cropHeightFrac, 0.50) * FH);
+      // Always center horizontally on portrait midpoint
+      cropX = Math.max(0, Math.min(Math.round(FW / 2 - cropSize / 2), FW - cropSize));
       cropY = Math.max(0, Math.min(Math.round(cropTop * FH), FH - cropSize));
       cropMethod = 'portrait-face';
-      faceCenterInCropX = Math.round(cx * FW) - cropX;
+      faceCenterInCropX = Math.round(FW / 2) - cropX;
       faceCenterInCropY = Math.round((faceBounds.y + faceH / 2) * FH) - cropY;
       console.log(`[composite:${figureId} crop] PORTRAIT-FACE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
