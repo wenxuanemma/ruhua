@@ -6,6 +6,14 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
 async function fetchBuf(url) {
   if (url.startsWith('data:')) return Buffer.from(url.split(',')[1], 'base64');
+  // Relative paths (e.g. /paintings/gongle.jpg) are served as static assets —
+  // read directly from disk to avoid server-side fetch of relative URLs.
+  if (url.startsWith('/')) {
+    const { readFile } = await import('fs/promises');
+    const { join } = await import('path');
+    const filePath = join(process.cwd(), 'public', url);
+    return await readFile(filePath);
+  }
   const r = await fetch(url);
   if (!r.ok) throw new Error(`Failed to fetch: ${url}`);
   return Buffer.from(await r.arrayBuffer());
