@@ -235,7 +235,7 @@ export function useGenerate() {
     const selfieHash = quickHash(selfie);
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
     const styleKey = `${selfieHash}_${gender || 'woman'}`;
-    const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
+    const resultKey = `${selfieHash}_${painting.id}_${figure.id}_${gender || 'woman'}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
     const cachedResult = resultCache.current[resultKey];

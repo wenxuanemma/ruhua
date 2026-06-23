@@ -89,9 +89,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#10060300 0%,#100603 0%,#3a100a 24%,#6a2c16 50%,#4a1e0e 74%,#100603 100%)',
     color: '#8a4020',
     figures: [
-      { id:'guest',  name:'宾客',   en:'Honored Guest',    rec:true },
-      { id:'host',   name:'韩熙载', en:'Han Xizai (Host)', rec:true,  disabled:true },
-      { id:'dancer', name:'舞伎',   en:'Court Dancer',     rec:false, disabled:true },
+      { id:'guest',  name:'宾客',   en:'Honored Guest',    gender:'man',   rec:true },
+      { id:'host',   name:'韩熙载', en:'Han Xizai (Host)', gender:'man',   rec:true,  disabled:true },
+      { id:'dancer', name:'舞伎',   en:'Court Dancer',     gender:'woman', rec:false, disabled:true },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
@@ -111,9 +111,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a0814 0%,#562040 24%,#925068 50%,#6a3850 74%,#1a0814 100%)',
     color: '#925068',
     figures: [
-      { id:'listener', name:'听乐仕女', en:'Lady of the Court', rec:true },
-      { id:'musician', name:'琵琶仕女', en:'Pipa Musician',     rec:true },
-      { id:'serving',  name:'侍女',     en:'Serving Attendant', rec:true },
+      { id:'listener', name:'听乐仕女', en:'Lady of the Court', gender:'woman', rec:true },
+      { id:'musician', name:'琵琶仕女', en:'Pipa Musician',     gender:'woman', rec:true },
+      { id:'serving',  name:'侍女',     en:'Serving Attendant', gender:'woman', rec:true },
     ],
     youAre: '听乐仕女 · Lady of the Tang Court',
     context: 'Ten Tang dynasty court ladies gather at a lacquered table — playing pipa, zither, and flute, or simply listening. Their full-figured forms and elaborate hairstyles embody the cosmopolitan aesthetic of Tang at its height.',
@@ -133,8 +133,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a1206 0%,#4a3418 24%,#9a7840 50%,#6a5228 74%,#1a1206 100%)',
     color: '#9a7840',
     figures: [
-      { id:'ironer',   name:'熨绢仕女', en:'Lady Ironing Silk',   rec:true },
-      { id:'threader', name:'穿针仕女', en:'Lady Threading Silk', rec:true },
+      { id:'ironer',   name:'熨绢仕女', en:'Lady Ironing Silk',   gender:'woman', rec:true },
+      { id:'threader', name:'穿针仕女', en:'Lady Threading Silk', gender:'woman', rec:true },
     ],
     youAre: '熨绢仕女 · Lady of the Silk Chamber',
     context: 'Zhang Xuan\'s original is lost; this Song dynasty copy by Emperor Huizong depicts three groups of Tang court ladies processing newly woven silk — pounding, threading, and ironing. Held at the Museum of Fine Arts, Boston.',
@@ -154,8 +154,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140a04 0%,#3a2010 24%,#7a5028 50%,#4a3018 74%,#140a04 100%)',
     color: '#7a5028',
     figures: [
-      { id:'topleft',   name:'左侧仕女', en:'Lady with Child',   rec:true },
-      { id:'topcenter', name:'中央仕女', en:'Lady of the Court', rec:true },
+      { id:'topleft',   name:'左侧仕女', en:'Lady with Child',   gender:'woman', rec:true },
+      { id:'topcenter', name:'中央仕女', en:'Lady of the Court', gender:'woman', rec:true },
     ],
     youAre: '左侧仕女 · Palace Lady',
     context: 'Tang court ladies at leisure with children in the imperial palace. The full-figured beauties and playful children capture the warmth and intimacy of inner court life at its most unguarded. Held at the Metropolitan Museum of Art (CC0).',
@@ -175,8 +175,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#0e1208 0%,#283820 24%,#506840 50%,#384828 74%,#0e1208 100%)',
     color: '#506840',
     figures: [
-      { id:'lady',      name:'调琴仕女', en:'Lady at the Lute', rec:true },
-      { id:'attendant', name:'品茗仕女', en:'Lady Tasting Tea', rec:true },
+      { id:'lady',      name:'调琴仕女', en:'Lady at the Lute', gender:'woman', rec:true },
+      { id:'attendant', name:'品茗仕女', en:'Lady Tasting Tea', gender:'woman', rec:true },
     ],
     youAre: '调琴仕女 · Lady of Refined Taste',
     context: 'Zhou Fang, master of Tang court beauty painting, depicts ladies in an aristocratic garden — one tuning a qin lute, another savoring tea. The painting epitomizes the cultivated leisure of Tang elite women.',
@@ -196,8 +196,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#0a0810 0%,#281e3a 24%,#584870 50%,#3a2e52 74%,#0a0810 100%)',
     color: '#584870',
     figures: [
-      { id:'center', name:'执瓶仕女', en:'Lady with Vase',    rec:true },
-      { id:'seated', name:'倚坐仕女', en:'Seated Court Lady', rec:true },
+      { id:'center', name:'执瓶仕女', en:'Lady with Vase',    gender:'woman', rec:true },
+      { id:'seated', name:'倚坐仕女', en:'Seated Court Lady', gender:'woman', rec:true },
     ],
     youAre: '执瓶仕女 · Lady of the Inner Court',
     context: 'Zhou Fang\'s masterpiece of Tang court beauty depicts ladies in summer leisure — holding fans, vases, and accessories in the palace gardens. The melancholic stillness beneath the surface elegance made this one of the most celebrated figure paintings of the Tang dynasty.',
@@ -1568,10 +1568,7 @@ export default function RuHua() {
   const [figure, setFigure] = useState(null);
   const [selfie, setSelfie] = useState(null);
   const [faceBounds, setFaceBounds] = useState(null);
-  const [gender, setGender] = useState('woman');
-  const genderRef = useRef('woman');
-  const [genderNext, setGenderNext] = useState('generate');
-  const [skipSelfie, setSkipSelfie] = useState(false); // 'generate' | 'figure'
+  const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
 
   const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
@@ -1649,7 +1646,7 @@ export default function RuHua() {
                                             selfie,
                                             painting,
                                             figure: f,
-                                            gender: genderRef.current,
+                                            gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
                                           });
@@ -1659,7 +1656,7 @@ export default function RuHua() {
                                             selfie,
                                             painting,
                                             figure: f,
-                                            gender: genderRef.current,
+                                            gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
                                           });
@@ -1668,32 +1665,27 @@ export default function RuHua() {
                                         }
                                       }}
                                       onBack={() => setScreen('gallery')} />}
-        {screen === 'gender'     && <GenderScreen currentGender={gender} onSelect={g => {
-                                      setGender(g);
-                                      genderRef.current = g;
-                                      if (genderNext === 'figure') {
-                                        setScreen('figure');
-                                      } else {
-                                        setScreen('processing');
-                                        generate({
-                                          selfie, painting, figure,
-                                          gender: g,
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
-                                        });
-                                      }
-                                    }} />}
         {screen === 'selfie'     && <SelfieScreen painting={painting} figure={figure} imgs={imgs}
                                       onCaptured={(img, bounds) => { setSelfie(img); setFaceBounds(bounds); }}
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
-                                        setGenderNext('generate');
-                                        setScreen('gender');
+                                        setScreen('processing');
+                                        generate({
+                                          selfie: img, painting, figure,
+                                          gender: figure?.gender || 'woman',
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
+                                        });
                                       }}
                                       onConfirm={() => {
-                                        setGenderNext('generate');
-                                        setScreen('gender');
+                                        setScreen('processing');
+                                        generate({
+                                          selfie, painting, figure,
+                                          gender: figure?.gender || 'woman',
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
+                                        });
                                       }}
                                       onBack={() => setScreen('figure')} />}
         {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} onRetry={() => setScreen('selfie')} />}
@@ -1709,12 +1701,8 @@ export default function RuHua() {
                                       onReset={reset}
                                       onChangeFigure={() => {
                                         resetGen();
-                                        // Don't clearStyledCache — style cache now contains all 5 angle
-                                        // portraits per selfie. Clearing forces a full Seedream+Kontext
-                                        // regeneration. selectPortrait() picks the right angle per figure.
                                         setSkipSelfie(true); // keep existing selfie, skip capture
-                                        setGenderNext('figure');
-                                        setScreen('gender');
+                                        setScreen('figure');
                                       }}
                                       onNew={() => {
                                         // Keep styled face cache — switch painting, rerun compositing
