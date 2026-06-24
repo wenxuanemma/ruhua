@@ -349,7 +349,7 @@ export default function Calibrate() {
           const { cx, cy } = v.skinSample;
           const dotX = cx * imgSize.w;
           const dotY = cy * imgSize.h;
-          const dotR = Math.max(6, (v.skinSample.r||0.008) * imgSize.w);
+          const dotR = Math.max(6, (v.skinSample.r||0.008) * Math.min(imgSize.w, imgSize.h));
           return (
             <div key={`skin_${fig.id}`} style={{
               position:'absolute',
@@ -436,7 +436,7 @@ export default function Calibrate() {
       </div>
 
       {/* Output */}
-      <div style={{marginTop:16,display:'flex',gap:8,alignItems:'center'}}>
+      <div style={{marginTop:16,display:'flex',gap:8,alignItems:'center',flexWrap:'wrap'}}>
         <button onClick={async () => {
           // Build full regions object from current vals
           const regions = {};
@@ -463,6 +463,30 @@ export default function Calibrate() {
         }} style={{padding:'6px 18px',background:'rgba(201,168,76,0.15)',
                    border:`1px solid ${C.gold}`,color:C.gold,cursor:'pointer',fontSize:13}}>
           💾 Save to lib/faceRegions.js
+        </button>
+        <button onClick={() => {
+          if (!confirm(`Reset all calibrations for ${painting.title}? This clears skinSample, colorShift, faceSize and faceCenter for all figures in this painting.`)) return;
+          setVals(prev => {
+            const next = {...prev};
+            for (const f of painting.figures) {
+              const key = `${painting.id}_${f.id}`;
+              if (next[key]) {
+                next[key] = {
+                  x: next[key].x, y: next[key].y,
+                  w: next[key].w, h: next[key].h,
+                  angle: next[key].angle ?? 0,
+                  skinSample: null,
+                  colorShift: null,
+                  faceSize: null,
+                  faceCenter: null,
+                };
+              }
+            }
+            return next;
+          });
+        }} style={{padding:'6px 18px',background:'rgba(226,75,74,0.1)',
+                   border:'1px solid rgba(226,75,74,0.4)',color:'#e24b4a',cursor:'pointer',fontSize:13}}>
+          🔄 Reset painting calibrations
         </button>
         <span style={{fontSize:11,color:C.dim}}>
           Saves directly to source — no copy/paste needed

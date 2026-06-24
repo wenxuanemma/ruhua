@@ -433,9 +433,81 @@ function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
 
 // ─── Figure Screen ───────────────────────────────────────────────────────────
 
+// ─── Shared Background Component ─────────────────────────────────────────────
+
+function PaintingBackground({ painting }) {
+  return (
+    <div className="fade-a">
+      <div style={{ fontFamily:F.brush, fontSize:24, color:C.silk, marginBottom:3 }}>
+        历史背景
+      </div>
+      <div style={{ fontFamily:F.serif, fontSize:11, color:C.gold, marginBottom:2 }}>
+        Historical Background
+      </div>
+      <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginBottom:16 }}>
+        {painting?.subZh}
+      </div>
+
+      <div style={{ background:C.card, border:`1px solid ${C.border}`, padding:16, marginBottom:14 }}>
+        <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
+          <div>
+            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk }}>{painting?.title}</div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim }}>{painting?.sub}</div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginTop:2 }}>{painting?.artistFull}</div>
+          </div>
+          <div style={{
+            width:36, height:36, background:C.vermillion,
+            color:'#f5e8c4', fontFamily:F.brush, fontSize:11,
+            display:'flex', alignItems:'center', justifyContent:'center',
+            writingMode:'vertical-rl', flexShrink:0, marginLeft:10,
+          }}>
+            {painting?.dynasty}
+          </div>
+        </div>
+        <div style={{ height:1, background:C.border, marginBottom:12 }} />
+        <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
+          <div>
+            <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginBottom:3 }}>朝代 · Dynasty</div>
+            <div style={{ fontFamily:F.serif, fontSize:12, color:C.silk }}>{painting?.dynastyFullZh}</div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginTop:2 }}>{painting?.dynastyFull}</div>
+          </div>
+          <div>
+            <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginBottom:3 }}>画家 · Artist</div>
+            <div style={{ fontFamily:F.serif, fontSize:12, color:C.silk }}>{painting?.artistFull}</div>
+          </div>
+        </div>
+        <div style={{ height:1, background:C.border, marginBottom:12 }} />
+        <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.8, marginBottom:10 }}>
+          {painting?.contextZh}
+        </div>
+        <div style={{ fontFamily:F.serif, fontSize:12, color:C.silkDim, lineHeight:1.8 }}>
+          {painting?.context}
+        </div>
+      </div>
+
+      <div style={{ background:'rgba(191,36,41,.07)', border:`1px solid rgba(191,36,41,.28)`, padding:'14px 16px' }}>
+        <div style={{ fontFamily:F.serif, fontSize:10, color:C.vermillion, letterSpacing:'.1em', marginBottom:6 }}>
+          你扮演的角色 · Your Role
+        </div>
+        <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:6 }}>
+          {painting?.youAre}
+        </div>
+        <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.75, marginBottom:8 }}>
+          {painting?.sceneZh}
+        </div>
+        <div style={{ fontFamily:F.serif, fontSize:12, color:C.silkDim, lineHeight:1.75 }}>
+          {painting?.scene}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Figure Screen ────────────────────────────────────────────────────────────
 function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
   if (!painting) return null;
   const imgUrl = imgs?.[painting.id];
+  const [showBg, setShowBg] = useState(false);
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
       {/* Hero — centered on first recommended figure if image available */}
@@ -469,53 +541,71 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
         </div>
       </div>
 
-      {/* Figure selection */}
-      <div style={{ padding:'24px 20px' }}>
-        <div className="r3" style={{ fontFamily:F.brush, fontSize:26, color:C.silk, marginBottom:3 }}>
-          选择角色
-        </div>
-        <div className="r4" style={{ fontFamily:F.latin, fontSize:11, color:C.silkFaint, letterSpacing:'.16em', marginBottom:20 }}>
-          Choose your figure in the painting
-        </div>
+      {/* Tab toggle */}
+      <div style={{ display:'flex', borderBottom:`1px solid ${C.border}` }}>
+        {[{id:false,zh:'选角色',en:'FIGURES'},{id:true,zh:'背景',en:'BACKGROUND'}].map(t => (
+          <button key={String(t.id)} onClick={() => setShowBg(t.id)}
+            style={{
+              flex:1, padding:'12px 0', background:'none', border:'none', cursor:'pointer',
+              borderBottom: showBg === t.id ? `2px solid ${C.gold}` : '2px solid transparent',
+              fontFamily:F.brush, fontSize:15,
+              color: showBg === t.id ? C.gold : C.silkDim,
+            }}>
+            {t.zh}
+          </button>
+        ))}
+      </div>
 
-        <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
-          {painting.figures.map((fig, i) => {
-            const figRegion = FACE_REGIONS[painting.id]?.[fig.id];
-            if (figRegion?.disabled) return null;
-            return (<div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
-              style={{
-                border:`1px solid ${fig.rec ? 'rgba(201,168,76,.38)' : C.border}`,
-                background: fig.rec ? C.goldFaint : 'transparent',
-                padding:'14px 16px', borderRadius:4,
-                display:'flex', alignItems:'center', justifyContent:'space-between',
-              }}>
-              <div>
-                <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:2 }}>
-                  {fig.name}
-                </div>
-                <div style={{ fontFamily:F.latin, fontSize:12, color:C.gold, marginBottom:6 }}>
-                  {fig.nameEn}
-                </div>
-                <div style={{ fontFamily:F.serif, fontSize:11, color:C.silk, lineHeight:1.6, marginBottom:3 }}>
-                  {fig.descZh}
-                </div>
-                <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.6 }}>
-                  {fig.descEn}
+      <div style={{ padding:'24px 20px' }}>
+        {!showBg ? (<>
+          <div className="r3" style={{ fontFamily:F.brush, fontSize:26, color:C.silk, marginBottom:3 }}>
+            选择角色
+          </div>
+          <div className="r4" style={{ fontFamily:F.latin, fontSize:11, color:C.silkFaint, letterSpacing:'.16em', marginBottom:20 }}>
+            Choose your figure in the painting
+          </div>
+
+          <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
+            {painting.figures.map((fig, i) => {
+              const figRegion = FACE_REGIONS[painting.id]?.[fig.id];
+              if (fig.disabled || figRegion?.disabled) return null;
+              return (<div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
+                style={{
+                  border:`1px solid ${fig.rec ? 'rgba(201,168,76,.38)' : C.border}`,
+                  background: fig.rec ? C.goldFaint : 'transparent',
+                  padding:'14px 16px', borderRadius:4,
+                  display:'flex', alignItems:'center', justifyContent:'space-between',
+                }}>
+                <div>
+                  <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:2 }}>
+                    {fig.name}
+                  </div>
+                  <div style={{ fontFamily:F.latin, fontSize:12, color:C.gold, marginBottom:6 }}>
+                    {fig.nameEn}
+                  </div>
+                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silk, lineHeight:1.6, marginBottom:3 }}>
+                    {fig.descZh}
+                  </div>
+                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.6 }}>
+                    {fig.descEn}
+                  </div>
                 </div>
               </div>
-            </div>
-          );
-          })}
-        </div>
-
-        <div className="r6" style={{ marginTop:20, padding:'12px 14px',
-          border:`1px solid ${C.borderSub}`, background:'rgba(201,168,76,.04)' }}>
-          <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
-            {hasCachedSelfie
-              ? '✓ 使用上次自拍 · 直接入画，无需重新拍照'
-              : '💡 选择人物后，拍摄正面自拍以获得最佳效果'}
+            );
+            })}
           </div>
-        </div>
+
+          <div className="r6" style={{ marginTop:20, padding:'12px 14px',
+            border:`1px solid ${C.borderSub}`, background:'rgba(201,168,76,.04)' }}>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
+              {hasCachedSelfie
+                ? '✓ 使用上次自拍 · 直接入画，无需重新拍照'
+                : '💡 选择人物后，拍摄正面自拍以获得最佳效果'}
+            </div>
+          </div>
+        </>) : (
+          <PaintingBackground painting={painting} />
+        )}
       </div>
     </div>
   );
@@ -1028,6 +1118,9 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
+  const [naturalDims, setNaturalDims] = useState(null);
+  const heroImgRef = useRef(null);
+  const isDebug = process.env.NODE_ENV === 'development';
   const imgUrl = generatedUrl || imgs?.[painting?.id];
   const region = FACE_REGIONS[painting?.id]?.[figure?.id];
 
@@ -1072,7 +1165,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
       {/* Hero — img with object-position correctly centers on face region */}
       <div style={{ position:'relative', paddingTop:'62%', overflow:'hidden' }}>
         {imgUrl
-          ? <img src={imgUrl} alt={painting?.title} style={{
+          ? <img ref={heroImgRef} src={imgUrl} alt={painting?.title} onLoad={e => setNaturalDims({ w: e.target.naturalWidth, h: e.target.naturalHeight })} style={{
               position:'absolute', inset:0, width:'100%', height:'100%',
               objectFit:'cover',
               objectPosition:`${Math.round(faceX * 100)}% ${Math.round(faceY * 100)}%`,
@@ -1085,37 +1178,68 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
             background:'linear-gradient(to bottom, transparent 50%, rgba(12,9,4,.7) 100%)' }} />
 
           {/* Debug: face region box + oval overlay — top layer */}
-          {showDebug && region && (
-            <div style={{
-              position:'absolute',
-              left:`${region.x*100}%`,
-              top:`${region.y*100}%`,
-              width:`${region.w*100}%`,
-              height:`${region.h*100}%`,
-              boxSizing:'border-box',
-              transform:`rotate(${region.angle||0}deg)`,
-              transformOrigin:'center center',
-              pointerEvents:'none',
-              zIndex:10,
-            }}>
-              {/* styledUrl preview removed — was showing pre-composite face at region size,
-                  making it look like the composite was smaller than it is.
-                  The debug panel below shows the styled face correctly. */}
-              {/* Red box — face region boundary */}
-              <div style={{
-                position:'absolute', inset:0,
-                border:'2px solid #e24b4a',
-                boxSizing:'border-box',
-              }}/>
-              {/* Dashed oval — actual composite blend boundary */}
+          {isDebug && showDebug && region && naturalDims && (() => {
+            // Container aspect: paddingTop 62% → containerW/containerH = 100/62
+            const containerAspect = 100 / 62;
+            const paintingAspect = naturalDims.w / naturalDims.h;
+
+            // objectFit:cover scales the image so it fills the container.
+            // objectPosition: faceX% faceY% means the painting point (faceX, faceY)
+            // maps to the container point (faceX, faceY).
+            //
+            // Case: painting wider than container → height fills, width overflows.
+            // Scale factor (painting→container, in fraction units):
+            //   scaleX = scaleY * paintingH/paintingW * containerW/containerH
+            //          = 1 * (containerAspect / paintingAspect)
+            // Mapping: containerX = faceX + (paintingX - faceX) * scaleX
+            //          containerY = faceY + (paintingY - faceY) * scaleY  [scaleY=1]
+            //
+            // Case: painting taller than container → width fills, height overflows.
+            // scaleY = paintingAspect / containerAspect, scaleX = 1
+            // Mapping: containerX = faceX + (paintingX - faceX) * scaleX  [scaleX=1]
+            //          containerY = faceY + (paintingY - faceY) * scaleY
+
+            let sx, sy; // scale factors painting→container in fraction space
+            if (paintingAspect > containerAspect) {
+              sy = 1;
+              sx = containerAspect / paintingAspect;
+            } else {
+              sx = 1;
+              sy = paintingAspect / containerAspect;
+            }
+
+            // Map region box corners
+            const left = faceX + (region.x - faceX) * sx;
+            const top  = faceY + (region.y - faceY) * sy;
+            const w    = region.w * sx;
+            const h    = region.h * sy;
+
+            return (
               <div style={{
                 position:'absolute',
-                left:'8%', top:'4%',
-                width:'84%', height:'90%',
-                borderRadius:'50%',
-                border:'2px dashed #e24b4a',
+                left:`${left*100}%`,
+                top:`${top*100}%`,
+                width:`${w*100}%`,
+                height:`${h*100}%`,
                 boxSizing:'border-box',
-              }}/>
+                transform:`rotate(${region.angle||0}deg)`,
+                transformOrigin:'center center',
+                pointerEvents:'none',
+                zIndex:10,
+              }}>
+                <div style={{
+                  position:'absolute', inset:0,
+                  border:'2px solid #e24b4a',
+                  boxSizing:'border-box',
+                }}/>
+                <div style={{
+                  position:'absolute',
+                  left:'8%', top:'4%',
+                  width:'84%', height:'90%',
+                  borderRadius:'50%',
+                  border:'2px dashed #e24b4a',
+                  boxSizing:'border-box',
+                }}/>
               {/* Label */}
               <div style={{
                 position:'absolute', top:-16, left:0,
@@ -1123,7 +1247,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                 background:'rgba(0,0,0,0.7)', padding:'1px 4px',
               }}>composite区域</div>
             </div>
-          )}
+            );
+          })()}
 
           {/* 你在此处 marker — offset from face to avoid overlap */}
           <div style={{
@@ -1277,69 +1402,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 
         {/* ── 背景 tab ── */}
         {tab === 'history' && (
-          <div className="fade-a">
-            <div style={{ fontFamily:F.brush, fontSize:24, color:C.silk, marginBottom:3 }}>
-              历史背景
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.gold, marginBottom:2 }}>
-              Historical Background
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginBottom:16 }}>
-              {painting?.subZh}
-            </div>
-
-            <div style={{ background:C.card, border:`1px solid ${C.border}`, padding:16, marginBottom:14 }}>
-              <div style={{ display:'flex', justifyContent:'space-between', alignItems:'flex-start', marginBottom:12 }}>
-                <div>
-                  <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk }}>{painting?.title}</div>
-                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim }}>{painting?.sub}</div>
-                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginTop:2 }}>{painting?.artistFull}</div>
-                </div>
-                <div style={{
-                  width:36, height:36, background:C.vermillion,
-                  color:'#f5e8c4', fontFamily:F.brush, fontSize:11,
-                  display:'flex', alignItems:'center', justifyContent:'center',
-                  writingMode:'vertical-rl', flexShrink:0, marginLeft:10,
-                }}>
-                  {painting?.dynasty}
-                </div>
-              </div>
-              <div style={{ height:1, background:C.border, marginBottom:12 }} />
-              <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:10, marginBottom:12 }}>
-                <div>
-                  <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginBottom:3 }}>朝代 · Dynasty</div>
-                  <div style={{ fontFamily:F.serif, fontSize:12, color:C.silk }}>{painting?.dynastyFullZh}</div>
-                  <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, marginTop:2 }}>{painting?.dynastyFull}</div>
-                </div>
-                <div>
-                  <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginBottom:3 }}>画家 · Artist</div>
-                  <div style={{ fontFamily:F.serif, fontSize:12, color:C.silk }}>{painting?.artistFull}</div>
-                </div>
-              </div>
-              <div style={{ height:1, background:C.border, marginBottom:12 }} />
-              <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.8, marginBottom:10 }}>
-                {painting?.contextZh}
-              </div>
-              <div style={{ fontFamily:F.serif, fontSize:12, color:C.silkDim, lineHeight:1.8 }}>
-                {painting?.context}
-              </div>
-            </div>
-
-            <div style={{ background:'rgba(191,36,41,.07)', border:`1px solid rgba(191,36,41,.28)`, padding:'14px 16px' }}>
-              <div style={{ fontFamily:F.serif, fontSize:10, color:C.vermillion, letterSpacing:'.1em', marginBottom:6 }}>
-                你扮演的角色 · Your Role
-              </div>
-              <div style={{ fontFamily:F.brush, fontSize:20, color:C.silk, marginBottom:6 }}>
-                {painting?.youAre}
-              </div>
-              <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.75, marginBottom:8 }}>
-                {painting?.sceneZh}
-              </div>
-              <div style={{ fontFamily:F.serif, fontSize:12, color:C.silkDim, lineHeight:1.75 }}>
-                {painting?.scene}
-              </div>
-            </div>
-          </div>
+          <PaintingBackground painting={painting} />
         )}
 
         {/* Action buttons */}
@@ -1391,8 +1454,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
             重新拍照
           </button>
 
-          {/* Debug: show raw converted face */}
-          {styledUrl && (
+          {/* Debug: show raw converted face — dev only */}
+          {isDebug && styledUrl && (
             <div style={{marginTop:16,textAlign:'center'}}>
               <button onClick={() => setShowDebug(d => !d)} style={{
                 fontSize:11, color:'rgba(242,226,192,0.3)', background:'none',
