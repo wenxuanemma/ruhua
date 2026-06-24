@@ -98,6 +98,8 @@ export function useGenerate() {
   const [cropBox, setCropBox]        = useState(null);
   const [paintSampleBox, setPaintSampleBox] = useState(null);
   const [maskedFaceUrl, setMaskedFaceUrl] = useState(null);
+  const [portraitCropUrl, setPortraitCropUrl] = useState(null);
+  const [faceBoundsBox, setFaceBoundsBox] = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]           = useState(null);
 
@@ -221,6 +223,8 @@ export function useGenerate() {
     if (data.cropBox)       setCropBox(data.cropBox);
     if (data.paintSampleBox) setPaintSampleBox(data.paintSampleBox);
     if (data.maskedFaceUrl) setMaskedFaceUrl(data.maskedFaceUrl);
+    if (data.portraitCropUrl) setPortraitCropUrl(data.portraitCropUrl);
+    if (data.faceBoundsBox) setFaceBoundsBox(data.faceBoundsBox);
     if (data.outputUrl) return data.outputUrl;
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
@@ -235,7 +239,7 @@ export function useGenerate() {
     const selfieHash = quickHash(selfie);
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
     const styleKey = `${selfieHash}_${gender || 'woman'}`;
-    const resultKey = `${selfieHash}_${painting.id}_${figure.id}_${gender || 'woman'}`;
+    const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
     const cachedResult = resultCache.current[resultKey];
@@ -457,5 +461,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }

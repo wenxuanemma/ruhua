@@ -81,9 +81,14 @@ export default async function handler(req, res) {
       // a centered face — detected x is unreliable due to hair/background inflation).
       // Vertical: use faceBounds.y for forehead position with asymmetric padding.
       const padTop = 0.40, padBot = 0.05;
-      const faceH = faceBounds.h;
-      const cropTop = Math.max(0, faceBounds.y - faceH * padTop);
-      const cropBot = Math.min(1, faceBounds.y + faceH * (1 + padBot));
+      // Cap faceH — MediaPipe detection is loose, often returns h>0.45 including hair
+      const faceH = Math.min(faceBounds.h, 0.40);
+      // Build crop centered on detected face center (y + h/2 of actual bounds, not capped)
+      // This ensures the face sits at ~50% of the crop regardless of padTop/padBot
+      const faceCenterY_frac = faceBounds.y + faceBounds.h / 2;
+      const halfCrop = faceH * (0.5 + Math.max(padTop, padBot)) * 1.5;
+      const cropTop = Math.max(0, faceCenterY_frac - halfCrop);
+      const cropBot = Math.min(1, faceCenterY_frac + halfCrop);
       const cropHeightFrac = cropBot - cropTop;
       // Use face height * (1 + padTop + padBot) as crop size, but at least 50% of portrait
       cropSize = Math.round(Math.max(cropHeightFrac, 0.50) * FH);
@@ -92,7 +97,7 @@ export default async function handler(req, res) {
       cropY = Math.max(0, Math.min(Math.round(cropTop * FH), FH - cropSize));
       cropMethod = 'portrait-face';
       faceCenterInCropX = Math.round(FW / 2) - cropX;
-      faceCenterInCropY = Math.round((faceBounds.y + faceH / 2) * FH) - cropY;
+      faceCenterInCropY = Math.round(faceCenterY_frac * FH) - cropY;
       console.log(`[composite:${figureId} crop] PORTRAIT-FACE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
 
@@ -213,12 +218,7 @@ export default async function handler(req, res) {
     // ── Step 2: Resize face to exact square ───────────────────────────────────
     let faceImg = sharp(faceCropBuf);
 
-    if (region.angle && region.angle !== 0) {
-      // Rotate with neutral skin-tone background to avoid black corners after removeAlpha
-      faceImg = faceImg.rotate(region.angle, { background: { r:200, g:170, b:140, alpha:1 } });
-    }
-
-    // Resize to exact targetSize x targetSize square
+    // Resize to exact targetSize x targetSize square (face is upright from Seedream)
     const facePng = await faceImg
       .resize(targetSize, targetSize, { fit: 'cover', position: 'centre' })
 
@@ -318,18 +318,19 @@ export default async function handler(req, res) {
       ? Math.min(profileFaceWidthFrac * ovalRy * 1.1, pasteS * 0.48)
       : ovalRxBase;
     const ovalR  = Math.min(ovalRx, ovalRy);
-    // Oval center: map face center from crop space to pasteS space
-    // faceCenterInCropX is in crop pixel space (0..cropSize), not resized space (0..S).
-    // Divide by cropSize to normalize, then scale to pasteS.
-    // Oval centered in pasteS square — converted face is resized to fill pasteS.
-    const ovalCx = pasteS * 0.50;
-    const ovalCy = pasteS * 0.50;
+    // Oval center: use face center from crop detection if available.
+    const ovalCx = faceCenterInCropX != null
+      ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropX / cropSize) * pasteS))
+      : pasteS * 0.50;
+    const ovalCy = faceCenterInCropY != null
+      ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
+      : pasteS * 0.50;
     const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
       <defs>
         <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
-          <stop offset="65%" stop-color="white" stop-opacity="1"/>
-          <stop offset="80%" stop-color="white" stop-opacity="0.70"/>
-          <stop offset="90%" stop-color="white" stop-opacity="0.20"/>
+          <stop offset="75%" stop-color="white" stop-opacity="1"/>
+          <stop offset="88%" stop-color="white" stop-opacity="0.70"/>
+          <stop offset="95%" stop-color="white" stop-opacity="0.20"/>
           <stop offset="100%" stop-color="white" stop-opacity="0"/>
         </radialGradient>
       </defs>
@@ -342,22 +343,35 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // ── Step 4: Paste onto painting ──────────────────────────────────────────
-    // Paste centered on region center (50% x, 55% y — matches calibrate oval position)
-    const cx = targetX + Math.round(targetW * 0.50);
-    const cy = targetY + Math.round(targetH * 0.55);
-    const px = Math.max(0, Math.min(cx - Math.round(pasteS / 2), PW - pasteS));
-    const py = Math.max(0, Math.min(cy - Math.round(pasteS / 2), PH - pasteS));
-
-    console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} px=${px} py=${py} ovalRx=${ovalRx.toFixed(0)} ovalRy=${ovalRy.toFixed(0)} ovalCx=${ovalCx.toFixed(0)} ovalCy=${ovalCy.toFixed(0)} profileFaceWidthFrac=${profileFaceWidthFrac?.toFixed(2)??'null'} faceCenterInCropX=${faceCenterInCropX?.toFixed(0)??'null'} cropSize=${cropSize}`);
-
-    // Sharp paste with oval gradient mask
-    const masked = await sharp(pasteFace)
+    // Apply oval gradient mask while face is upright (correct oval cut)
+    let masked = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png().toBuffer();
-    const cW = Math.min(pasteS, PW - px);
-    const cH = Math.min(pasteS, PH - py);
-    const pasteBuf = (cW === pasteS && cH === pasteS)
+
+    // Then rotate the masked face to match the painting character's head tilt.
+    // Sharp.rotate(+angle) = clockwise. region.angle convention: positive = CW tilt in painting.
+    // Sharp expands canvas on rotation — track new size for correct paste centering.
+    let maskedSize = pasteS;
+    if (region.angle && region.angle !== 0) {
+      masked = await sharp(masked)
+        .rotate(region.angle, { background: { r:0, g:0, b:0, alpha:0 } })
+        .png().toBuffer();
+      const a = Math.abs(region.angle) * Math.PI / 180;
+      maskedSize = Math.round(pasteS * (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a))));
+    }
+
+    // Paste centered on region center (50% x, 55% y — matches calibrate oval position)
+    const cx = targetX + Math.round(targetW * 0.50);
+    const cy = targetY + Math.round(targetH * 0.55);
+    const px = Math.max(0, Math.min(cx - Math.round(maskedSize / 2), PW - maskedSize));
+    const py = Math.max(0, Math.min(cy - Math.round(maskedSize / 2), PH - maskedSize));
+
+    console.log(`[composite:${figureId} paste] S=${S} pasteS=${pasteS} maskedSize=${maskedSize} px=${px} py=${py} ovalRx=${ovalRx.toFixed(0)} ovalRy=${ovalRy.toFixed(0)} ovalCx=${ovalCx.toFixed(0)} ovalCy=${ovalCy.toFixed(0)} profileFaceWidthFrac=${profileFaceWidthFrac?.toFixed(2)??'null'} faceCenterInCropX=${faceCenterInCropX?.toFixed(0)??'null'} cropSize=${cropSize}`);
+
+    const cW = Math.min(maskedSize, PW - px);
+    const cH = Math.min(maskedSize, PH - py);
+    const pasteBuf = (cW === maskedSize && cH === maskedSize)
       ? masked
       : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
     const composited = await sharp(paintingBuf)
@@ -385,11 +399,19 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
+    // Debug: raw portrait crop (before color correction) — shows what MediaPipe detected
+    const portraitCropDebug = await sharp(facePng)
+      .resize(200, 200, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
+      .jpeg({ quality: 85 })
+      .toBuffer();
+
     return res.status(200).json({
-      outputUrl:  `data:image/jpeg;base64,${composited.toString('base64')}`,
-      profileUrl: `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
-      maskedFaceUrl: `data:image/png;base64,${maskedDebug.toString('base64')}`,
+      outputUrl:       `data:image/jpeg;base64,${composited.toString('base64')}`,
+      profileUrl:      `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
+      maskedFaceUrl:   `data:image/png;base64,${maskedDebug.toString('base64')}`,
+      portraitCropUrl: `data:image/jpeg;base64,${portraitCropDebug.toString('base64')}`,
       cropBox: faceCropBox,
+      faceBoundsBox: faceBounds || null,
       // Debug: painting sample region as fractions of painting dimensions
       paintSampleBox: {
         x: sampleX / PW,

@@ -1115,7 +1115,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, selfie, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const [naturalDims, setNaturalDims] = useState(null);
@@ -1501,8 +1501,35 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                             pointerEvents:'none',
                           }}/>
                         )}
+                        {faceBoundsBox && (
+                          <div style={{
+                            position:'absolute',
+                            left:`${faceBoundsBox.x*100}%`,
+                            top:`${faceBoundsBox.y*100}%`,
+                            width:`${faceBoundsBox.w*100}%`,
+                            height:`${faceBoundsBox.h*100}%`,
+                            border:'2px solid #4488ff',
+                            boxSizing:'border-box',
+                            pointerEvents:'none',
+                          }}/>
+                        )}
                       </div>
                     </div>
+                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
+                    {maskedFaceUrl && (
+                      <div style={{textAlign:'center',flexShrink:0}}>
+                        <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画人脸（裁剪后）</div>
+                        <div style={{
+                          width:80, height:80,
+                          border:'1px solid rgba(201,168,76,0.2)',
+                          background:'rgba(0,0,0,0.3)',
+                          display:'flex', alignItems:'center', justifyContent:'center',
+                          overflow:'hidden',
+                        }}>
+                          {portraitCropUrl && <img src={portraitCropUrl} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}}/>}
+                        </div>
+                      </div>
+                    )}
                     <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
                     {maskedFaceUrl && (
                       <div style={{textAlign:'center',flexShrink:0}}>
@@ -1514,7 +1541,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                           display:'flex', alignItems:'center', justifyContent:'center',
                           overflow:'hidden',
                         }}>
-                          <img src={maskedFaceUrl} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}}/>
+                          <img src={maskedFaceUrl} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain',
+                            transform: region?.angle ? `rotate(${region.angle}deg)` : undefined}}/>
                         </div>
                       </div>
                     )}
@@ -1573,6 +1601,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                                 background:'rgba(100,160,255,0.20)',
                                 border:'2px solid rgba(100,160,255,0.7)',
                                 boxSizing:'border-box', pointerEvents:'none',
+                                transform: reg.angle ? `rotate(${reg.angle}deg)` : undefined,
+                                transformOrigin: 'center center',
                               }}/>
                             )}
                             {psb && (() => {
@@ -1690,7 +1720,7 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -1814,6 +1844,8 @@ export default function RuHua() {
                                       cropBox={cropBox}
                                       paintSampleBox={paintSampleBox}
                                       maskedFaceUrl={maskedFaceUrl}
+                                      portraitCropUrl={portraitCropUrl}
+                                      faceBoundsBox={faceBoundsBox}
                                       paintSampleBox={paintSampleBox}
                                       selfie={selfie}
                                       onReset={reset}
