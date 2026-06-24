@@ -278,11 +278,13 @@ export default async function handler(req, res) {
 
     // SHIFT controls how far to pull face tone toward painting sample (0=none, 1=full match).
     // Global default 0.75; per-figure override via region.colorShift in faceRegions.js.
-    // B is capped at 1.10 to avoid blue oversaturation on cooler paintings (e.g. Dancer).
+    // Per-figure channel caps via region.rMax, region.bMax to prevent over-correction.
     const SHIFT = region.colorShift ?? 0.75;
-    const rM = Math.min(1.9, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));
-    const gM = Math.min(1.9, Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
-    const bM = Math.min(1.10, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
+    const rMax  = region.rMax ?? 1.90;
+    const bMax  = region.bMax ?? 1.10;
+    const rM = Math.min(rMax, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));
+    const gM = Math.min(1.9,  Math.max(0.3, 1 + (ps.gm / Math.max(fs.gm, 1) - 1) * SHIFT));
+    const bM = Math.min(bMax, Math.max(0.3, 1 + (ps.bm / Math.max(fs.bm, 1) - 1) * SHIFT));
 
     console.log(`[composite:${figureId} color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 

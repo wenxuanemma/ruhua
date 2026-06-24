@@ -1119,7 +1119,6 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const [naturalDims, setNaturalDims] = useState(null);
-  const heroImgRef = useRef(null);
   const isDebug = process.env.NODE_ENV === 'development';
   const imgUrl = generatedUrl || imgs?.[painting?.id];
   const region = FACE_REGIONS[painting?.id]?.[figure?.id];
@@ -1162,10 +1161,15 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
+      {/* Hidden img to get painting natural dimensions for debug overlay */}
+      {isDebug && imgs?.[painting?.id] && (
+        <img src={imgs[painting.id]} alt="" onLoad={e => setNaturalDims({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
+          style={{ display:'none' }} />
+      )}
       {/* Hero — img with object-position correctly centers on face region */}
       <div style={{ position:'relative', paddingTop:'62%', overflow:'hidden' }}>
         {imgUrl
-          ? <img ref={heroImgRef} src={imgUrl} alt={painting?.title} onLoad={e => setNaturalDims({ w: e.target.naturalWidth, h: e.target.naturalHeight })} style={{
+          ? <img src={imgUrl} alt={painting?.title} style={{
               position:'absolute', inset:0, width:'100%', height:'100%',
               objectFit:'cover',
               objectPosition:`${Math.round(faceX * 100)}% ${Math.round(faceY * 100)}%`,
@@ -1724,12 +1728,11 @@ export default function RuHua() {
   }, [status]);
 
   const reset = () => {
-    setScreen('home');
-    setPainting(null);
-    setFigure(null);
     setSelfie(null);
     setFaceBounds(null);
-    fullReset();  // clears styled cache too — new selfie required
+    clearSelfieCache();
+    resetGen();
+    setScreen('selfie');
   };
 
   return (
