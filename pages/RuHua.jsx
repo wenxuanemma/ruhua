@@ -1524,60 +1524,69 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                     {imgs?.[painting?.id] && figure && (() => {
                         const reg = FACE_REGIONS[painting?.id]?.[figure?.id];
                         if (!reg) return null;
+                        const thumbW = 120, thumbH = 140;
+                        // Region in painting pixels — fractions * painting dimensions
+                        // naturalDims gives true painting pixel size; fall back to square if not loaded
+                        const PW = naturalDims?.w ?? 1000;
+                        const PH = naturalDims?.h ?? 1000;
+                        const regWpx_paint = reg.w * PW;
+                        const regHpx_paint = reg.h * PH;
+                        // Scale to fit in thumbnail preserving true aspect ratio
+                        const scale = Math.min(thumbW / regWpx_paint, thumbH / regHpx_paint);
+                        const regWpx = regWpx_paint * scale;
+                        const regHpx = regHpx_paint * scale;
+                        // Center region in thumbnail
+                        const offX = (thumbW - regWpx) / 2;
+                        const offY = (thumbH - regHpx) / 2;
+                        // Oval matching composite.js formula
+                        const targetSize = Math.max(regWpx, regHpx);
+                        const ovalRx = Math.min((regWpx / targetSize) * targetSize * 0.41, targetSize * 0.48);
+                        const ovalRy = Math.min((regHpx / targetSize) * targetSize * 0.42, targetSize * 0.48);
+                        // Paste center: 50% x, 55% y of region
+                        const ovalCx = offX + regWpx * 0.50;
+                        const ovalCy = offY + regHpx * 0.55;
+                        // paintSampleBox: convert painting fractions to thumbnail pixels
+                        const psb = paintSampleBox;
+                        // img sizing: full painting scaled so region fills thumbnail
+                        const imgScale = scale; // px per painting-pixel
                         return (
                           <div style={{
-                            width:120, height:140,
+                            width:thumbW, height:thumbH,
                             overflow:'hidden',
                             border:'1px solid rgba(201,168,76,0.2)',
                             position:'relative',
                           }}>
                             <img src={imgs[painting.id]} style={{
                               position:'absolute',
-                              width: `${100 / reg.w}%`,
-                              height: `${100 / reg.h}%`,
-                              left: `${-reg.x / reg.w * 100}%`,
-                              top:  `${-reg.y / reg.h * 100}%`,
+                              width: `${PW * imgScale}px`,
+                              height: 'auto',
+                              left: `${offX - reg.x * PW * imgScale}px`,
+                              top:  `${offY - reg.y * PH * imgScale}px`,
                               maxWidth:'none',
                             }}/>
-                            {/* Oval showing paste area — matches calibrate oval */}
-                            {generatedUrl && (() => {
-                              const thumbW = 120, thumbH = 140;
-                              const ovalW = thumbW * 0.82;
-                              const ovalH = thumbH * 0.84;
-                              const ovalL = (thumbW - ovalW) / 2;
-                              const ovalT = thumbH * 0.13;
-                              return (
-                                <div style={{
-                                  position:'absolute',
-                                  left: ovalL, top: ovalT,
-                                  width: ovalW, height: ovalH,
-                                  borderRadius:'50%',
-                                  background:'rgba(100,160,255,0.20)',
-                                  border:'2px solid rgba(100,160,255,0.7)',
-                                  boxSizing:'border-box',
-                                  pointerEvents:'none',
-                                }}/>
-                              );
-                            })()}
-                            {paintSampleBox && (() => {
-                              // Map paintSampleBox (painting coords) into the thumbnail's coordinate space
-                              // Thumbnail shows the region [reg.x, reg.y, reg.w, reg.h] of the painting
-                              // scaled to 120×140px
-                              const thumbW = 120, thumbH = 140;
-                              const scaleX = thumbW / reg.w;
-                              const scaleY = thumbH / reg.h;
-                              const boxL = (paintSampleBox.x - reg.x) * scaleX;
-                              const boxT = (paintSampleBox.y - reg.y) * scaleY;
-                              const boxW = paintSampleBox.w * scaleX;
-                              const boxH = paintSampleBox.h * scaleY;
+                            {generatedUrl && (
+                              <div style={{
+                                position:'absolute',
+                                left: ovalCx - ovalRx, top: ovalCy - ovalRy,
+                                width: ovalRx * 2, height: ovalRy * 2,
+                                borderRadius:'50%',
+                                background:'rgba(100,160,255,0.20)',
+                                border:'2px solid rgba(100,160,255,0.7)',
+                                boxSizing:'border-box', pointerEvents:'none',
+                              }}/>
+                            )}
+                            {psb && (() => {
+                              const boxL = offX + (psb.x - reg.x) * PW * imgScale;
+                              const boxT = offY + (psb.y - reg.y) * PH * imgScale;
+                              const boxW = psb.w * PW * imgScale;
+                              const boxH = psb.h * PH * imgScale;
                               return (
                                 <div style={{
                                   position:'absolute',
                                   left: boxL, top: boxT,
                                   width: boxW, height: boxH,
                                   border: '2px solid #00ff88',
-                                  boxSizing:'border-box',
-                                  pointerEvents:'none',
+                                  boxSizing:'border-box', pointerEvents:'none',
                                 }}/>
                               );
                             })()}
