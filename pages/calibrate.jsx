@@ -16,13 +16,14 @@ const PAINTINGS = [
     figures:[
       {id:'guest',  name:'宾客'},
       {id:'host',   name:'韩熙载'},
-      {id:'dancer', name:'舞伎'},
+      {id:'dancer', name:'乐伎'},
     ]},
   { id:'gongle', title:'宫乐图', directImageUrl:'/paintings/gongle.jpg',
     figures:[
+      {id:'pipa',     name:'琵琶仕女'},
+      {id:'guzheng',  name:'古筝仕女'},
+      {id:'clapper',  name:'执拍侍女'},
       {id:'listener', name:'听乐仕女'},
-      {id:'musician', name:'琵琶仕女'},
-      {id:'serving',  name:'侍女'},
     ]},
   { id:'daolian', title:'捣练图', directImageUrl:'/paintings/daolian.jpg',
     figures:[
@@ -31,13 +32,15 @@ const PAINTINGS = [
     ]},
   { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
     figures:[
-      {id:'topleft',   name:'左侧仕女'},
-      {id:'topcenter', name:'中央仕女'},
+      {id:'topleft',    name:'左上仕女'},
+      {id:'bottomleft', name:'左下仕女'},
+      {id:'topcenter',  name:'中上仕女'},
+      {id:'right',      name:'右侧仕女'},
     ]},
   { id:'tiaoqin', title:'调琴啜茗图', directImageUrl:'/paintings/tiaoqin.jpg',
     figures:[
-      {id:'lady',      name:'调琴仕女'},
-      {id:'attendant', name:'品茗仕女'},
+      {id:'lady',   name:'调琴仕女'},
+      {id:'seated', name:'静坐仕女'},
     ]},
   { id:'huishan', title:'挥扇仕女图', directImageUrl:'/paintings/huishan.jpg',
     figures:[
@@ -45,7 +48,6 @@ const PAINTINGS = [
       {id:'seated', name:'倚坐仕女'},
     ]},
 ];
-
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
 
