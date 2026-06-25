@@ -69,6 +69,7 @@ export default async function handler(req, res) {
     let faceCropBox = null;
     let cropX, cropY, cropSize;
     let faceCenterInCropX = null, faceCenterInCropY = null;
+    let chinInCrop = null;
     let profileFaceWidthFrac = null;
     let cropMethod = 'fallback';
 
@@ -80,24 +81,39 @@ export default async function handler(req, res) {
       // Horizontal: always center on portrait midpoint (Seedream always generates
       // a centered face — detected x is unreliable due to hair/background inflation).
       // Vertical: use faceBounds.y for forehead position with asymmetric padding.
-      const padTop = 0.40, padBot = 0.05;
-      // Cap faceH — MediaPipe detection is loose, often returns h>0.45 including hair
-      const faceH = Math.min(faceBounds.h, 0.40);
-      // Build crop centered on detected face center (y + h/2 of actual bounds, not capped)
-      // This ensures the face sits at ~50% of the crop regardless of padTop/padBot
-      const faceCenterY_frac = faceBounds.y + faceBounds.h / 2;
-      const halfCrop = faceH * (0.5 + Math.max(padTop, padBot)) * 1.5;
-      const cropTop = Math.max(0, faceCenterY_frac - halfCrop);
-      const cropBot = Math.min(1, faceCenterY_frac + halfCrop);
-      const cropHeightFrac = cropBot - cropTop;
-      // Use face height * (1 + padTop + padBot) as crop size, but at least 50% of portrait
+      // If landmarks+ink scan available, use precise forehead/chin positions.
+      // Otherwise fall back to chin-anchored bounding box estimate.
+      let faceCenterY_frac, cropTopFrac, cropBotFrac;
+      if (faceBounds.fromLandmarks && faceBounds.foreheadY != null && faceBounds.chinY != null) {
+        // Use landmark bounds directly for tight crop — forehead to chin only.
+        // Add margin so oval gradient feathers naturally beyond face boundary.
+        const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
+        const margin = faceH_lm * 0.15; // 15% margin above/below face
+        faceCenterY_frac = faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2;
+        cropTopFrac = Math.max(0, faceBounds.foreheadY - margin);
+        cropBotFrac = Math.min(1, faceBounds.chinY + margin);
+        console.log(`[composite:${figureId} crop] LANDMARKS-TIGHT forehead=${faceBounds.foreheadY.toFixed(3)} chin=${faceBounds.chinY.toFixed(3)} faceH=${faceH_lm.toFixed(3)} margin=${margin.toFixed(3)}`);
+      } else {
+        // Fallback: chin-anchored formula
+        const faceH = Math.min(faceBounds.h, 0.40);
+        const chinY = faceBounds.y + faceBounds.h;
+        faceCenterY_frac = chinY - faceBounds.h * 0.55;
+        const halfCrop = faceH * (0.5 + 0.40) * 1.5;
+        cropTopFrac = Math.max(0, faceCenterY_frac - halfCrop);
+        cropBotFrac = Math.min(1, faceCenterY_frac + halfCrop);
+      }
+      const cropHeightFrac = cropBotFrac - cropTopFrac;
+      // Use face height as crop size, but at least 50% of portrait
       cropSize = Math.round(Math.max(cropHeightFrac, 0.50) * FH);
       // Always center horizontally on portrait midpoint
       cropX = Math.max(0, Math.min(Math.round(FW / 2 - cropSize / 2), FW - cropSize));
-      cropY = Math.max(0, Math.min(Math.round(cropTop * FH), FH - cropSize));
+      cropY = Math.max(0, Math.min(Math.round(cropTopFrac * FH), FH - cropSize));
       cropMethod = 'portrait-face';
       faceCenterInCropX = Math.round(FW / 2) - cropX;
       faceCenterInCropY = Math.round(faceCenterY_frac * FH) - cropY;
+      if (faceBounds.fromLandmarks && faceBounds.chinY != null) {
+        chinInCrop = Math.round(faceBounds.chinY * FH) - cropY;
+      }
       console.log(`[composite:${figureId} crop] PORTRAIT-FACE faceBounds=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
 
@@ -308,12 +324,14 @@ export default async function handler(req, res) {
     const pasteFace = colorFaceExact;
 
     // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
-    // Oval rx/ry: calibrate proportions (82%/84%) applied to pasteS.
-    // pasteS is already scaled by faceSize so oval naturally matches painted face.
-    // Profile faces get wider rx to cover nose tip.
-    const ovalRy = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
+    // Oval rx/ry: sized to match the painting region (calibrated in calibrate tool).
+    // Landmark data is used for positioning (ovalCy) but not for oval size —
+    // the oval must fit the painted figure's face, not the portrait face.
+    // Oval sized to match painting region — always region-based, not portrait-derived.
+    // The crop already excludes hair/neck via landmarks; the oval covers the painted figure.
+    const ovalRy     = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
     const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
-    // Profile: use actual face width (noseTip-to-ear fraction of landmarkH) for rx
+    // Profile: use actual face width for rx
     const ovalRx = (isProfile && profileFaceWidthFrac)
       ? Math.min(profileFaceWidthFrac * ovalRy * 1.1, pasteS * 0.48)
       : ovalRxBase;
@@ -322,6 +340,10 @@ export default async function handler(req, res) {
     const ovalCx = faceCenterInCropX != null
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropX / cropSize) * pasteS))
       : pasteS * 0.50;
+
+    // Center oval on face midpoint (yellow landmark dot = midpoint of hairline→chin).
+    // idealCropSize already ensures face fits within ovalRy, so centering on
+    // faceCenterInCropY aligns the oval symmetrically with the face.
     const ovalCy = faceCenterInCropY != null
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
       : pasteS * 0.50;
@@ -363,7 +385,7 @@ export default async function handler(req, res) {
 
     // Paste centered on region center (50% x, 55% y — matches calibrate oval position)
     const cx = targetX + Math.round(targetW * 0.50);
-    const cy = targetY + Math.round(targetH * 0.55);
+    const cy = targetY + Math.round(targetH * 0.50);
     const px = Math.max(0, Math.min(cx - Math.round(maskedSize / 2), PW - maskedSize));
     const py = Math.max(0, Math.min(cy - Math.round(maskedSize / 2), PH - maskedSize));
 
@@ -401,8 +423,8 @@ export default async function handler(req, res) {
 
     // Debug: raw portrait crop (before color correction) — shows what MediaPipe detected
     const portraitCropDebug = await sharp(facePng)
-      .resize(200, 200, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
-      .jpeg({ quality: 85 })
+      .resize(120, 120, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
+      .jpeg({ quality: 75 })
       .toBuffer();
 
     return res.status(200).json({

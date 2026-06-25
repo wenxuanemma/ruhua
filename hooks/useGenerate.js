@@ -100,6 +100,7 @@ export function useGenerate() {
   const [maskedFaceUrl, setMaskedFaceUrl] = useState(null);
   const [portraitCropUrl, setPortraitCropUrl] = useState(null);
   const [faceBoundsBox, setFaceBoundsBox] = useState(null);
+  const [portraitLandmarks, setPortraitLandmarks] = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]           = useState(null);
 
@@ -225,6 +226,7 @@ export function useGenerate() {
     if (data.maskedFaceUrl) setMaskedFaceUrl(data.maskedFaceUrl);
     if (data.portraitCropUrl) setPortraitCropUrl(data.portraitCropUrl);
     if (data.faceBoundsBox) setFaceBoundsBox(data.faceBoundsBox);
+    if (data.cropBox) setCropBox(data.cropBox);
     if (data.outputUrl) return data.outputUrl;
     return pollUntilDone(data.predictionId);
   }, [pollUntilDone]);
@@ -390,7 +392,10 @@ export function useGenerate() {
       let portraitFaceBounds = null;
       if (isFrontFacing) {
         portraitFaceBounds = await detectSelfie(selectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
-        if (portraitFaceBounds) console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
+        if (portraitFaceBounds) {
+          console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
+          if (portraitFaceBounds.fromLandmarks) setPortraitLandmarks(portraitFaceBounds);
+        }
         else console.log('[portrait] face detection failed, using fallback');
       }
       const composite = await runComposite({
@@ -461,5 +466,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }

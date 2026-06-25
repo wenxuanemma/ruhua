@@ -1115,7 +1115,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
-function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, selfie, onReset, onNew, onChangeFigure }) {
+function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, selfie, onReset, onNew, onChangeFigure }) {
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const [naturalDims, setNaturalDims] = useState(null);
@@ -1513,6 +1513,24 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                             pointerEvents:'none',
                           }}/>
                         )}
+                        {/* Landmark dots: forehead (green), chin (red), center (yellow) */}
+                        {portraitLandmarks?.fromLandmarks && [
+                          {y: portraitLandmarks.foreheadY, color:'#00ff88', label:'F'},
+                          {y: portraitLandmarks.chinY,     color:'#ff4444', label:'C'},
+                          {y: portraitLandmarks.centerY,   color:'#ffdd00', label:'•'},
+                        ].map(({y, color, label}) => (
+                          <div key={label} style={{
+                            position:'absolute',
+                            left:'50%',
+                            top:`${y*100}%`,
+                            transform:'translate(-50%,-50%)',
+                            width:8, height:8,
+                            borderRadius:'50%',
+                            background:color,
+                            pointerEvents:'none',
+                            zIndex:10,
+                          }}/>
+                        ))}
                       </div>
                     </div>
                     <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
@@ -1720,7 +1738,7 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -1846,6 +1864,7 @@ export default function RuHua() {
                                       maskedFaceUrl={maskedFaceUrl}
                                       portraitCropUrl={portraitCropUrl}
                                       faceBoundsBox={faceBoundsBox}
+                                      portraitLandmarks={portraitLandmarks}
                                       paintSampleBox={paintSampleBox}
                                       selfie={selfie}
                                       onReset={reset}
