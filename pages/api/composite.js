@@ -85,14 +85,17 @@ export default async function handler(req, res) {
       // Otherwise fall back to chin-anchored bounding box estimate.
       let faceCenterY_frac, cropTopFrac, cropBotFrac;
       if (faceBounds.fromLandmarks && faceBounds.foreheadY != null && faceBounds.chinY != null) {
-        // Use landmark bounds directly for tight crop \u2014 forehead to chin only.
-        // Add margin so oval gradient feathers naturally beyond face boundary.
+        // Compute cropSize so face height in pasteS matches 2*ovalRy exactly.
+        // This ensures the portrait face fills the calibrated oval in the painting.
+        // ovalRy = (targetH/targetSize) * targetSize * 0.42
+        // faceInPS = faceH_lm*FH/cropSize * pasteS = 2*ovalRy → cropSize = faceH_lm*FH*pasteS/(2*ovalRy)
         const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
-        const margin = faceH_lm * 0.15; // 15% margin above/below face
+        const ovalRy_target = Math.min((targetH / targetSize) * targetSize * 0.42, targetSize * 0.48);
+        const idealCropSize = Math.round((faceH_lm * FH * targetSize) / (2 * ovalRy_target));
         faceCenterY_frac = faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2;
-        cropTopFrac = Math.max(0, faceBounds.foreheadY - margin);
-        cropBotFrac = Math.min(1, faceBounds.chinY + margin);
-        console.log(`[composite:${figureId} crop] LANDMARKS-TIGHT forehead=${faceBounds.foreheadY.toFixed(3)} chin=${faceBounds.chinY.toFixed(3)} faceH=${faceH_lm.toFixed(3)} margin=${margin.toFixed(3)}`);
+        cropTopFrac = Math.max(0, faceCenterY_frac - (idealCropSize / FH) / 2);
+        cropBotFrac = Math.min(1, faceCenterY_frac + (idealCropSize / FH) / 2);
+        console.log(`[composite:${figureId} crop] LANDMARKS-TIGHT forehead=${faceBounds.foreheadY.toFixed(3)} chin=${faceBounds.chinY.toFixed(3)} faceH=${faceH_lm.toFixed(3)} idealCropSize=${idealCropSize} ovalRy=${ovalRy_target.toFixed(1)}`);
       } else {
         // Fallback: chin-anchored formula
         const faceH = Math.min(faceBounds.h, 0.40);
@@ -364,10 +367,14 @@ export default async function handler(req, res) {
         const polygonSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
           <polygon points="${points}" fill="white"/>
         </svg>`;
-        ovalMask = await sharp(Buffer.from(polygonSvg))
+        let rawMask = await sharp(Buffer.from(polygonSvg))
+          .png()
+          .toBuffer();
+        const rawMeta = await sharp(rawMask).metadata();
+        console.log(`[composite:${figureId}] polygon SVG raw size: ${rawMeta.width}x${rawMeta.height} target: ${pasteS}x${pasteS}`);
+        ovalMask = await sharp(rawMask)
           .resize(pasteS, pasteS, { fit: 'fill' })
           .greyscale()
-          .blur(3)
           .png()
           .toBuffer();
         console.log(`[composite:${figureId}] using face oval polygon mask`);
@@ -427,9 +434,9 @@ export default async function handler(req, res) {
       : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
     const composited = await sharp(paintingBuf)
       .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
-      .jpeg({ quality: 92 }).toBuffer();
+      .jpeg({ quality: 85 }).toBuffer();
 
-    // \u2500\u2500 Step 5: Profile crop \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
+    // ── Step 5: Profile crop ──────────────────────────────────────────────────
     const pad = Math.round(targetH * 1.5);
     const profX = Math.max(0, px - pad);
     const profY = Math.max(0, py - pad);
@@ -437,18 +444,26 @@ export default async function handler(req, res) {
     const profH = Math.min(PH - profY, S + pad * 2);
 
     const profileBuf = await sharp(composited)
-      .extract({ left: profX, top: profY, width: profW, height: profH })
+      .extract({ left: profX, top: profY, width: Math.max(1,profW), height: Math.max(1,profH) })
       .resize(400, 400, { fit: 'cover' })
       .jpeg({ quality: 90 })
       .toBuffer();
-
-    // Build debug composite: painting region crop with masked face pasted on top
-    // Debug: color-corrected face with oval mask \u2014 shows what gets pasted and transparency
-    const maskedDebug = await sharp(pasteFace)
-      .ensureAlpha()
-      .composite([{ input: ovalMask, blend: 'dest-in' }])
-      .png()
-      .toBuffer();
+    // Debug: masked face — use separate resize of ovalMask to ensure size match
+    let maskedDebug = null;
+    try {
+      const debugMask = await sharp(ovalMask)
+        .resize(275, 275, { fit: 'fill' })
+        .png()
+        .toBuffer();
+      maskedDebug = await sharp(pasteFace)
+        .ensureAlpha()
+        .composite([{ input: debugMask, blend: 'dest-in' }])
+        .resize(120, 120, { fit: 'contain', background: {r:0,g:0,b:0,alpha:0} })
+        .png({ compressionLevel: 9 })
+        .toBuffer();
+    } catch(e) {
+      console.warn(`[composite:${figureId}] maskedDebug failed: ${e.message}`);
+    }
 
     // Debug: raw portrait crop (before color correction) \u2014 shows what MediaPipe detected
     const portraitCropDebug = await sharp(facePng)
@@ -459,7 +474,7 @@ export default async function handler(req, res) {
     return res.status(200).json({
       outputUrl:       `data:image/jpeg;base64,${composited.toString('base64')}`,
       profileUrl:      `data:image/jpeg;base64,${profileBuf.toString('base64')}`,
-      maskedFaceUrl:   `data:image/png;base64,${maskedDebug.toString('base64')}`,
+      maskedFaceUrl:   maskedDebug ? `data:image/png;base64,${maskedDebug.toString('base64')}` : null,
       portraitCropUrl: `data:image/jpeg;base64,${portraitCropDebug.toString('base64')}`,
       cropBox: faceCropBox,
       faceBoundsBox: faceBounds || null,
