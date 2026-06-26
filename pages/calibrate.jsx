@@ -12,42 +12,42 @@ const C = {
 };
 
 const PAINTINGS = [
-  { id:'qingming', title:'清明上河图', wikiTitle:'Along_the_River_During_the_Qingming_Festival',
-    figures:[
-      {id:'scholar',  name:'行路客'},
-      {id:'merchant', name:'市井商人'},
-      {id:'boatman',  name:'船夫'},
-    ]},
   { id:'hanxizai', title:'韩熙载夜宴图', wikiTitle:'The_Night_Revels_of_Han_Xizai',
     figures:[
       {id:'guest',  name:'宾客'},
       {id:'host',   name:'韩熙载'},
-      {id:'dancer', name:'舞伎'},
+      {id:'dancer', name:'乐伎'},
     ]},
-  { id:'bunianta', title:'步辇图', wikiTitle:'Emperor_Taizong_Receiving_the_Tibetan_Envoy',
+  { id:'gongle', title:'宫乐图', directImageUrl:'/paintings/gongle.jpg',
     figures:[
-      {id:'official', name:'唐朝官员'},
-      {id:'envoy',    name:'吐蕃使节'},
-    ]},
-  { id:'guoguo', title:'虢国夫人游春图', commonsTitle:'唐 张萱 虢国夫人游春图.jpg',
-    figures:[
-      {id:'lady',      name:'虢国夫人'},
-      {id:'attendant', name:'侍女'},
-      {id:'rider',     name:'骑马侍从'},
-    ]},
-  { id:'luoshen', title:'洛神赋图', wikiTitle:'Nymph_of_the_Luo_River',
-    figures:[
-      {id:'cao',       name:'曹植'},
-      {id:'attendant', name:'随行侍从'},
-    ]},
-  { id:'gongle', title:'宫乐图', wikiTitle:'A_Palace_Concert',
-    figures:[
+      {id:'pipa',     name:'琵琶仕女'},
+      {id:'guzheng',  name:'古筝仕女'},
+      {id:'clapper',  name:'执拍侍女'},
       {id:'listener', name:'听乐仕女'},
-      {id:'musician', name:'琵琶仕女'},
-      {id:'serving',  name:'侍女'},
+    ]},
+  { id:'daolian', title:'捣练图', directImageUrl:'/paintings/daolian.jpg',
+    figures:[
+      {id:'ironer',   name:'熨绢仕女'},
+      {id:'threader', name:'穿针仕女'},
+    ]},
+  { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
+    figures:[
+      {id:'topleft',    name:'左上仕女'},
+      {id:'bottomleft', name:'左下仕女'},
+      {id:'topcenter',  name:'中上仕女'},
+      {id:'right',      name:'右侧仕女'},
+    ]},
+  { id:'tiaoqin', title:'调琴啜茗图', directImageUrl:'/paintings/tiaoqin.jpg',
+    figures:[
+      {id:'lady',   name:'调琴仕女'},
+      {id:'seated', name:'静坐仕女'},
+    ]},
+  { id:'huishan', title:'挥扇仕女图', directImageUrl:'/paintings/huishan.jpg',
+    figures:[
+      {id:'center', name:'执瓶仕女'},
+      {id:'seated', name:'倚坐仕女'},
     ]},
 ];
-
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
 
@@ -93,7 +93,9 @@ export default function Calibrate() {
   // Fetch painting image when painting changes
   useEffect(() => {
     setImgUrl('');
-    if (painting.commonsTitle) {
+    if (painting.directImageUrl) {
+      setImgUrl(painting.directImageUrl);
+    } else if (painting.commonsTitle) {
       const enc = encodeURIComponent(painting.commonsTitle);
       fetch(`https://commons.wikimedia.org/w/api.php?action=query&titles=File:${enc}&prop=imageinfo&iiprop=url&iiurlwidth=1200&format=json&origin=*`)
         .then(r=>r.json()).then(d=>{

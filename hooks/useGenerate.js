@@ -216,6 +216,7 @@ export function useGenerate() {
         paintingImageUrl,
         dynasty:         painting.dynasty,
         faceBounds,
+        landmarks:       faceBounds?.landmarks ?? null,
       }),
     });
     const data = await res.json();

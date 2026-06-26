@@ -1515,13 +1515,13 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         )}
                         {/* Landmark dots: forehead (green), chin (red), center (yellow) */}
                         {portraitLandmarks?.fromLandmarks && [
-                          {y: portraitLandmarks.foreheadY, color:'#00ff88', label:'F'},
-                          {y: portraitLandmarks.chinY,     color:'#ff4444', label:'C'},
-                          {y: portraitLandmarks.centerY,   color:'#ffdd00', label:'•'},
-                        ].map(({y, color, label}) => (
+                          {y: portraitLandmarks.foreheadY, x: portraitLandmarks.centerX ?? 0.5, color:'#00ff88', label:'F'},
+                          {y: portraitLandmarks.chinY,     x: portraitLandmarks.centerX ?? 0.5, color:'#ff4444', label:'C'},
+                          {y: portraitLandmarks.centerY,   x: portraitLandmarks.centerX ?? 0.5, color:'#ffdd00', label:'•'},
+                        ].map(({y, x, color, label}) => (
                           <div key={label} style={{
                             position:'absolute',
-                            left:'50%',
+                            left:`${x*100}%`,
                             top:`${y*100}%`,
                             transform:'translate(-50%,-50%)',
                             width:8, height:8,

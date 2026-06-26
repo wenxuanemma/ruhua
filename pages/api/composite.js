@@ -6,7 +6,7 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
 async function fetchBuf(url) {
   if (url.startsWith('data:')) return Buffer.from(url.split(',')[1], 'base64');
-  // Relative paths (e.g. /paintings/gongle.jpg) are served as static assets —
+  // Relative paths (e.g. /paintings/gongle.jpg) are served as static assets \u2014
   // read directly from disk to avoid server-side fetch of relative URLs.
   if (url.startsWith('/')) {
     const { readFile } = await import('fs/promises');
@@ -46,12 +46,12 @@ export default async function handler(req, res) {
     const targetW = Math.round(region.w * PW);
     const targetH = Math.round(region.h * PH);
 
-    // Use square target — max of width/height
+    // Use square target \u2014 max of width/height
     const targetSize = Math.max(targetW, targetH);
 
     console.log(`[composite:${figureId}] painting=${PW}x${PH} region=${targetW}x${targetH} targetSize=${targetSize} faceInput=${FW}x${FH}`);
 
-    // ── Step 1: Crop face from Seedream portrait ──────────────────────────────
+    // \u2500\u2500 Step 1: Crop face from Seedream portrait \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     // Strategy depends on face angle:
     //
     // FRONT / THREE-QUARTER: use selfie faceBounds to derive crop position.
@@ -60,7 +60,7 @@ export default async function handler(req, res) {
     //   stable across runs for the same selfie.
     //
     // PROFILE: selfie framing doesn't match (Seedream generates a side view).
-    //   Use MediaPipe keypoints on the Seedream output — keypoints are stable
+    //   Use MediaPipe keypoints on the Seedream output \u2014 keypoints are stable
     //   even when the bbox is inflated by hair/robes.
 
     const isProfile    = region.faceAngle && region.faceAngle.includes('profile');
@@ -73,19 +73,19 @@ export default async function handler(req, res) {
     let profileFaceWidthFrac = null;
     let cropMethod = 'fallback';
 
-    // Selfie-based crop only for front-facing figures — three-quarter and profile
+    // Selfie-based crop only for front-facing figures \u2014 three-quarter and profile
     // figures have different poses than the selfie so faceBounds doesn't apply.
     if (isFront && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
-      // ── Front/3Q: portrait face bounds crop ─────────────────────────────
+      // \u2500\u2500 Front/3Q: portrait face bounds crop \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
       // faceBounds detected directly from portrait via client MediaPipe.
       // Horizontal: always center on portrait midpoint (Seedream always generates
-      // a centered face — detected x is unreliable due to hair/background inflation).
+      // a centered face \u2014 detected x is unreliable due to hair/background inflation).
       // Vertical: use faceBounds.y for forehead position with asymmetric padding.
       // If landmarks+ink scan available, use precise forehead/chin positions.
       // Otherwise fall back to chin-anchored bounding box estimate.
       let faceCenterY_frac, cropTopFrac, cropBotFrac;
       if (faceBounds.fromLandmarks && faceBounds.foreheadY != null && faceBounds.chinY != null) {
-        // Use landmark bounds directly for tight crop — forehead to chin only.
+        // Use landmark bounds directly for tight crop \u2014 forehead to chin only.
         // Add margin so oval gradient feathers naturally beyond face boundary.
         const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
         const margin = faceH_lm * 0.15; // 15% margin above/below face
@@ -118,7 +118,7 @@ export default async function handler(req, res) {
 
 
     } else {
-      // ── Profile (or no faceBounds): MediaPipe keypoints on Seedream output ──
+      // \u2500\u2500 Profile (or no faceBounds): MediaPipe keypoints on Seedream output \u2500\u2500
       if (LOCAL_SERVER && FW > 500) {
         try {
           // Front figures: detect-face-mp (fast, no outline needed).
@@ -152,7 +152,7 @@ export default async function handler(req, res) {
 
                 // Discard if keypoints are off-image or implausible face size
                 if (eyeCy < 50 || eyeCy > FH * 0.85 || eyeToMouth < 100 || eyeToMouth > FH * 0.60) {
-                  console.warn(`[composite] Invalid keypoints: eyeCy=${eyeCy} eyeToMouth=${eyeToMouth} — using bbox fallback`);
+                  console.warn(`[composite] Invalid keypoints: eyeCy=${eyeCy} eyeToMouth=${eyeToMouth} \u2014 using bbox fallback`);
                   throw new Error('invalid keypoints');
                 }
 
@@ -172,7 +172,7 @@ export default async function handler(req, res) {
                 const landmarkH   = chinBottom - foreheadTop;
                 console.log(`[composite:${figureId} bounds] ${outlineValid ? 'outline' : 'estimated'} foreheadTop=${foreheadTop} chinBottom=${chinBottom} landmarkH=${landmarkH} (outline=${outlineFt !== null ? `ft=${outlineFt} cb=${outlineCb} valid=${outlineValid}` : 'null'})`);
                 // cropSize and face center depend on face angle:
-                // - Profile: unchanged — max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
+                // - Profile: unchanged \u2014 max(landmarkH, bboxW) + 40, centered on (backOfHead+noseTip)/2
                 // - 3/4: landmarkH + 40 (bboxW includes background); X centered on near eye (closer to audience)
                 // - Front: landmarkH + 40, centered on eyeCx
                 // Y center always = (foreheadTop + chinBottom) / 2
@@ -184,7 +184,7 @@ export default async function handler(req, res) {
                   faceCenterX = Math.round((backOfHead + noseTip.x) / 2);
                   const faceSpanX = Math.abs(noseTip.x - backOfHead);
                   profileFaceWidthFrac = faceSpanX / Math.max(landmarkH, 1);
-                  // Use landmarkH only — bboxW inflates crop unnecessarily for profile faces
+                  // Use landmarkH only \u2014 bboxW inflates crop unnecessarily for profile faces
                   cropSize = Math.min(landmarkH + 40, 1500);
                 } else if (!isFront) {
                   // 3/4: near eye (facing direction determines which eye is closer to audience)
@@ -204,7 +204,7 @@ export default async function handler(req, res) {
                 console.log(`[composite:${figureId} crop] KEYPOINTS eye=(${eyeCx},${eyeCy}) mouth=(${mouth.x},${mouth.y}) faceCenter=(${faceCenterX},${faceCenterY}) bboxW=${bboxW} landmarkH=${landmarkH} cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
 
               } else {
-                // Keypoints unavailable — bbox fallback
+                // Keypoints unavailable \u2014 bbox fallback
                 const faceTop   = Math.round(box.y * FH);
                 const faceH     = Math.round((box.y2 - box.y) * FH);
                 cropSize = Math.round(FW * (isProfile ? 0.38 : 0.50));
@@ -231,7 +231,7 @@ export default async function handler(req, res) {
     }
     console.log(`[composite:${figureId}] cropMethod=${cropMethod} cropSize=${cropSize}`);
 
-    // ── Step 2: Resize face to exact square ───────────────────────────────────
+    // \u2500\u2500 Step 2: Resize face to exact square \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     let faceImg = sharp(faceCropBuf);
 
     // Resize to exact targetSize x targetSize square (face is upright from Seedream)
@@ -245,7 +245,7 @@ export default async function handler(req, res) {
     const fpMeta = await sharp(facePng).metadata();
     const S = fpMeta.width; // guaranteed square
 
-    // ── Step 2: Color matching ────────────────────────────────────────────────
+    // \u2500\u2500 Step 2: Color matching \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     const safeX = Math.max(0, targetX);
     const safeY = Math.max(0, targetY);
     const safeW = Math.min(targetW, PW - safeX);
@@ -271,7 +271,7 @@ export default async function handler(req, res) {
       .extract({ left: sampleX, top: sampleY, width: patchSize, height: patchSize })
       .resize(8, 8, { fit: 'fill' }).removeAlpha().raw().toBuffer();
 
-    // Sample a 20% patch shifted up 10% from center — lands on cheeks/nose,
+    // Sample a 20% patch shifted up 10% from center \u2014 lands on cheeks/nose,
     // avoids hair at top and neck/clothing at bottom. Tighter than 30% to stay on skin.
     const fSampleSize = Math.round(S * 0.20);
     const fSampleLeft = Math.round((S - fSampleSize) / 2);
@@ -304,7 +304,7 @@ export default async function handler(req, res) {
 
     console.log(`[composite:${figureId} color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
-    // Color match — keep exact S x S dimensions
+    // Color match \u2014 keep exact S x S dimensions
     const colorFace = await sharp(facePng)
       .removeAlpha()
       .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
@@ -318,16 +318,16 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // pasteS always = S — paste at full targetSize.
+    // pasteS always = S \u2014 paste at full targetSize.
     const faceSize = region.faceSize ?? 1.0;
     const pasteS = S;
     const pasteFace = colorFaceExact;
 
-    // Face-fitted oval mask — sized and positioned to match actual face bounds in the crop.
+    // Face-fitted oval mask \u2014 sized and positioned to match actual face bounds in the crop.
     // Oval rx/ry: sized to match the painting region (calibrated in calibrate tool).
-    // Landmark data is used for positioning (ovalCy) but not for oval size —
+    // Landmark data is used for positioning (ovalCy) but not for oval size \u2014
     // the oval must fit the painted figure's face, not the portrait face.
-    // Oval sized to match painting region — always region-based, not portrait-derived.
+    // Oval sized to match painting region \u2014 always region-based, not portrait-derived.
     // The crop already excludes hair/neck via landmarks; the oval covers the painted figure.
     const ovalRy     = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
     const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
@@ -341,30 +341,59 @@ export default async function handler(req, res) {
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropX / cropSize) * pasteS))
       : pasteS * 0.50;
 
-    // Center oval on face midpoint (yellow landmark dot = midpoint of hairline→chin).
+    // Center oval on face midpoint (yellow landmark dot = midpoint of hairline\u2192chin).
     // idealCropSize already ensures face fits within ovalRy, so centering on
     // faceCenterInCropY aligns the oval symmetrically with the face.
     const ovalCy = faceCenterInCropY != null
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
       : pasteS * 0.50;
-    const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
-      <defs>
-        <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
-          <stop offset="75%" stop-color="white" stop-opacity="1"/>
-          <stop offset="88%" stop-color="white" stop-opacity="0.70"/>
-          <stop offset="95%" stop-color="white" stop-opacity="0.20"/>
-          <stop offset="100%" stop-color="white" stop-opacity="0"/>
-        </radialGradient>
-      </defs>
-      <ellipse cx="${ovalCx}" cy="${ovalCy}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
-    </svg>`;
+    // Prefer polygon mask from landmarks (pixel-accurate jawline). Falls back to oval.
+    const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
+      397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+    const landmarks = req.body.landmarks ?? null;
+    let ovalMask;
 
-    const ovalMask = await sharp(Buffer.from(maskSvg))
-      .resize(pasteS, pasteS, { fit: 'fill' })
-      .png()
-      .toBuffer();
+    if (landmarks && landmarks.length >= 468) {
+      try {
+        const points = FACE_OVAL.map(i => {
+          const lm = landmarks[i];
+          const lpx = (lm.x * FW - cropX) / cropSize * pasteS;
+          const lpy = (lm.y * FH - cropY) / cropSize * pasteS;
+          return `${lpx.toFixed(1)},${lpy.toFixed(1)}`;
+        }).join(' ');
+        const polygonSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
+          <polygon points="${points}" fill="white"/>
+        </svg>`;
+        ovalMask = await sharp(Buffer.from(polygonSvg))
+          .resize(pasteS, pasteS, { fit: 'fill' })
+          .greyscale()
+          .blur(3)
+          .png()
+          .toBuffer();
+        console.log(`[composite:${figureId}] using face oval polygon mask`);
+      } catch (e) {
+        console.warn(`[composite:${figureId}] polygon mask failed: ${e.message}`);
+      }
+    }
 
-    // ── Step 4: Paste onto painting ──────────────────────────────────────────
+    if (!ovalMask) {
+      const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
+            <stop offset="75%" stop-color="white" stop-opacity="1"/>
+            <stop offset="88%" stop-color="white" stop-opacity="0.70"/>
+            <stop offset="95%" stop-color="white" stop-opacity="0.20"/>
+            <stop offset="100%" stop-color="white" stop-opacity="0"/>
+          </radialGradient>
+        </defs>
+        <ellipse cx="${ovalCx}" cy="${ovalCy}" rx="${ovalRx}" ry="${ovalRy}" fill="url(#g)"/>
+      </svg>`;
+      ovalMask = await sharp(Buffer.from(maskSvg))
+        .resize(pasteS, pasteS, { fit: 'fill' })
+        .png()
+        .toBuffer();
+    }
+    // \u2500\u2500 Step 4: Paste onto painting \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     // Apply oval gradient mask while face is upright (correct oval cut)
     let masked = await sharp(pasteFace)
       .ensureAlpha()
@@ -373,7 +402,7 @@ export default async function handler(req, res) {
 
     // Then rotate the masked face to match the painting character's head tilt.
     // Sharp.rotate(+angle) = clockwise. region.angle convention: positive = CW tilt in painting.
-    // Sharp expands canvas on rotation — track new size for correct paste centering.
+    // Sharp expands canvas on rotation \u2014 track new size for correct paste centering.
     let maskedSize = pasteS;
     if (region.angle && region.angle !== 0) {
       masked = await sharp(masked)
@@ -383,7 +412,7 @@ export default async function handler(req, res) {
       maskedSize = Math.round(pasteS * (Math.abs(Math.cos(a)) + Math.abs(Math.sin(a))));
     }
 
-    // Paste centered on region center (50% x, 55% y — matches calibrate oval position)
+    // Paste centered on region center (50% x, 55% y \u2014 matches calibrate oval position)
     const cx = targetX + Math.round(targetW * 0.50);
     const cy = targetY + Math.round(targetH * 0.50);
     const px = Math.max(0, Math.min(cx - Math.round(maskedSize / 2), PW - maskedSize));
@@ -400,7 +429,7 @@ export default async function handler(req, res) {
       .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
       .jpeg({ quality: 92 }).toBuffer();
 
-    // ── Step 5: Profile crop ──────────────────────────────────────────────────
+    // \u2500\u2500 Step 5: Profile crop \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     const pad = Math.round(targetH * 1.5);
     const profX = Math.max(0, px - pad);
     const profY = Math.max(0, py - pad);
@@ -414,14 +443,14 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // Build debug composite: painting region crop with masked face pasted on top
-    // Debug: color-corrected face with oval mask — shows what gets pasted and transparency
+    // Debug: color-corrected face with oval mask \u2014 shows what gets pasted and transparency
     const maskedDebug = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png()
       .toBuffer();
 
-    // Debug: raw portrait crop (before color correction) — shows what MediaPipe detected
+    // Debug: raw portrait crop (before color correction) \u2014 shows what MediaPipe detected
     const portraitCropDebug = await sharp(facePng)
       .resize(120, 120, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
       .jpeg({ quality: 75 })
