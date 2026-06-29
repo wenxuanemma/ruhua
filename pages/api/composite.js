@@ -350,7 +350,9 @@ export default async function handler(req, res) {
     const ovalCy = faceCenterInCropY != null
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
       : pasteS * 0.50;
-    // Prefer polygon mask from landmarks (pixel-accurate jawline). Falls back to oval.
+    // Plain sharp polygon mask with forehead points lifted to hairlineY.
+    // Five consecutive top points all set to the same y = flat horizontal line at hairline.
+    // No blur. Sharp edges everywhere — no dark halo, no seam artifacts.
     const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
       397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
     const landmarks = req.body.landmarks ?? null;
@@ -358,32 +360,57 @@ export default async function handler(req, res) {
 
     if (landmarks && landmarks.length >= 468) {
       try {
-        const points = FACE_OVAL.map(i => {
-          const lm = landmarks[i];
-          const lpx = (lm.x * FW - cropX) / cropSize * pasteS;
-          const lpy = (lm.y * FH - cropY) / cropSize * pasteS;
-          return `${lpx.toFixed(1)},${lpy.toFixed(1)}`;
-        }).join(' ');
+        const hairlineY_px = faceBounds?.foreheadY != null
+          ? Math.max(0, (faceBounds.foreheadY * FH - cropY) / cropSize * pasteS)
+          : null;
+
+        // Override top-5 forehead points to hairlineY — flat line, no spike, no bump.
+        // No blur applied: straight line is geometrically clean and hair covers it in the painting.
+        // Build SVG path: polygon segments for jaw/cheeks/sides,
+        // quadratic bezier arc for the hairline (lm[54] → lm[284], both lifted to hairlineY).
+        // Control point slightly above hairlineY = gentle natural arch, all coords on-canvas.
+        const lmPx = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
+        const lmPy = (lm) => (lm.y * FH - cropY) / cropSize * pasteS;
+
+        // SVG path: jaw polygon (lm[251]→chin→lm[21]) + cubic bezier hairline arc back to lm[251].
+        // Jaw uses FACE_OVAL forward order 251→389→...→162→21 (right cheek, chin, left cheek).
+        // Bezier: lm[21] → lm[251] with CP1=(x21,0) CP2=(x251,0) — vertical tangents, no corners,
+        // arc peaks at y≈36px (hair covers gap to hairlineY=22px).
+        const x21  = lmPx(landmarks[21]),  y21  = lmPy(landmarks[21]);
+        const x251 = lmPx(landmarks[251]), y251 = lmPy(landmarks[251]);
+
+        // Jaw: FACE_OVAL positions 5..31 = 251→389→356→454→323→361→288→397→365→379→378→400→377→152→148→176→149→150→136→172→58→132→93→234→127→162→21
+        const jawIndices = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
+        const jawPoints = jawIndices.slice(1)
+          .map(i => { const l = landmarks[i]; return `L ${lmPx(l).toFixed(1)} ${lmPy(l).toFixed(1)}`; })
+          .join(' ');
+
+        const pathD = [
+          `M ${x251.toFixed(1)} ${y251.toFixed(1)}`,  // start at right sideburn
+          jawPoints,                                       // jaw to left sideburn
+          // Cubic bezier back to lm[251]: vertical tangents at both ends — no corners
+          `C ${x21.toFixed(1)} 0 ${x251.toFixed(1)} 0 ${x251.toFixed(1)} ${y251.toFixed(1)}`,
+          'Z'
+        ].join(' ');
+
         const polygonSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
-          <polygon points="${points}" fill="white"/>
+          <path d="${pathD}" fill="white"/>
         </svg>`;
-        let rawMask = await sharp(Buffer.from(polygonSvg))
-          .png()
-          .toBuffer();
-        const rawMeta = await sharp(rawMask).metadata();
-        console.log(`[composite:${figureId}] polygon SVG raw size: ${rawMeta.width}x${rawMeta.height} target: ${pasteS}x${pasteS}`);
-        ovalMask = await sharp(rawMask)
+
+        ovalMask = await sharp(Buffer.from(polygonSvg))
           .resize(pasteS, pasteS, { fit: 'fill' })
           .greyscale()
           .png()
           .toBuffer();
-        console.log(`[composite:${figureId}] using face oval polygon mask`);
-      } catch (e) {
+
+        console.log(`[composite:${figureId}] polygon mask: hairlineY_px=${hairlineY_px?.toFixed(1) ?? 'null'}`);
+      } catch(e) {
         console.warn(`[composite:${figureId}] polygon mask failed: ${e.message}`);
       }
     }
 
     if (!ovalMask) {
+      // Fallback: gradient ellipse (no landmarks available)
       const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <radialGradient id="g" cx="50%" cy="50%" rx="50%" ry="50%">
@@ -432,32 +459,47 @@ export default async function handler(req, res) {
     const pasteBuf = (cW === maskedSize && cH === maskedSize)
       ? masked
       : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
-    const composited = await sharp(paintingBuf)
+    // Composite at full painting resolution first (needed for accurate profile crop)
+    const compositedFull = await sharp(paintingBuf)
       .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
-      .jpeg({ quality: 85 }).toBuffer();
+      .png().toBuffer();
 
-    // ── Step 5: Profile crop ──────────────────────────────────────────────────
+    // ── Step 5: Profile crop (from full-res composited) ───────────────────────
     const pad = Math.round(targetH * 1.5);
     const profX = Math.max(0, px - pad);
     const profY = Math.max(0, py - pad);
     const profW = Math.min(PW - profX, S + pad * 2);
     const profH = Math.min(PH - profY, S + pad * 2);
 
-    const profileBuf = await sharp(composited)
+    const profileBuf = await sharp(compositedFull)
       .extract({ left: profX, top: profY, width: Math.max(1,profW), height: Math.max(1,profH) })
       .resize(400, 400, { fit: 'cover' })
       .jpeg({ quality: 90 })
       .toBuffer();
-    // Debug: masked face — use separate resize of ovalMask to ensure size match
+
+    // Downscale full painting before returning — full 4000px JPEG exceeds 4MB API route limit.
+    const paintingScale = Math.min(1, 1200 / Math.max(PW, PH));
+    const outW = Math.round(PW * paintingScale);
+    const outH = Math.round(PH * paintingScale);
+    const composited = await sharp(compositedFull)
+      .resize(outW, outH, { fit: 'fill' })
+      .jpeg({ quality: 85 }).toBuffer();
+    // Debug: masked face — resize mask to match pasteFace exactly before compositing
     let maskedDebug = null;
     try {
       const debugMask = await sharp(ovalMask)
-        .resize(275, 275, { fit: 'fill' })
+        .resize(pasteS, pasteS, { fit: 'fill' })
+        .greyscale()
         .png()
         .toBuffer();
-      maskedDebug = await sharp(pasteFace)
+      // Break into two calls — Sharp can't chain resize after composite reliably
+      const maskedFull = await sharp(pasteFace)
+        .resize(pasteS, pasteS, { fit: 'fill' })
         .ensureAlpha()
         .composite([{ input: debugMask, blend: 'dest-in' }])
+        .png()
+        .toBuffer();
+      maskedDebug = await sharp(maskedFull)
         .resize(120, 120, { fit: 'contain', background: {r:0,g:0,b:0,alpha:0} })
         .png({ compressionLevel: 9 })
         .toBuffer();

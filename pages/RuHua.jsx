@@ -1533,8 +1533,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         ))}
                       </div>
                     </div>
-                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
-                    {maskedFaceUrl && (
+                    {portraitCropUrl && (<>
+                      <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
                       <div style={{textAlign:'center',flexShrink:0}}>
                         <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>入画人脸（裁剪后）</div>
                         <div style={{
@@ -1544,12 +1544,12 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                           display:'flex', alignItems:'center', justifyContent:'center',
                           overflow:'hidden',
                         }}>
-                          {portraitCropUrl && <img src={portraitCropUrl} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}}/>}
+                          <img src={portraitCropUrl} style={{maxWidth:'100%',maxHeight:'100%',objectFit:'contain'}}/>
                         </div>
                       </div>
-                    )}
-                    <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
-                    {maskedFaceUrl && (
+                    </>)}
+                    {maskedFaceUrl && (<>
+                      <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
                       <div style={{textAlign:'center',flexShrink:0}}>
                         <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>合成面（裁剪后）</div>
                         <div style={{
@@ -1563,7 +1563,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                             transform: region?.angle ? `rotate(${region.angle}deg)` : undefined}}/>
                         </div>
                       </div>
-                    )}
+                    </>)}
                     <div style={{color:'rgba(242,226,192,0.3)',fontSize:18,paddingTop:55,flexShrink:0}}>→</div>
                     <div style={{textAlign:'center',flexShrink:0}}>
                       <div style={{fontSize:9,color:'rgba(242,226,192,0.25)',marginBottom:4}}>原画人物</div>
