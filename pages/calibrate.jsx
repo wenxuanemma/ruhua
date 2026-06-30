@@ -193,7 +193,7 @@ export default function Calibrate() {
           if (c==='tl') { x=ob.x+dx; y=ob.y+dy; w=Math.max(0.01,ob.w-dx); h=Math.max(0.01,ob.h-dy); }
           return { x:Math.max(0,x), y:Math.max(0,y), w:Math.min(1,w), h:Math.min(1,h), angle:ob.angle||0 };
         })();
-        return { ...prev, [key]: b };
+        return { ...prev, [key]: { ...prev[key], ...b } };
       });
     };
     const onUp = () => {
@@ -438,6 +438,31 @@ export default function Calibrate() {
 
       {/* Output */}
       <div style={{marginTop:16,display:'flex',gap:8,alignItems:'center'}}>
+        <button onClick={() => {
+          fetch('/api/face-regions')
+            .then(r => r.json())
+            .then(regions => {
+              const loaded = {};
+              for (const [paintingId, figures] of Object.entries(regions)) {
+                for (const [figId, v] of Object.entries(figures)) {
+                  if (v.x !== undefined) {
+                    loaded[`${paintingId}_${figId}`] = {
+                      x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
+                      skinSample: v.skinSample || null,
+                      colorShift: v.colorShift ?? null,
+                      faceSize:   v.faceSize   ?? null,
+                      faceCenter: v.faceCenter || null,
+                      _original:  v,
+                    };
+                  }
+                }
+              }
+              setVals(loaded);
+            });
+        }} style={{padding:'6px 18px',background:'rgba(226,75,74,0.10)',
+                   border:`1px solid ${C.red}`,color:C.red,cursor:'pointer',fontSize:13}}>
+          ↺ Reset
+        </button>
         <button onClick={async () => {
           // Build full regions object from current vals
           const regions = {};
@@ -447,14 +472,23 @@ export default function Calibrate() {
               const key = `${p.id}_${f.id}`;
               const v = vals[key];
               if (v) {
-                const known = new Set(['x','y','w','h','angle','faceAngle','skinSample','colorShift','faceSize','faceCenter','_original']);
+                const known = new Set(['x','y','w','h','angle','faceAngle','skinSample','colorShift','faceSize','faceCenter','foreheadClip','saturation','brightness','rMax','bMax','exactSample','disabled','_original']);
                 const extra = Object.fromEntries(Object.entries(v._original||{}).filter(([k])=>!known.has(k)));
+                const orig = v._original || {};
                 regions[p.id][f.id] = {
                   x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0,
-                  ...(v.skinSample  ? { skinSample:  v.skinSample  } : {}),
-                  ...(v.colorShift  != null ? { colorShift:  v.colorShift  } : {}),
-                  ...(v.faceSize    != null ? { faceSize:    v.faceSize    } : {}),
-                  ...(v.faceCenter  ? { faceCenter:  v.faceCenter  } : {}),
+                  faceAngle: orig.faceAngle,
+                  ...(v.skinSample            ? { skinSample:    v.skinSample            } : {}),
+                  ...(v.colorShift  != null   ? { colorShift:    v.colorShift            } : {}),
+                  ...(v.faceSize    != null   ? { faceSize:      v.faceSize              } : {}),
+                  ...(v.faceCenter            ? { faceCenter:    v.faceCenter            } : {}),
+                  ...(orig.foreheadClip       ? { foreheadClip:  orig.foreheadClip       } : {}),
+                  ...(orig.saturation != null ? { saturation:    orig.saturation         } : {}),
+                  ...(orig.brightness != null ? { brightness:    orig.brightness         } : {}),
+                  ...(orig.rMax       != null ? { rMax:          orig.rMax               } : {}),
+                  ...(orig.bMax       != null ? { bMax:          orig.bMax               } : {}),
+                  ...(orig.exactSample        ? { exactSample:   orig.exactSample        } : {}),
+                  ...(orig.disabled           ? { disabled:      orig.disabled           } : {}),
                   ...extra,
                 };
               }

@@ -90,7 +90,7 @@ export default async function handler(req, res) {
         // ovalRy = (targetH/targetSize) * targetSize * 0.42
         // faceInPS = faceH_lm*FH/cropSize * pasteS = 2*ovalRy → cropSize = faceH_lm*FH*pasteS/(2*ovalRy)
         const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
-        const ovalRy_target = Math.min((targetH / targetSize) * targetSize * 0.42, targetSize * 0.48);
+        const ovalRy_target = Math.min((targetH / targetSize) * targetSize * 0.50, targetSize * 0.50);
         const idealCropSize = Math.round((faceH_lm * FH * targetSize) / (2 * ovalRy_target));
         faceCenterY_frac = faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2;
         cropTopFrac = Math.max(0, faceCenterY_frac - (idealCropSize / FH) / 2);
@@ -278,7 +278,7 @@ export default async function handler(req, res) {
     // avoids hair at top and neck/clothing at bottom. Tighter than 30% to stay on skin.
     const fSampleSize = Math.round(S * 0.20);
     const fSampleLeft = Math.round((S - fSampleSize) / 2);
-    const fSampleTop  = Math.round(S * 0.35);  // 35% from top = upper cheek area
+    const fSampleTop  = Math.round(S * 0.50);  // 50% from top = mid-cheek/jaw area
     const faceRaw = await sharp(facePng)
       .extract({ left: fSampleLeft, top: fSampleTop, width: fSampleSize, height: fSampleSize })
       .resize(8, 8).removeAlpha().raw().toBuffer();
@@ -311,7 +311,7 @@ export default async function handler(req, res) {
     const colorFace = await sharp(facePng)
       .removeAlpha()
       .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
-      .modulate({ saturation: 0.72 })
+      .modulate({ saturation: region.saturation ?? 0.72, brightness: region.brightness ?? 1.0 })
       .png()
       .toBuffer();
 
@@ -321,10 +321,52 @@ export default async function handler(req, res) {
       .png()
       .toBuffer();
 
-    // pasteS always = S \u2014 paste at full targetSize.
-    const faceSize = region.faceSize ?? 1.0;
-    const pasteS = S;
-    const pasteFace = colorFaceExact;
+
+    // ── Texture overlay ────────────────────────────────────────────────────────
+    // Extract the painting texture from the face region and composite it over
+    // the color-corrected face using soft-light blend. Transfers canvas grain and
+    // brushstroke texture onto the smooth portrait face, making it read as painted.
+    let pasteFace = colorFaceExact;
+    try {
+      // Use skinSample center (known good skin area) as the texture source.
+      // Extract S×S patch centered on skinSample, fallback to face region center.
+      const skinCx = region.skinSample ? Math.round(region.skinSample.cx * PW) : Math.round(targetX + targetW * 0.5);
+      const skinCy = region.skinSample ? Math.round(region.skinSample.cy * PH) : Math.round(targetY + targetH * 0.5);
+      const texX = Math.max(0, Math.min(skinCx - Math.round(S / 2), PW - S));
+      const texY = Math.max(0, Math.min(skinCy - Math.round(S / 2), PH - S));
+      const texW = Math.min(S, PW - texX);
+      const texH = Math.min(S, PH - texY);
+
+      const texturePatch = await sharp(paintingBuf)
+        .extract({ left: texX, top: texY, width: Math.max(1, texW), height: Math.max(1, texH) })
+        .resize(S, S, { fit: 'fill' })
+        .removeAlpha()
+        .blur(0.8)
+        .png()
+        .toBuffer();
+
+      // High-pass texture: subtract blurred version to isolate grain only.
+      // Then blend at low opacity using 'soft-light' so only fine texture transfers, not color.
+      const texBlurred = await sharp(texturePatch).blur(8).png().toBuffer();
+
+      // Normalize grain to mid-grey (128) baseline so it has no net color effect:
+      // grain = texturePatch desaturated, contrast reduced toward 128
+      const grainOnly = await sharp(texturePatch)
+        .greyscale()
+        .linear(0.25, 96)  // compress toward mid-grey: output = input*0.25 + 96 → range ~96-160
+        .png()
+        .toBuffer();
+
+      // Blend grain onto face at soft-light: values near 128 = no effect, slight variation adds texture
+      pasteFace = await sharp(colorFaceExact)
+        .composite([{ input: grainOnly, blend: 'soft-light' }])
+        .png()
+        .toBuffer();
+
+      console.log(`[composite:${figureId}] texture overlay: texX=${texX} texY=${texY}`);
+    } catch(e) {
+      console.warn(`[composite:${figureId}] texture overlay failed: ${e.message}`);
+    }
 
     // Face-fitted oval mask \u2014 sized and positioned to match actual face bounds in the crop.
     // Oval rx/ry: sized to match the painting region (calibrated in calibrate tool).
@@ -332,8 +374,9 @@ export default async function handler(req, res) {
     // the oval must fit the painted figure's face, not the portrait face.
     // Oval sized to match painting region \u2014 always region-based, not portrait-derived.
     // The crop already excludes hair/neck via landmarks; the oval covers the painted figure.
-    const ovalRy     = Math.min((targetH / targetSize) * pasteS * 0.42, pasteS * 0.48);
-    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.41, pasteS * 0.48);
+    const pasteS = S;
+    const ovalRy     = Math.min((targetH / targetSize) * pasteS * 0.50, pasteS * 0.50);
+    const ovalRxBase = Math.min((targetW / targetSize) * pasteS * 0.50, pasteS * 0.50);
     // Profile: use actual face width for rx
     const ovalRx = (isProfile && profileFaceWidthFrac)
       ? Math.min(profileFaceWidthFrac * ovalRy * 1.1, pasteS * 0.48)
@@ -351,8 +394,6 @@ export default async function handler(req, res) {
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
       : pasteS * 0.50;
     // Plain sharp polygon mask with forehead points lifted to hairlineY.
-    // Five consecutive top points all set to the same y = flat horizontal line at hairline.
-    // No blur. Sharp edges everywhere — no dark halo, no seam artifacts.
     const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
       397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
     const landmarks = req.body.landmarks ?? null;
@@ -360,41 +401,44 @@ export default async function handler(req, res) {
 
     if (landmarks && landmarks.length >= 468) {
       try {
-        const hairlineY_px = faceBounds?.foreheadY != null
-          ? Math.max(0, (faceBounds.foreheadY * FH - cropY) / cropSize * pasteS)
-          : null;
-
-        // Override top-5 forehead points to hairlineY — flat line, no spike, no bump.
-        // No blur applied: straight line is geometrically clean and hair covers it in the painting.
-        // Build SVG path: polygon segments for jaw/cheeks/sides,
-        // quadratic bezier arc for the hairline (lm[54] → lm[284], both lifted to hairlineY).
-        // Control point slightly above hairlineY = gentle natural arch, all coords on-canvas.
         const lmPx = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
         const lmPy = (lm) => (lm.y * FH - cropY) / cropSize * pasteS;
 
-        // SVG path: jaw polygon (lm[251]→chin→lm[21]) + cubic bezier hairline arc back to lm[251].
-        // Jaw uses FACE_OVAL forward order 251→389→...→162→21 (right cheek, chin, left cheek).
-        // Bezier: lm[21] → lm[251] with CP1=(x21,0) CP2=(x251,0) — vertical tangents, no corners,
-        // arc peaks at y≈36px (hair covers gap to hairlineY=22px).
         const x21  = lmPx(landmarks[21]),  y21  = lmPy(landmarks[21]);
         const x251 = lmPx(landmarks[251]), y251 = lmPy(landmarks[251]);
 
-        // Jaw: FACE_OVAL positions 5..31 = 251→389→356→454→323→361→288→397→365→379→378→400→377→152→148→176→149→150→136→172→58→132→93→234→127→162→21
+        // Jaw: FACE_OVAL positions 5..31 = 251→389→...→162→21 (right cheek, chin, left cheek)
         const jawIndices = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
         const jawPoints = jawIndices.slice(1)
           .map(i => { const l = landmarks[i]; return `L ${lmPx(l).toFixed(1)} ${lmPy(l).toFixed(1)}`; })
           .join(' ');
 
-        const pathD = [
-          `M ${x251.toFixed(1)} ${y251.toFixed(1)}`,  // start at right sideburn
-          jawPoints,                                       // jaw to left sideburn
-          // Cubic bezier back to lm[251]: vertical tangents at both ends — no corners
-          `C ${x21.toFixed(1)} 0 ${x251.toFixed(1)} 0 ${x251.toFixed(1)} ${y251.toFixed(1)}`,
-          'Z'
-        ].join(' ');
+        let pathD;
+        let svgContent;
+        if (region.foreheadClip) {
+          // Hat/headwear: use full unmodified FACE_OVAL polygon — hat covers the top so
+          // raw lm[10] position is fine, no arc needed.
+          const points = FACE_OVAL.map(i => {
+            const l = landmarks[i];
+            return `${lmPx(l).toFixed(1)},${lmPy(l).toFixed(1)}`;
+          }).join(' ');
+          svgContent = `<polygon points="${points}" fill="white"/>`;
+          console.log(`[composite:${figureId}] mask: raw polygon (hat covers top)`);
+        } else {
+          // Visible forehead: cubic bezier arc from lm[21]→lm[251] with vertical tangents.
+          // CP1=(x21,0) CP2=(x251,0) — arc peaks at y≈36px, hair covers gap to hairlineY.
+          const pathD = [
+            `M ${x251.toFixed(1)} ${y251.toFixed(1)}`,
+            jawPoints,
+            `C ${x21.toFixed(1)} 0 ${x251.toFixed(1)} 0 ${x251.toFixed(1)} ${y251.toFixed(1)}`,
+            'Z'
+          ].join(' ');
+          svgContent = `<path d="${pathD}" fill="white"/>`;
+          console.log(`[composite:${figureId}] mask: bezier arc hairline`);
+        }
 
         const polygonSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
-          <path d="${pathD}" fill="white"/>
+          ${svgContent}
         </svg>`;
 
         ovalMask = await sharp(Buffer.from(polygonSvg))
@@ -403,7 +447,7 @@ export default async function handler(req, res) {
           .png()
           .toBuffer();
 
-        console.log(`[composite:${figureId}] polygon mask: hairlineY_px=${hairlineY_px?.toFixed(1) ?? 'null'}`);
+
       } catch(e) {
         console.warn(`[composite:${figureId}] polygon mask failed: ${e.message}`);
       }
