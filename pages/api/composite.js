@@ -295,10 +295,8 @@ export default async function handler(req, res) {
 
     const ps = stats(paintingRaw), fs = stats(faceRaw);
 
-    // SHIFT controls how far to pull face tone toward painting sample (0=none, 1=full match).
-    // Global default 0.75; per-figure override via region.colorShift in faceRegions.js.
-    // Per-figure channel caps via region.rMax, region.bMax to prevent over-correction.
-    const SHIFT = region.colorShift ?? 0.75;
+    // Full color match toward painting sample — per-figure channel caps via rMax/bMax.
+    const SHIFT = 1.0;
     const rMax  = region.rMax ?? 1.90;
     const bMax  = region.bMax ?? 1.10;
     const rM = Math.min(rMax, Math.max(0.3, 1 + (ps.rm / Math.max(fs.rm, 1) - 1) * SHIFT));

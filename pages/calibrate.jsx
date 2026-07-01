@@ -74,14 +74,7 @@ export default function Calibrate() {
         for (const [paintingId, figures] of Object.entries(regions)) {
           for (const [figId, v] of Object.entries(figures)) {
             if (v.x !== undefined) { // skip nested objects like visitor
-              loaded[`${paintingId}_${figId}`] = {
-                x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
-                skinSample:  v.skinSample  || null,
-                colorShift:  v.colorShift  ?? null,
-                faceSize:    v.faceSize    ?? null,
-                faceCenter:  v.faceCenter  || null,
-                _original:   v,
-              };
+              loaded[`${paintingId}_${figId}`] = { ...v, _original: v };
             }
           }
         }
@@ -300,38 +293,41 @@ export default function Calibrate() {
             </div>
         }
 
-        {/* Figure boxes */}
+        {/* Figure ovals */}
         {painting.figures.map((fig, fi) => {
           const v = getVal(fig.id);
           const color = FIG_COLORS[fi % FIG_COLORS.length];
           const isDragging = dragging?.figId === fig.id;
           const px = v.x * imgSize.w, py = v.y * imgSize.h;
           const pw = v.w * imgSize.w, ph = v.h * imgSize.h;
+          const hw = 10;
           return (
             <div key={fig.id} style={{
               position:'absolute', left:px, top:py, width:pw, height:ph,
-              border:`2px solid ${color}`,
-              background: isDragging ? `${color}22` : `${color}11`,
               boxSizing:'border-box', cursor:'move',
               transform:`rotate(${v.angle||0}deg)`,
               transformOrigin:'center center',
             }}>
-              {/* Dashed oval showing actual face blend area */}
               <div style={{
-                position:'absolute',
-                left:`${(1-0.82)/2*100}%`,
-                top:`${(1-0.84)/2*100 + 5}%`,
-                width:'82%',
-                height:'84%',
+                position:'absolute', left:0, top:0, width:'100%', height:'100%',
                 borderRadius:'50%',
-                border:`1.5px dashed ${color}`,
-                opacity:0.7,
+                border:`1px solid ${color}88`,
+                background: isDragging ? `${color}22` : `${color}11`,
                 pointerEvents:'none',
               }}/>
-              {/* Corner handles */}
-              {[[0,0,'tl'],[pw-10,0,'tr'],[0,ph-10,'bl'],[pw-10,ph-10,'br']].map(([cx,cy,c])=>(
-                <div key={c} style={{position:'absolute',left:cx,top:cy,
-                  width:10,height:10,background:color,cursor:'nwse-resize',zIndex:10}}/>
+              {[
+                [0,     0,     'tl', '\u2196'],
+                [pw-hw, 0,     'tr', '\u2197'],
+                [0,     ph-hw, 'bl', '\u2199'],
+                [pw-hw, ph-hw, 'br', '\u2198'],
+              ].map(([cx,cy,corner,arrow])=>(
+                <div key={corner} style={{
+                  position:'absolute', left:cx, top:cy,
+                  width:hw, height:hw,
+                  display:'flex', alignItems:'center', justifyContent:'center',
+                  fontSize:9, color:color, cursor:'nwse-resize', zIndex:10,
+                  textShadow:'0 0 2px #000',
+                }}>{arrow}</div>
               ))}
               {/* Label */}
               <div style={{position:'absolute',top:-18,left:0,
@@ -350,14 +346,14 @@ export default function Calibrate() {
           const { cx, cy } = v.skinSample;
           const dotX = cx * imgSize.w;
           const dotY = cy * imgSize.h;
-          const dotR = Math.max(6, (v.skinSample.r||0.008) * imgSize.w);
+          const dotR = Math.max(4, (v.skinSample.r || v.w * 0.15) * imgSize.w);
           return (
             <div key={`skin_${fig.id}`} style={{
               position:'absolute',
               left: dotX - dotR, top: dotY - dotR,
               width: dotR*2, height: dotR*2,
               borderRadius:'50%',
-              border: `2px solid ${color}`,
+              border: `1px solid ${color}88`,
               background: `${color}55`,
               cursor:'move',
               boxSizing:'border-box',
@@ -395,7 +391,7 @@ export default function Calibrate() {
                       const key = `${painting.id}_${fig.id}`;
                       // Place dot at center of face region as starting point
                       setVals(prev => ({...prev, [key]: {...prev[key],
-                        skinSample: { cx: v.x+v.w*0.5, cy: v.y+v.h*0.65, r:0.008 }
+                        skinSample: { cx: v.x+v.w*0.5, cy: v.y+v.h*0.65, r: v.w * 0.15 }
                       }}));
                     }} style={{marginLeft:8,fontSize:9,padding:'1px 5px',cursor:'pointer',
                       background:'rgba(0,255,136,0.1)',border:'1px solid rgba(0,255,136,0.4)',
@@ -416,7 +412,7 @@ export default function Calibrate() {
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontSize:11,color:C.dim,width:40}}>angle:</span>
-                <input type="range" min="-20" max="20" step="1"
+                <input type="range" min="-45" max="45" step="1"
                   value={v.angle||0}
                   onChange={e => {
                     const key = `${painting.id}_${fig.id}`;
@@ -449,7 +445,6 @@ export default function Calibrate() {
                     loaded[`${paintingId}_${figId}`] = {
                       x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
                       skinSample: v.skinSample || null,
-                      colorShift: v.colorShift ?? null,
                       faceSize:   v.faceSize   ?? null,
                       faceCenter: v.faceCenter || null,
                       _original:  v,
@@ -472,17 +467,16 @@ export default function Calibrate() {
               const key = `${p.id}_${f.id}`;
               const v = vals[key];
               if (v) {
-                const known = new Set(['x','y','w','h','angle','faceAngle','skinSample','colorShift','faceSize','faceCenter','foreheadClip','saturation','brightness','rMax','bMax','exactSample','disabled','_original']);
+                const known = new Set(['x','y','w','h','angle','faceAngle','skinSample','faceSize','faceCenter','foreheadClip','saturation','brightness','rMax','bMax','exactSample','disabled','_original']);
                 const extra = Object.fromEntries(Object.entries(v._original||{}).filter(([k])=>!known.has(k)));
                 const orig = v._original || {};
                 regions[p.id][f.id] = {
                   x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle??0,
                   faceAngle: orig.faceAngle,
                   ...(v.skinSample            ? { skinSample:    v.skinSample            } : {}),
-                  ...(v.colorShift  != null   ? { colorShift:    v.colorShift            } : {}),
                   ...(v.faceSize    != null   ? { faceSize:      v.faceSize              } : {}),
                   ...(v.faceCenter            ? { faceCenter:    v.faceCenter            } : {}),
-                  ...(orig.foreheadClip       ? { foreheadClip:  orig.foreheadClip       } : {}),
+                  ...(v.foreheadClip         ? { foreheadClip:  v.foreheadClip           } : {}),
                   ...(orig.saturation != null ? { saturation:    orig.saturation         } : {}),
                   ...(orig.brightness != null ? { brightness:    orig.brightness         } : {}),
                   ...(orig.rMax       != null ? { rMax:          orig.rMax               } : {}),

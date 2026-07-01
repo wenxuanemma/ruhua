@@ -1590,7 +1590,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                         const ovalRy = Math.min((regHpx / targetSize) * targetSize * 0.42, targetSize * 0.48);
                         // Paste center: 50% x, 55% y of region
                         const ovalCx = offX + regWpx * 0.50;
-                        const ovalCy = offY + regHpx * 0.55;
+                        const ovalCy = offY + regHpx * 0.50;
                         // paintSampleBox: convert painting fractions to thumbnail pixels
                         const psb = paintSampleBox;
                         // img sizing: full painting scaled so region fills thumbnail
