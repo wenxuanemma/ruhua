@@ -27,7 +27,7 @@ const PAINTINGS = [
     ]},
   { id:'daolian', title:'捣练图', directImageUrl:'/paintings/daolian.jpg',
     figures:[
-      {id:'ironer',   name:'熨绢仕女'},
+      {id:'girl',     name:'粉衣小童'},
       {id:'threader', name:'穿针仕女'},
     ]},
   { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
@@ -412,7 +412,7 @@ export default function Calibrate() {
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontSize:11,color:C.dim,width:40}}>angle:</span>
-                <input type="range" min="-45" max="45" step="1"
+                <input type="range" min="-90" max="45" step="1"
                   value={v.angle||0}
                   onChange={e => {
                     const key = `${painting.id}_${fig.id}`;

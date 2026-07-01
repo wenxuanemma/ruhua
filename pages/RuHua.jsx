@@ -144,7 +144,7 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a1206 0%,#4a3418 24%,#9a7840 50%,#6a5228 74%,#1a1206 100%)',
     color: '#9a7840',
     figures: [
-      { id:'ironer',   name:'熨绢仕女', nameEn:'Lady Ironing Silk',   descZh:'以热熨斗轻抚绢帛，将丝绸熨烫平整，动作沉稳而专注。',             descEn:'Smoothing silk with a heated iron, pressing the fabric with steady, focused hands in the rhythm of the weaving chamber.', gender:'woman', rec:true },
+      { id:'girl',     name:'粉衣小童', nameEn:'Girl in Pink',        descZh:'粉衣小女，俯身于练布之下，姿态天真可爱。',                         descEn:'A little girl in pink, bending beneath the stretched silk with innocent, curious eyes.', gender:'woman', rec:true },
       { id:'threader', name:'穿针仕女', nameEn:'Lady Threading Silk', descZh:'细心穿针引线，将练丝精准穿入针孔，是织造工序中最考验耐心之人。', descEn:'Threading silk with patient precision — the most careful and exacting work of the silk-making process.', gender:'woman', rec:true },
     ],
     youAre: '熨绢仕女 · Lady of the Silk Chamber',
