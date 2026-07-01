@@ -426,11 +426,12 @@ export default async function handler(req, res) {
           console.log(`[composite:${figureId}] mask: raw polygon (hat covers top)`);
         } else {
           // Visible forehead: cubic bezier arc from lm[21]→lm[251] with vertical tangents.
-          // CP1=(x21,0) CP2=(x251,0) — arc peaks at y≈36px, hair covers gap to hairlineY.
+          // cpY computed so arc peaks exactly at ovalCy-ovalRy (oval top), regardless of pasteS size.
+          const cpY = ((ovalCy - ovalRy) - 0.125*(y21+y251)) / 0.75;
           const pathD = [
             `M ${x251.toFixed(1)} ${y251.toFixed(1)}`,
             jawPoints,
-            `C ${x21.toFixed(1)} 0 ${x251.toFixed(1)} 0 ${x251.toFixed(1)} ${y251.toFixed(1)}`,
+            `C ${x21.toFixed(1)} ${cpY.toFixed(1)} ${x251.toFixed(1)} ${cpY.toFixed(1)} ${x251.toFixed(1)} ${y251.toFixed(1)}`,
             'Z'
           ].join(' ');
           svgContent = `<path d="${pathD}" fill="white"/>`;
