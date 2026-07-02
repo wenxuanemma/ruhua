@@ -442,13 +442,7 @@ export default function Calibrate() {
               for (const [paintingId, figures] of Object.entries(regions)) {
                 for (const [figId, v] of Object.entries(figures)) {
                   if (v.x !== undefined) {
-                    loaded[`${paintingId}_${figId}`] = {
-                      x:v.x, y:v.y, w:v.w, h:v.h, angle:v.angle||0,
-                      skinSample: v.skinSample || null,
-                      faceSize:   v.faceSize   ?? null,
-                      faceCenter: v.faceCenter || null,
-                      _original:  v,
-                    };
+                    loaded[`${paintingId}_${figId}`] = { ...v, _original: v };
                   }
                 }
               }
