@@ -208,6 +208,7 @@ const PAINTINGS = [
   {
     id: 'huishan',
     directImageUrl: '/paintings/huishan.jpg',
+    bgPosition: '80% center',
     title: '挥扇仕女图',
     sub: 'Court Ladies with Fans',
     subZh: '唐周昉绘宫廷仕女挥扇图',
@@ -512,7 +513,7 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
     <div style={{ minHeight:'100vh', background:C.bg }}>
       {/* Hero — centered on first recommended figure if image available */}
       <div style={{
-        background: imgUrl ? `url(${imgUrl}) center/cover` : painting.grad,
+        background: imgUrl ? `url(${imgUrl}) ${painting?.bgPosition || "center"}/cover` : painting.grad,
         padding:'52px 22px 28px', position:'relative', overflow:'hidden',
         transition:'background .4s ease',
       }}>
@@ -1010,7 +1011,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
   return (
     <div style={{
       minHeight:'100vh',
-      background: imgUrl ? `url(${imgUrl}) center/cover` : (painting?.grad || C.bg),
+      background: imgUrl ? `url(${imgUrl}) ${painting?.bgPosition || "center"}/cover` : (painting?.grad || C.bg),
       display:'flex', flexDirection:'column', alignItems:'center', justifyContent:'center',
       padding:32, position:'relative', overflow:'hidden',
     }}>
@@ -1133,7 +1134,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
     };
     // Fallback: CSS zoom (less reliable but better than nothing)
     if (!region || !imgUrl) return {
-      background: imgUrl ? `url(${imgUrl}) center/cover` : painting?.grad,
+      background: imgUrl ? `url(${imgUrl}) ${painting?.bgPosition || "center"}/cover` : painting?.grad,
     };
     const scale = Math.min(1 / region.w, 1 / region.h) * 0.72;
     const faceCenterX = region.x + region.w / 2;
@@ -1295,7 +1296,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
       </div>
 
       {/* Tab bar — Chinese only, clean */}
-      <div style={{ display:'flex', background:C.card, borderBottom:`1px solid ${C.border}` }}>
+      <div style={{ display:'flex', background:C.card }}>
         {[
           { id:'scene',   label:'场景' },
           { id:'crop',    label:'头像' },

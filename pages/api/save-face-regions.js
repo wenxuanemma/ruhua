@@ -66,12 +66,18 @@ export default function handler(req, res) {
       const colorShift = v.colorShift ?? existingColorShifts[figId];
       const faceSize   = v.faceSize   ?? existingFaceSizes[figId];
       const skinSample = v.skinSample ?? existingSkinSamples[figId];
-      const colorShiftStr = colorShift != null ? `, colorShift:${colorShift}` : '';
-      const faceSizeStr   = faceSize   != null ? `, faceSize:${faceSize}`     : '';
       const faceCenter  = v.faceCenter  ?? existingFaceCenters[figId];
       const faceCenterStr = faceCenter ? `, faceCenter:{ cx:${faceCenter.cx.toFixed(4)}, cy:${faceCenter.cy.toFixed(4)} }` : '';
       const skinSampleStr = skinSample ? `, skinSample:{ cx:${skinSample.cx.toFixed(4)}, cy:${skinSample.cy.toFixed(4)}, r:${skinSample.r.toFixed(4)} }` : '';
-      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${colorShiftStr}${faceSizeStr}${faceCenterStr}${skinSampleStr} },`);
+      const foreheadClipStr = v.foreheadClip ? `, foreheadClip:true` : '';
+      const disabledStr     = v.disabled     ? `, disabled:true`     : '';
+      const saturationStr   = v.saturation  != null ? `, saturation:${v.saturation}`   : '';
+      const brightnessStr   = v.brightness  != null ? `, brightness:${v.brightness}`   : '';
+      const rMaxStr         = v.rMax        != null ? `, rMax:${v.rMax}`               : '';
+      const bMaxStr         = v.bMax        != null ? `, bMax:${v.bMax}`               : '';
+      const exactSampleStr  = v.exactSample          ? `, exactSample:true`             : '';
+      const faceSizeStr     = faceSize != null ? `, faceSize:${faceSize}` : '';
+      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${foreheadClipStr}${disabledStr}${faceSizeStr}${faceCenterStr}${saturationStr}${brightnessStr}${rMaxStr}${bMaxStr}${exactSampleStr}${skinSampleStr} },`);
     }
     lines.push(`  },`);
   }

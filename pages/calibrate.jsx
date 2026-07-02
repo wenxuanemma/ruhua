@@ -412,7 +412,7 @@ export default function Calibrate() {
               </div>
               <div style={{display:'flex',alignItems:'center',gap:8}}>
                 <span style={{fontSize:11,color:C.dim,width:40}}>angle:</span>
-                <input type="range" min="-90" max="45" step="1"
+                <input type="range" min="-90" max="90" step="1"
                   value={v.angle||0}
                   onChange={e => {
                     const key = `${painting.id}_${fig.id}`;
@@ -477,12 +477,12 @@ export default function Calibrate() {
                   ...(v.faceSize    != null   ? { faceSize:      v.faceSize              } : {}),
                   ...(v.faceCenter            ? { faceCenter:    v.faceCenter            } : {}),
                   ...(v.foreheadClip         ? { foreheadClip:  v.foreheadClip           } : {}),
-                  ...(orig.saturation != null ? { saturation:    orig.saturation         } : {}),
-                  ...(orig.brightness != null ? { brightness:    orig.brightness         } : {}),
-                  ...(orig.rMax       != null ? { rMax:          orig.rMax               } : {}),
-                  ...(orig.bMax       != null ? { bMax:          orig.bMax               } : {}),
-                  ...(orig.exactSample        ? { exactSample:   orig.exactSample        } : {}),
-                  ...(orig.disabled           ? { disabled:      orig.disabled           } : {}),
+                  ...(v.saturation  != null ? { saturation:   v.saturation            } : {}),
+                  ...(v.brightness  != null ? { brightness:   v.brightness            } : {}),
+                  ...(v.rMax        != null ? { rMax:         v.rMax                  } : {}),
+                  ...(v.bMax        != null ? { bMax:         v.bMax                  } : {}),
+                  ...(v.exactSample         ? { exactSample:  v.exactSample           } : {}),
+                  ...(v.disabled            ? { disabled:     v.disabled              } : {}),
                   ...extra,
                 };
               }
