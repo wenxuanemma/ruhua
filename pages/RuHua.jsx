@@ -64,7 +64,7 @@ const STYLES = `
 .fig-opt{cursor:pointer;transition:all .18s ease}
 .fig-opt:hover{border-color:rgba(201,168,76,.55)!important;background:rgba(201,168,76,.08)!important}
 
-.tab-btn{cursor:pointer;border:none;background:none;transition:all .18s ease}
+.tab-btn{cursor:pointer;border:none;background:none;transition:all .18s ease;outline:none}
 .tab-btn:hover{background:rgba(201,168,76,.05)!important}
 
 ::-webkit-scrollbar{width:3px}
@@ -1157,7 +1157,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
   const markerLeft = `${Math.round(faceX * 100)}%`;
   const markerTop  = markerAbove
     ? `${Math.max(5, Math.round((faceY - 0.18) * 100))}%`  // above face
-    : `${Math.min(85, Math.round((faceY + 0.18) * 100))}%`; // below face
+    : `${Math.min(75, Math.round((faceY + 0.18) * 100))}%`; // below face — capped to avoid tab bar
 
   return (
     <div style={{ minHeight:'100vh', background:C.bg }}>
@@ -1273,7 +1273,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               你在此处
             </div>
             <div style={{
-              width:1.5, height:16, background:C.vermillion, margin:'0 auto', opacity:.85,
+              width:2, height:16, background:C.vermillion, margin:'0 auto', opacity:.7,
               order: markerAbove ? 1 : -1,
             }} />
           </div>
