@@ -1132,7 +1132,6 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
       backgroundSize: 'cover',
       backgroundPosition: 'center',
     };
-    // Fallback: CSS zoom (less reliable but better than nothing)
     if (!region || !imgUrl) return {
       background: imgUrl ? `url(${imgUrl}) ${painting?.bgPosition || "center"}/cover` : painting?.grad,
     };
@@ -1167,7 +1166,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
         <img src={imgs[painting.id]} alt="" onLoad={e => setNaturalDims({ w: e.target.naturalWidth, h: e.target.naturalHeight })}
           style={{ display:'none' }} />
       )}
-      {/* Hero — img with object-position correctly centers on face region */}
+      {/* Hero — composited output centered on face */}
       <div style={{ position:'relative', paddingTop:'62%', overflow:'hidden' }}>
         {imgUrl
           ? <img src={imgUrl} alt={painting?.title} style={{

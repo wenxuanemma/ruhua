@@ -522,7 +522,7 @@ export default async function handler(req, res) {
       .toBuffer();
 
     // Downscale full painting before returning — full 4000px JPEG exceeds 4MB API route limit.
-    const paintingScale = Math.min(1, 1200 / Math.max(PW, PH));
+    const paintingScale = Math.min(1, 2400 / Math.max(PW, PH));
     const outW = Math.round(PW * paintingScale);
     const outH = Math.round(PH * paintingScale);
     const composited = await sharp(compositedFull)
