@@ -7,7 +7,7 @@
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
 	<key>CFBundleDisplayName</key>
-        <string>ruhua</string>
+        <string>如画</string>
 	<key>CFBundleExecutable</key>
 	<string>$(EXECUTABLE_NAME)</string>
 	<key>CFBundleIdentifier</key>
@@ -47,5 +47,9 @@
 	</array>
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
+	<key>NSCameraUsageDescription</key>
+	<string>入画需要使用相机拍摄您的自拍，以将您的面孔融入古典画作。</string>
+	<key>NSPhotoLibraryUsageDescription</key>
+	<string>入画需要访问您的相册以选择照片。</string>
 </dict>
 </plist>
