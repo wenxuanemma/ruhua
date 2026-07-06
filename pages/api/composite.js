@@ -106,13 +106,22 @@ export default async function handler(req, res) {
         cropBotFrac = Math.min(1, faceCenterY_frac + halfCrop);
       }
       const cropHeightFrac = cropBotFrac - cropTopFrac;
-      // Use face height as crop size, but at least 50% of portrait
-      cropSize = Math.round(Math.max(cropHeightFrac, 0.50) * FH);
-      // Always center horizontally on portrait midpoint
-      cropX = Math.max(0, Math.min(Math.round(FW / 2 - cropSize / 2), FW - cropSize));
+      // For profile faces, constrain crop to face width (ear→nose) to avoid background.
+      // For front/three-quarter, use face height as before.
+      const faceWidthFrac = faceBounds?.w ?? 0;
+      const isProfileFace = region.faceAngle && region.faceAngle.includes('profile');
+      const cropSizeFromH = Math.round(Math.max(cropHeightFrac, 0.50) * FH);
+      const cropSizeFromW = isProfileFace && faceWidthFrac > 0
+        ? Math.round(faceWidthFrac * FW * 1.15) // face width + 15% margin
+        : cropSizeFromH;
+      cropSize = Math.min(cropSizeFromH, cropSizeFromW);
+      // Center horizontally on face center
+      const hCenterFrac = faceBounds ? (faceBounds.x + faceBounds.w / 2) : 0.5;
+      const hCenter = Math.round(hCenterFrac * FW);
+      cropX = Math.max(0, Math.min(hCenter - Math.round(cropSize / 2), FW - cropSize));
       cropY = Math.max(0, Math.min(Math.round(cropTopFrac * FH), FH - cropSize));
       cropMethod = 'portrait-face';
-      faceCenterInCropX = Math.round(FW / 2) - cropX;
+      faceCenterInCropX = hCenter - cropX;
       faceCenterInCropY = Math.round(faceCenterY_frac * FH) - cropY;
       if (faceBounds.fromLandmarks && faceBounds.chinY != null) {
         chinInCrop = Math.round(faceBounds.chinY * FH) - cropY;

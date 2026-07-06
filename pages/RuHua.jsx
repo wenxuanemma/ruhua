@@ -615,16 +615,17 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
 function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, onCaptured, onRetake, onBack }) {
-  const [camState, setCamState] = useState('starting');
-  const [count, setCount] = useState(3);
-  const [capturedImg, setCapturedImg] = useState(null);
   const lastSelfie = loadLastSelfie();
+  const [camState, setCamState] = useState(lastSelfie ? 'done' : 'starting');
+  const [count, setCount] = useState(3);
+  const [capturedImg, setCapturedImg] = useState(lastSelfie || null);
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
 
-  // Start front camera on mount
+  // Start front camera on mount — skip if already showing cached selfie
   useEffect(() => {
+    if (lastSelfie) return;
     let active = true;
     async function startCamera() {
       try {
@@ -902,7 +903,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
               padding:'4px 14px', letterSpacing:'.12em', whiteSpace:'nowrap',
               zIndex:5,
             }}>
-              ✓ 自拍已捕捉
+              {capturedImg === lastSelfie ? '↩ 上次自拍' : '✓ 自拍已捕捉'}
             </div>
           )}
         </div>
@@ -918,17 +919,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
         <div style={{ width:'100%', maxWidth:300, marginTop:20, display:'flex', flexDirection:'column', gap:10 }}>
           {camState !== 'done' ? (
             <>
-              {lastSelfie && (
-                <button onClick={() => {
-                  onConfirmWithSelfie(lastSelfie);
-                }} className="btn" style={{
-                  background:'rgba(201,168,76,.12)', border:`1px solid ${C.gold}`,
-                  color:C.gold, fontFamily:F.brush, fontSize:16, padding:'12px 18px',
-                  letterSpacing:'.12em', marginBottom:8,
-                }}>
-                  ✓ 使用上次自拍 · 直接入画
-                </button>
-              )}
+
               <button
                 onClick={handleCapture}
                 disabled={camState !== 'live'}
@@ -945,7 +936,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
             </>
           ) : (
             <>
-              <button onClick={onConfirm} className="btn" style={{
+              <button onClick={() => capturedImg === lastSelfie ? onConfirmWithSelfie(lastSelfie) : onConfirm()} className="btn" style={{
                 background:C.vermillion, color:'#f5e8c4',
                 fontFamily:F.brush, fontSize:20, padding:'14px', letterSpacing:'.35em',
                 boxShadow:`0 4px 22px rgba(191,36,41,.32)`,
@@ -956,7 +947,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
                 background:'transparent', border:`1px solid ${C.border}`,
                 color:C.silkDim, fontFamily:F.serif, fontSize:14, padding:'12px',
               }}>
-                重拍
+                {capturedImg === lastSelfie ? '重新拍摄' : '重拍'}
               </button>
             </>
           )}
@@ -1325,7 +1316,10 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                 {figure?.en}
               </span>
             </div>
-            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.85, marginBottom:18 }}>
+            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.85, marginBottom:8 }}>
+              {painting?.sceneZh}
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:12, color:C.silkDim, lineHeight:1.85, marginBottom:18 }}>
               {painting?.scene}
             </div>
             <div style={{ background:C.card, border:`1px solid ${C.border}`, padding:'13px 15px' }}>
