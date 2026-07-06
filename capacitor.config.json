@@ -1,0 +1,9 @@
+{
+  "appId": "com.ruhua.app",
+  "appName": "ruhua",
+  "webDir": "public",
+  "server": {
+    "url": "https://ruhua.vercel.app",
+    "cleartext": false
+  }
+}
