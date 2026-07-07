@@ -1407,22 +1407,28 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
         <div style={{ marginTop:26, display:'flex', flexDirection:'column', gap:10 }}>
           <button className="btn" onClick={async () => {
             if (!imgUrl) return;
+            const filename = `ruhua_${painting?.id || 'painting'}.jpg`;
             try {
-              // Draw clean image (no red box overlays) onto canvas and download
-              const img = await new Promise((res, rej) => {
-                const i = new Image(); i.crossOrigin = 'anonymous';
-                i.onload = () => res(i); i.onerror = rej; i.src = imgUrl;
-              });
-              const canvas = document.createElement('canvas');
-              canvas.width = img.naturalWidth; canvas.height = img.naturalHeight;
-              canvas.getContext('2d').drawImage(img, 0, 0);
-              const a = document.createElement('a');
-              a.href = canvas.toDataURL('image/jpeg', 0.95);
-              a.download = `ruhua_${painting?.id || 'painting'}.jpg`;
-              a.click();
+              // imgUrl is a base64 data URL — fetch it directly as blob (no canvas/CORS issues)
+              const res = await fetch(imgUrl);
+              const blob = await res.blob();
+              const file = new File([blob], filename, { type: 'image/jpeg' });
+              if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                await navigator.share({ files: [file], title: '入画', text: '我入画了！' });
+              } else if (navigator.share) {
+                await navigator.share({ title: '入画', text: '我入画了！', url: window.location.href });
+              } else {
+                // Web fallback: download
+                const a = document.createElement('a');
+                a.href = imgUrl;
+                a.download = filename;
+                a.click();
+              }
             } catch (e) {
-              // Fallback: open in new tab
-              window.open(imgUrl, '_blank');
+              if (e.name !== 'AbortError') {
+                // Last resort: open in new tab
+                window.open(imgUrl, '_blank');
+              }
             }
           }} style={{
             background:C.vermillion, color:'#f5e8c4',
