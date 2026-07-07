@@ -953,30 +953,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
               </button>
             </>
           )}
-        {/* DEV ONLY: upload from photo library — auto-hidden in production */}
-        {/* DEV ONLY — remove before App Store submission */}
-        <label style={{
-          fontFamily:F.serif, fontSize:12, color:C.silkDim,
-          border:`1px solid ${C.border}`, padding:'8px 16px',
-          cursor:'pointer', textAlign:'center', marginTop:8,
-          display:'block',
-        }}>
-          从相册选择（测试用）
-          <input type="file" accept="image/*" style={{ display:'none' }}
-            onChange={e => {
-              const file = e.target.files?.[0];
-              if (!file) return;
-              const reader = new FileReader();
-              reader.onload = ev => {
-                const dataUrl = ev.target.result;
-                setCapturedImg(dataUrl);
-                setCamState('done');
-                onCaptured(dataUrl);
-              };
-              reader.readAsDataURL(file);
-            }}
-          />
-        </label>
+
         </div>
       </div>
     </div>
