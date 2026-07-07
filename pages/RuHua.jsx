@@ -258,7 +258,8 @@ function BackBtn({ onClick }) {
     <button onClick={onClick} className="btn" style={{
       color: C.silkDim, fontFamily: F.serif, fontSize: 13,
       display: 'flex', alignItems: 'center', gap: 5,
-      padding: '6px 0', marginBottom: 12,
+      padding: '12px 16px 12px 0', marginBottom: 12,
+      minHeight: 44, minWidth: 80,
     }}>
       ← 返回
     </button>
@@ -933,6 +934,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
                 }}>
                 {camState === 'live' ? '拍照' : camState === 'counting' ? `${count}…` : camState === 'error' ? '无法拍摄' : '准备中…'}
               </button>
+
             </>
           ) : (
             <>
@@ -951,6 +953,30 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
               </button>
             </>
           )}
+        {/* DEV ONLY: upload from photo library — auto-hidden in production */}
+        {/* DEV ONLY — remove before App Store submission */}
+        <label style={{
+          fontFamily:F.serif, fontSize:12, color:C.silkDim,
+          border:`1px solid ${C.border}`, padding:'8px 16px',
+          cursor:'pointer', textAlign:'center', marginTop:8,
+          display:'block',
+        }}>
+          从相册选择（测试用）
+          <input type="file" accept="image/*" style={{ display:'none' }}
+            onChange={e => {
+              const file = e.target.files?.[0];
+              if (!file) return;
+              const reader = new FileReader();
+              reader.onload = ev => {
+                const dataUrl = ev.target.result;
+                setCapturedImg(dataUrl);
+                setCamState('done');
+                onCaptured(dataUrl);
+              };
+              reader.readAsDataURL(file);
+            }}
+          />
+        </label>
         </div>
       </div>
     </div>
