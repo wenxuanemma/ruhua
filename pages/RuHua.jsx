@@ -1366,17 +1366,34 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                 pointerEvents:'none' }} />
             </div>
 
-            {/* Download circle */}
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:10 }}>
+              圆形头像 · 微信 · 微博
+            </div>
+
+            {/* Download circle — canvas with circular clip → PNG */}
             <button className="btn" onClick={async () => {
               if (!profileUrl) return;
               try {
-                const blob = await fetch(profileUrl).then(r => r.blob());
-                const file = new File([blob], 'ruhua_avatar.jpg', { type: 'image/jpeg' });
+                const img = await new Promise((res, rej) => {
+                  const i = new Image(); i.crossOrigin = 'anonymous';
+                  i.onload = () => res(i); i.onerror = rej; i.src = profileUrl;
+                });
+                const sz = img.naturalWidth;
+                const canvas = document.createElement('canvas');
+                canvas.width = sz; canvas.height = sz;
+                const ctx = canvas.getContext('2d');
+                ctx.beginPath();
+                ctx.arc(sz/2, sz/2, sz/2, 0, Math.PI*2);
+                ctx.clip();
+                ctx.drawImage(img, 0, 0);
+                const dataUrl = canvas.toDataURL('image/png');
+                const blob = await fetch(dataUrl).then(r => r.blob());
+                const file = new File([blob], 'ruhua_avatar_circle.png', { type: 'image/png' });
                 if (navigator.share && navigator.canShare?.({ files: [file] })) {
                   await navigator.share({ files: [file], title: '入画头像' });
                 } else {
                   const a = document.createElement('a');
-                  a.href = profileUrl; a.download = 'ruhua_avatar.jpg'; a.click();
+                  a.href = dataUrl; a.download = 'ruhua_avatar_circle.png'; a.click();
                 }
               } catch(e) { if (e.name !== 'AbortError') window.open(profileUrl, '_blank'); }
             }} style={{
