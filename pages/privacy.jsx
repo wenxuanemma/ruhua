@@ -58,7 +58,7 @@ export default function Privacy() {
         <p>We may update this policy from time to time. The "Last updated" date at the top will reflect any changes. Continued use of the app constitutes acceptance of the updated policy.</p>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Contact</h3>
-        <p>If you have questions about this privacy policy, please contact us at: <a href="mailto:ruhua.app@gmail.com" style={{ color: '#c0392b' }}>ruhua.app@gmail.com</a></p>
+        <p>If you have questions about this privacy policy, please contact us at: <a href="mailto:ruhua.contact@gmail.com" style={{ color: '#c0392b' }}>ruhua.contact@gmail.com</a></p>
       </section>
 
       {/* Chinese */}
@@ -105,7 +105,7 @@ export default function Privacy() {
         <p>我们可能不时更新本政策。顶部的"最后更新"日期将反映任何变更。继续使用本应用即表示接受更新后的政策。</p>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>联系我们</h3>
-        <p>如您有任何疑问，请联系：<a href="mailto:ruhua.app@gmail.com" style={{ color: '#c0392b' }}>ruhua.app@gmail.com</a></p>
+        <p>如您有任何疑问，请联系：<a href="mailto:ruhua.contact@gmail.com" style={{ color: '#c0392b' }}>ruhua.contact@gmail.com</a></p>
       </section>
 
       <div style={{ marginTop: 64, paddingTop: 24, borderTop: '1px solid #e0d4c0', fontSize: 13, color: '#999', textAlign: 'center' }}>
