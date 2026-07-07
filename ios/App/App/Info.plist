@@ -36,6 +36,8 @@
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
 	</array>
+	<key>UIRequiresFullScreen</key>
+	<true/>
 	<key>UISupportedInterfaceOrientations~ipad</key>
 	<array>
 		<string>UIInterfaceOrientationPortrait</string>
@@ -44,8 +46,6 @@
 	<key>UIViewControllerBasedStatusBarAppearance</key>
 	<true/>
 	<key>NSCameraUsageDescription</key>
-	<string>入画需要使用相机拍摄您的自拍，以将您的面孔融入古典画作。</string>
-	<key>NSPhotoLibraryUsageDescription</key>
-	<string>入画需要访问您的相册以选择照片。</string>
+	<string>RuHua needs camera access to take your selfie for compositing into classical paintings. (入画需要使用相机拍摄您的自拍，以将您的面孔融入古典画作。)</string>
 </dict>
 </plist>
