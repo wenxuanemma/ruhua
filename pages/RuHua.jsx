@@ -1366,9 +1366,26 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
                 pointerEvents:'none' }} />
             </div>
 
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:20 }}>
-              圆形头像 · 微信 · 微博
-            </div>
+            {/* Download circle */}
+            <button className="btn" onClick={async () => {
+              if (!profileUrl) return;
+              try {
+                const blob = await fetch(profileUrl).then(r => r.blob());
+                const file = new File([blob], 'ruhua_avatar.jpg', { type: 'image/jpeg' });
+                if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                  await navigator.share({ files: [file], title: '入画头像' });
+                } else {
+                  const a = document.createElement('a');
+                  a.href = profileUrl; a.download = 'ruhua_avatar.jpg'; a.click();
+                }
+              } catch(e) { if (e.name !== 'AbortError') window.open(profileUrl, '_blank'); }
+            }} style={{
+              fontFamily:F.serif, fontSize:11, color:C.gold, marginBottom:20,
+              border:`1px solid ${C.gold}44`, padding:'4px 16px', borderRadius:20,
+              background:'rgba(201,168,76,.08)',
+            }}>
+              ↓ 保存圆形头像
+            </button>
 
             {/* Square crop — server-side cropped to face */}
             <div style={{
@@ -1392,7 +1409,28 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
               </div>
             </div>
 
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint }}>
+            {/* Download square */}
+            <button className="btn" onClick={async () => {
+              if (!profileUrl) return;
+              try {
+                const blob = await fetch(profileUrl).then(r => r.blob());
+                const file = new File([blob], 'ruhua_avatar_sq.jpg', { type: 'image/jpeg' });
+                if (navigator.share && navigator.canShare?.({ files: [file] })) {
+                  await navigator.share({ files: [file], title: '入画头像' });
+                } else {
+                  const a = document.createElement('a');
+                  a.href = profileUrl; a.download = 'ruhua_avatar_sq.jpg'; a.click();
+                }
+              } catch(e) { if (e.name !== 'AbortError') window.open(profileUrl, '_blank'); }
+            }} style={{
+              fontFamily:F.serif, fontSize:11, color:C.silkDim, marginBottom:4,
+              border:`1px solid ${C.border}`, padding:'4px 16px', borderRadius:20,
+              background:'rgba(201,168,76,.04)',
+            }}>
+              ↓ 保存方形头像
+            </button>
+
+            <div style={{ fontFamily:F.serif, fontSize:10, color:C.silkFaint }}>
               方形头像 · Instagram · 小红书
             </div>
           </div>
