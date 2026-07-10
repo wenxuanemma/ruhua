@@ -4,6 +4,13 @@ import { FACE_REGIONS } from '../../lib/faceRegions.js';
 
 export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 
+// MediaPipe FaceMesh landmark index sets, shared between the width-stretch
+// calculation and the oval mask construction so both measure/draw the same
+// face boundary.
+const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
+  397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+const JAW_INDICES = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
+
 async function fetchBuf(url) {
   if (url.startsWith('data:')) return Buffer.from(url.split(',')[1], 'base64');
   // Relative paths (e.g. /paintings/gongle.jpg) are served as static assets \u2014
@@ -401,23 +408,79 @@ export default async function handler(req, res) {
     const ovalCy = faceCenterInCropY != null
       ? Math.max(pasteS * 0.25, Math.min(pasteS * 0.75, (faceCenterInCropY / cropSize) * pasteS))
       : pasteS * 0.50;
-    // Plain sharp polygon mask with forehead points lifted to hairlineY.
-    const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
-      397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+
     const landmarks = req.body.landmarks ?? null;
+
+    // -- Width stretch --------------------------------------------------------
+    // Everything above (crop size, ovalRy) is driven entirely by matching
+    // HEIGHT to the calibrated region. Face WIDTH in the output used to just
+    // be whatever the selfie's own landmark geometry produced at that height
+    // scale -- region.w had no effect at all on the primary landmark-based
+    // mask path (only the ellipse fallback path used it). That meant widening
+    // the calibrated box in /calibrate did nothing for front-facing figures.
+    // This measures the selfie's natural jaw width vs. the calibrated target
+    // width and stretches both the face image and its mask horizontally
+    // (around ovalCx) to close that gap. Profile faces are excluded -- they
+    // already have dedicated width handling via profileFaceWidthFrac.
+    let widthStretch = 1.0;
+    if (landmarks && landmarks.length >= 468 && !isProfile) {
+      const lmPxRaw = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
+      const jawXs = JAW_INDICES.map(i => lmPxRaw(landmarks[i]));
+      const naturalJawWidth = Math.max(...jawXs) - Math.min(...jawXs);
+      if (naturalJawWidth > 1) {
+        // targetW is already in the same S-space scale as pasteS (S === targetSize).
+        widthStretch = Math.max(0.80, Math.min(1.60, targetW / naturalJawWidth));
+      }
+    }
+
+    if (Math.abs(widthStretch - 1) > 0.02) {
+      const stretchedW = Math.max(1, Math.round(pasteS * widthStretch));
+      const stretchedBuf = await sharp(pasteFace)
+        .resize(stretchedW, pasteS, { fit: 'fill' })
+        .png()
+        .toBuffer();
+      const pasteLeft = Math.round(ovalCx - ovalCx * widthStretch);
+      if (stretchedW >= pasteS) {
+        // Widening: stretched buffer is now bigger than the canvas. sharp's
+        // composite() refuses an overlay larger than its base, so extract the
+        // pasteS-wide window that keeps ovalCx fixed in place instead.
+        const cropFromStretched = Math.max(0, Math.min(-pasteLeft, stretchedW - pasteS));
+        pasteFace = await sharp(stretchedBuf)
+          .extract({ left: cropFromStretched, top: 0, width: pasteS, height: pasteS })
+          .png()
+          .toBuffer();
+        console.log(`[composite:${figureId}] width-stretch (widen): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} cropFromStretched=${cropFromStretched}`);
+      } else {
+        // Narrowing: stretched buffer is smaller than the canvas, pad with
+        // transparent margins on a fresh canvas.
+        pasteFace = await sharp({
+          create: { width: pasteS, height: pasteS, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
+        })
+          .composite([{ input: stretchedBuf, left: Math.max(0, pasteLeft), top: 0 }])
+          .png()
+          .toBuffer();
+        console.log(`[composite:${figureId}] width-stretch (narrow): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} pasteLeft=${pasteLeft}`);
+      }
+    }
+
+    // Plain sharp polygon mask with forehead points lifted to hairlineY.
     let ovalMask;
 
     if (landmarks && landmarks.length >= 468) {
       try {
-        const lmPx = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
+        const lmPx = (lm) => {
+          const raw = (lm.x * FW - cropX) / cropSize * pasteS;
+          // Same stretch-around-ovalCx transform applied to pasteFace above,
+          // so the mask stays aligned with the (possibly) stretched face image.
+          return (raw - ovalCx) * widthStretch + ovalCx;
+        };
         const lmPy = (lm) => (lm.y * FH - cropY) / cropSize * pasteS;
 
         const x21  = lmPx(landmarks[21]),  y21  = lmPy(landmarks[21]);
         const x251 = lmPx(landmarks[251]), y251 = lmPy(landmarks[251]);
 
         // Jaw: FACE_OVAL positions 5..31 = 251→389→...→162→21 (right cheek, chin, left cheek)
-        const jawIndices = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
-        const jawPoints = jawIndices.slice(1)
+        const jawPoints = JAW_INDICES.slice(1)
           .map(i => { const l = landmarks[i]; return `L ${lmPx(l).toFixed(1)} ${lmPy(l).toFixed(1)}`; })
           .join(' ');
 
