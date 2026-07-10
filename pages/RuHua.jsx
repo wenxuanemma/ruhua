@@ -1953,22 +1953,26 @@ export default function RuHua() {
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
-                                        setScreen('processing');
-                                        runWithConsent(() => generate({
-                                          selfie: img, painting, figure,
-                                          gender: figure?.gender || 'woman',
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
-                                        }));
+                                        runWithConsent(() => {
+                                          setScreen('processing');
+                                          generate({
+                                            selfie: img, painting, figure,
+                                            gender: figure?.gender || 'woman',
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
+                                        });
                                       }}
                                       onConfirm={() => {
-                                        setScreen('processing');
-                                        runWithConsent(() => generate({
-                                          selfie, painting, figure,
-                                          gender: figure?.gender || 'woman',
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
-                                        }));
+                                        runWithConsent(() => {
+                                          setScreen('processing');
+                                          generate({
+                                            selfie, painting, figure,
+                                            gender: figure?.gender || 'woman',
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
+                                        });
                                       }}
                                       onBack={() => setScreen('figure')} />}
         {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} onRetry={() => setScreen('selfie')} />}
