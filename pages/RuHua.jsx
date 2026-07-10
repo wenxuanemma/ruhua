@@ -2009,6 +2009,7 @@ export default function RuHua() {
             <button onClick={() => {
               localStorage.setItem('ruhua_ai_consent', 'true');
               setShowConsentModal(false);
+              setShowConsentNudge(false);
               if (pendingGenerate) { pendingGenerate(); setPendingGenerate(null); }
             }} className="btn" style={{
               background:C.vermillion, color:'#f5e8c4',
