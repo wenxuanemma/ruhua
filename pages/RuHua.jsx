@@ -1780,47 +1780,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
             </div>
           )}
         </div>
-      {/* AI Consent Modal — shown once before first AI call */}
-      {showConsentModal && (
-        <div style={{
-          position:'fixed', inset:0, zIndex:9999,
-          background:'rgba(0,0,0,0.88)',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          padding:'24px',
-        }}>
-          <div style={{
-            background:'#1a1208', border:`1px solid ${C.gold}`,
-            borderRadius:12, padding:'28px 24px', maxWidth:380, width:'100%',
-          }}>
-            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:14, textAlign:'center', letterSpacing:'.1em' }}>
-              数据使用说明
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:2, marginBottom:16 }}>
-              <div>入画将使用您的自拍照片生成古典画风肖像。</div>
-              <div style={{ marginTop:10 }}>
-                <span style={{ color:C.silk }}>发送内容：</span>您的自拍照片<br/>
-                <span style={{ color:C.silk }}>发送至：</span>aimlapi.com（AI图像生成服务）<br/>
-                <span style={{ color:C.silk }}>用途：</span>生成肖像，处理后即删除
-              </div>
-              <div style={{ marginTop:10, color:C.silkFaint, fontSize:12 }}>
-                Your selfie is sent to aimlapi.com to generate a portrait. It is processed transiently and not stored.
-              </div>
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
-              详见隐私政策：ruhua.vercel.app/privacy
-            </div>
-            <button onClick={handleConsentAgree} className="btn" style={{
-              background:C.vermillion, color:'#f5e8c4',
-              fontFamily:F.brush, fontSize:18, padding:'12px',
-              letterSpacing:'.2em', width:'100%', marginBottom:10,
-            }}>同意并继续</button>
-            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
-              background:'transparent', color:C.silkDim,
-              fontFamily:F.serif, fontSize:13, padding:'8px', width:'100%',
-            }}>取消 · Cancel</button>
-          </div>
-        </div>
-      )}
+
       </div>
     </div>
   );
@@ -1831,26 +1791,17 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 export default function RuHua() {
   const [screen, setScreen] = useState('home');
   const [painting, setPainting] = useState(null);
+  const [showConsentModal, setShowConsentModal] = useState(false);
+
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!localStorage.getItem('ruhua_ai_consent')) {
+      setShowConsentModal(true);
+    }
+  }, []);
   const [figure, setFigure] = useState(null);
   const [selfie, setSelfie] = useState(null);
-  const [aiConsent, setAiConsent] = useState(() => {
-    if (typeof window === 'undefined') return false;
-    return localStorage.getItem('ruhua_ai_consent') === 'true';
-  });
-  const [showConsentModal, setShowConsentModal] = useState(false);
-  const [pendingGenerate, setPendingGenerate] = useState(null);
 
-  const runWithConsent = (generateFn) => {
-    if (aiConsent) { generateFn(); return; }
-    setPendingGenerate(() => generateFn);
-    setShowConsentModal(true);
-  };
-  const handleConsentAgree = () => {
-    localStorage.setItem('ruhua_ai_consent', 'true');
-    setAiConsent(true);
-    setShowConsentModal(false);
-    if (pendingGenerate) { pendingGenerate(); setPendingGenerate(null); }
-  };
   const [faceBounds, setFaceBounds] = useState(null);
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
@@ -1925,24 +1876,24 @@ export default function RuHua() {
                                           // Figure change flow — skip selfie, generate fresh
                                           setSkipSelfie(false);
                                           setScreen('processing');
-                                          runWithConsent(() => generate({
+                                          generate({
                                             selfie,
                                             painting,
                                             figure: f,
                                             gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
-                                          }));
+                                          });
                                         } else if (hasCachedSelfie(selfie)) {
                                           setScreen('processing');
-                                          runWithConsent(() => generate({
+                                          generate({
                                             selfie,
                                             painting,
                                             figure: f,
                                             gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
-                                          }));
+                                          });
                                         } else {
                                           setScreen('selfie');
                                         }
@@ -1953,25 +1904,21 @@ export default function RuHua() {
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
-                                        runWithConsent(() => {
-                                          setScreen('processing');
-                                          generate({
-                                            selfie: img, painting, figure,
-                                            gender: figure?.gender || 'woman',
-                                            styleImageUrl: imgs[painting.id],
-                                            faceBounds,
-                                          });
+                                        setScreen('processing');
+                                        generate({
+                                          selfie: img, painting, figure,
+                                          gender: figure?.gender || 'woman',
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
                                         });
                                       }}
                                       onConfirm={() => {
-                                        runWithConsent(() => {
-                                          setScreen('processing');
-                                          generate({
-                                            selfie, painting, figure,
-                                            gender: figure?.gender || 'woman',
-                                            styleImageUrl: imgs[painting.id],
-                                            faceBounds,
-                                          });
+                                        setScreen('processing');
+                                        generate({
+                                          selfie, painting, figure,
+                                          gender: figure?.gender || 'woman',
+                                          styleImageUrl: imgs[painting.id],
+                                          faceBounds,
                                         });
                                       }}
                                       onBack={() => setScreen('figure')} />}
@@ -2001,6 +1948,49 @@ export default function RuHua() {
                                         setFigure(null);
                                         setScreen('gallery');
                                       }} />}
+      {showConsentModal && (
+        <div style={{
+          position:'fixed', inset:0, zIndex:9999,
+          background:'rgba(0,0,0,0.88)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          padding:'24px',
+        }}>
+          <div style={{
+            background:'#1a1208', border:`1px solid ${C.gold}`,
+            borderRadius:12, padding:'28px 24px', maxWidth:380, width:'100%',
+          }}>
+            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:14, textAlign:'center', letterSpacing:'.1em' }}>
+              数据使用说明
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:2, marginBottom:16 }}>
+              <div>入画将使用您的自拍照片生成古典画风肖像。</div>
+              <div style={{ marginTop:10 }}>
+                <span style={{ color:C.silk }}>发送内容：</span>您的自拍照片<br/>
+                <span style={{ color:C.silk }}>发送至：</span>aimlapi.com（AI图像生成服务）<br/>
+                <span style={{ color:C.silk }}>用途：</span>生成肖像，处理后即删除
+              </div>
+              <div style={{ marginTop:10, color:C.silkFaint, fontSize:12 }}>
+                Your selfie is sent to aimlapi.com to generate a portrait. It is processed transiently and not stored.
+              </div>
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
+              详见隐私政策：ruhua.vercel.app/privacy
+            </div>
+            <button onClick={() => {
+              localStorage.setItem('ruhua_ai_consent', 'true');
+              setShowConsentModal(false);
+            }} className="btn" style={{
+              background:C.vermillion, color:'#f5e8c4',
+              fontFamily:F.brush, fontSize:18, padding:'12px',
+              letterSpacing:'.2em', width:'100%', marginBottom:10,
+            }}>同意并继续</button>
+            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
+              background:'transparent', color:C.silkDim,
+              fontFamily:F.serif, fontSize:13, padding:'8px', width:'100%',
+            }}>取消 · Cancel</button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
