@@ -355,6 +355,54 @@ function HomeScreen({ onBegin }) {
         {['北宋','唐','东晋','五代'].map(d => (
           <div key={d} style={{ fontFamily:F.serif, fontSize:10, color:C.silk }}>{d}</div>
         ))}
+      {/* AI Consent Modal */}
+      {showConsentModal && (
+        <div style={{
+          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          zIndex:9999, padding:'24px',
+        }}>
+          <div style={{
+            background:'#1a1208', border:`1px solid ${C.gold}`,
+            borderRadius:12, padding:'28px 24px', maxWidth:380,
+          }}>
+            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:12, textAlign:'center' }}>
+              数据使用说明
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.9, marginBottom:20 }}>
+              入画将使用您的自拍照片生成古典画风肖像。
+              {'
+
+'}
+              <strong style={{ color:C.silk }}>发送内容：</strong>您的自拍照片{'
+'}
+              <strong style={{ color:C.silk }}>发送至：</strong>aimlapi.com（AI图像生成服务）{'
+'}
+              <strong style={{ color:C.silk }}>用途：</strong>生成古典绘画风格肖像，处理后即删除，不作其他用途{'
+
+'}
+              Your selfie will be sent to aimlapi.com to generate a classical painting portrait. It is processed transiently and not stored.
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:20, lineHeight:1.7 }}>
+              详见隐私政策：ruhua.vercel.app/privacy
+            </div>
+            <button onClick={handleConsentAgree} className="btn" style={{
+              background:C.vermillion, color:'#f5e8c4',
+              fontFamily:F.brush, fontSize:18, padding:'12px',
+              letterSpacing:'.2em', width:'100%', marginBottom:10,
+            }}>
+              同意并继续
+            </button>
+            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
+              background:'transparent', color:C.silkDim,
+              fontFamily:F.serif, fontSize:13, padding:'8px',
+              width:'100%',
+            }}>
+              取消 · Cancel
+            </button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
@@ -1792,6 +1840,24 @@ export default function RuHua() {
   const [painting, setPainting] = useState(null);
   const [figure, setFigure] = useState(null);
   const [selfie, setSelfie] = useState(null);
+  const [aiConsent, setAiConsent] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    return localStorage.getItem('ruhua_ai_consent') === 'true';
+  });
+  const [showConsentModal, setShowConsentModal] = useState(false);
+  const [pendingGenerate, setPendingGenerate] = useState(null);
+
+  const runWithConsent = (generateFn) => {
+    if (aiConsent) { generateFn(); return; }
+    setPendingGenerate(() => generateFn);
+    setShowConsentModal(true);
+  };
+  const handleConsentAgree = () => {
+    localStorage.setItem('ruhua_ai_consent', 'true');
+    setAiConsent(true);
+    setShowConsentModal(false);
+    if (pendingGenerate) { pendingGenerate(); setPendingGenerate(null); }
+  };
   const [faceBounds, setFaceBounds] = useState(null);
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
@@ -1866,24 +1932,24 @@ export default function RuHua() {
                                           // Figure change flow — skip selfie, generate fresh
                                           setSkipSelfie(false);
                                           setScreen('processing');
-                                          generate({
+                                          runWithConsent(() => generate({
                                             selfie,
                                             painting,
                                             figure: f,
                                             gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
-                                          });
+                                          }));
                                         } else if (hasCachedSelfie(selfie)) {
                                           setScreen('processing');
-                                          generate({
+                                          runWithConsent(() => generate({
                                             selfie,
                                             painting,
                                             figure: f,
                                             gender: f.gender || 'woman',
                                             styleImageUrl: imgs[painting.id],
                                             faceBounds,
-                                          });
+                                          }));
                                         } else {
                                           setScreen('selfie');
                                         }
@@ -1895,21 +1961,21 @@ export default function RuHua() {
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
                                         setScreen('processing');
-                                        generate({
+                                        runWithConsent(() => generate({
                                           selfie: img, painting, figure,
                                           gender: figure?.gender || 'woman',
                                           styleImageUrl: imgs[painting.id],
                                           faceBounds,
-                                        });
+                                        }));
                                       }}
                                       onConfirm={() => {
                                         setScreen('processing');
-                                        generate({
+                                        runWithConsent(() => generate({
                                           selfie, painting, figure,
                                           gender: figure?.gender || 'woman',
                                           styleImageUrl: imgs[painting.id],
                                           faceBounds,
-                                        });
+                                        }));
                                       }}
                                       onBack={() => setScreen('figure')} />}
         {screen === 'processing' && <ProcessingScreen step={procStep} painting={painting} imgs={imgs} styledUrl={styledUrl} error={error} onRetry={() => setScreen('selfie')} />}
