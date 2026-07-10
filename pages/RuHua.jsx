@@ -1792,6 +1792,18 @@ export default function RuHua() {
   const [screen, setScreen] = useState('home');
   const [painting, setPainting] = useState(null);
   const [showConsentModal, setShowConsentModal] = useState(false);
+  const [consentIsGate, setConsentIsGate] = useState(false); // true = triggered by 入画, false = first load
+  const [showConsentNudge, setShowConsentNudge] = useState(false); // "需要同意才能继续"
+  const [pendingGenerate, setPendingGenerate] = useState(null);
+
+  const hasConsent = () => typeof window !== 'undefined' && localStorage.getItem('ruhua_ai_consent') === 'true';
+
+  const triggerGenerate = (generateFn) => {
+    if (hasConsent()) { generateFn(); return; }
+    setPendingGenerate(() => generateFn);
+    setConsentIsGate(true);
+    setShowConsentModal(true);
+  };
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1875,24 +1887,28 @@ export default function RuHua() {
                                         if (skipSelfie && selfie) {
                                           // Figure change flow — skip selfie, generate fresh
                                           setSkipSelfie(false);
-                                          setScreen('processing');
-                                          generate({
-                                            selfie,
-                                            painting,
-                                            figure: f,
-                                            gender: f.gender || 'woman',
-                                            styleImageUrl: imgs[painting.id],
-                                            faceBounds,
+                                          triggerGenerate(() => {
+                                            setScreen('processing');
+                                            generate({
+                                              selfie,
+                                              painting,
+                                              figure: f,
+                                              gender: f.gender || 'woman',
+                                              styleImageUrl: imgs[painting.id],
+                                              faceBounds,
+                                            });
                                           });
                                         } else if (hasCachedSelfie(selfie)) {
-                                          setScreen('processing');
-                                          generate({
-                                            selfie,
-                                            painting,
-                                            figure: f,
-                                            gender: f.gender || 'woman',
-                                            styleImageUrl: imgs[painting.id],
-                                            faceBounds,
+                                          triggerGenerate(() => {
+                                            setScreen('processing');
+                                            generate({
+                                              selfie,
+                                              painting,
+                                              figure: f,
+                                              gender: f.gender || 'woman',
+                                              styleImageUrl: imgs[painting.id],
+                                              faceBounds,
+                                            });
                                           });
                                         } else {
                                           setScreen('selfie');
@@ -1904,21 +1920,25 @@ export default function RuHua() {
                                       onRetake={() => clearSelfieCache()}
                                       onConfirmWithSelfie={(img) => {
                                         setSelfie(img);
-                                        setScreen('processing');
-                                        generate({
-                                          selfie: img, painting, figure,
-                                          gender: figure?.gender || 'woman',
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
+                                        triggerGenerate(() => {
+                                          setScreen('processing');
+                                          generate({
+                                            selfie: img, painting, figure,
+                                            gender: figure?.gender || 'woman',
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
                                         });
                                       }}
                                       onConfirm={() => {
-                                        setScreen('processing');
-                                        generate({
-                                          selfie, painting, figure,
-                                          gender: figure?.gender || 'woman',
-                                          styleImageUrl: imgs[painting.id],
-                                          faceBounds,
+                                        triggerGenerate(() => {
+                                          setScreen('processing');
+                                          generate({
+                                            selfie, painting, figure,
+                                            gender: figure?.gender || 'woman',
+                                            styleImageUrl: imgs[painting.id],
+                                            faceBounds,
+                                          });
                                         });
                                       }}
                                       onBack={() => setScreen('figure')} />}
@@ -1948,6 +1968,16 @@ export default function RuHua() {
                                         setFigure(null);
                                         setScreen('gallery');
                                       }} />}
+      {showConsentNudge && (
+        <div style={{
+          position:'fixed', bottom:100, left:'50%', transform:'translateX(-50%)',
+          background:'rgba(26,18,8,0.95)', border:`1px solid ${C.gold}44`,
+          borderRadius:8, padding:'10px 20px', zIndex:9998,
+          fontFamily:F.serif, fontSize:13, color:C.gold, whiteSpace:'nowrap',
+        }} onClick={() => setShowConsentNudge(false)}>
+          需要同意数据使用才能入画 · 点击关闭
+        </div>
+      )}
       {showConsentModal && (
         <div style={{
           position:'fixed', inset:0, zIndex:9999,
@@ -1979,12 +2009,17 @@ export default function RuHua() {
             <button onClick={() => {
               localStorage.setItem('ruhua_ai_consent', 'true');
               setShowConsentModal(false);
+              if (pendingGenerate) { pendingGenerate(); setPendingGenerate(null); }
             }} className="btn" style={{
               background:C.vermillion, color:'#f5e8c4',
               fontFamily:F.brush, fontSize:18, padding:'12px',
               letterSpacing:'.2em', width:'100%', marginBottom:10,
             }}>同意并继续</button>
-            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
+            <button onClick={() => {
+              setShowConsentModal(false);
+              setPendingGenerate(null);
+              if (consentIsGate) setShowConsentNudge(true);
+            }} className="btn" style={{
               background:'transparent', color:C.silkDim,
               fontFamily:F.serif, fontSize:13, padding:'8px', width:'100%',
             }}>取消 · Cancel</button>
