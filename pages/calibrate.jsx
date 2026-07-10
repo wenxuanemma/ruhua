@@ -47,6 +47,21 @@ const PAINTINGS = [
       {id:'center', name:'执瓶仕女'},
       {id:'seated', name:'倚坐仕女'},
     ]},
+  { id:'mingdaidihou_taizu', title:'明太祖 · 孝慈高皇后', directImageUrl:'/paintings/mingdaidihou_taizu.jpg',
+    figures:[
+      {id:'empress', name:'孝慈高皇后'},
+      {id:'emperor', name:'明太祖'},
+    ]},
+  { id:'mingdaidihou_xuanzong', title:'明宣宗 · 孝恭章皇后', directImageUrl:'/paintings/mingdaidihou_xuanzong.jpg',
+    figures:[
+      {id:'empress', name:'孝恭章皇后'},
+      {id:'emperor', name:'明宣宗'},
+    ]},
+  { id:'mingdaidihou_xiaozong', title:'明孝宗 · 孝康敬皇后', directImageUrl:'/paintings/mingdaidihou_xiaozong.jpg',
+    figures:[
+      {id:'empress', name:'孝康敬皇后'},
+      {id:'emperor', name:'明孝宗'},
+    ]},
 ];
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
