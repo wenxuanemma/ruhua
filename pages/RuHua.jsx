@@ -355,54 +355,6 @@ function HomeScreen({ onBegin }) {
         {['北宋','唐','东晋','五代'].map(d => (
           <div key={d} style={{ fontFamily:F.serif, fontSize:10, color:C.silk }}>{d}</div>
         ))}
-      {/* AI Consent Modal */}
-      {showConsentModal && (
-        <div style={{
-          position:'fixed', inset:0, background:'rgba(0,0,0,0.85)',
-          display:'flex', alignItems:'center', justifyContent:'center',
-          zIndex:9999, padding:'24px',
-        }}>
-          <div style={{
-            background:'#1a1208', border:`1px solid ${C.gold}`,
-            borderRadius:12, padding:'28px 24px', maxWidth:380,
-          }}>
-            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:12, textAlign:'center' }}>
-              数据使用说明
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:1.9, marginBottom:20 }}>
-              入画将使用您的自拍照片生成古典画风肖像。
-              {'
-
-'}
-              <strong style={{ color:C.silk }}>发送内容：</strong>您的自拍照片{'
-'}
-              <strong style={{ color:C.silk }}>发送至：</strong>aimlapi.com（AI图像生成服务）{'
-'}
-              <strong style={{ color:C.silk }}>用途：</strong>生成古典绘画风格肖像，处理后即删除，不作其他用途{'
-
-'}
-              Your selfie will be sent to aimlapi.com to generate a classical painting portrait. It is processed transiently and not stored.
-            </div>
-            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:20, lineHeight:1.7 }}>
-              详见隐私政策：ruhua.vercel.app/privacy
-            </div>
-            <button onClick={handleConsentAgree} className="btn" style={{
-              background:C.vermillion, color:'#f5e8c4',
-              fontFamily:F.brush, fontSize:18, padding:'12px',
-              letterSpacing:'.2em', width:'100%', marginBottom:10,
-            }}>
-              同意并继续
-            </button>
-            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
-              background:'transparent', color:C.silkDim,
-              fontFamily:F.serif, fontSize:13, padding:'8px',
-              width:'100%',
-            }}>
-              取消 · Cancel
-            </button>
-          </div>
-        </div>
-      )}
       </div>
     </div>
   );
@@ -1828,6 +1780,47 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
             </div>
           )}
         </div>
+      {/* AI Consent Modal — shown once before first AI call */}
+      {showConsentModal && (
+        <div style={{
+          position:'fixed', inset:0, zIndex:9999,
+          background:'rgba(0,0,0,0.88)',
+          display:'flex', alignItems:'center', justifyContent:'center',
+          padding:'24px',
+        }}>
+          <div style={{
+            background:'#1a1208', border:`1px solid ${C.gold}`,
+            borderRadius:12, padding:'28px 24px', maxWidth:380, width:'100%',
+          }}>
+            <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:14, textAlign:'center', letterSpacing:'.1em' }}>
+              数据使用说明
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:2, marginBottom:16 }}>
+              <div>入画将使用您的自拍照片生成古典画风肖像。</div>
+              <div style={{ marginTop:10 }}>
+                <span style={{ color:C.silk }}>发送内容：</span>您的自拍照片<br/>
+                <span style={{ color:C.silk }}>发送至：</span>aimlapi.com（AI图像生成服务）<br/>
+                <span style={{ color:C.silk }}>用途：</span>生成肖像，处理后即删除
+              </div>
+              <div style={{ marginTop:10, color:C.silkFaint, fontSize:12 }}>
+                Your selfie is sent to aimlapi.com to generate a portrait. It is processed transiently and not stored.
+              </div>
+            </div>
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
+              详见隐私政策：ruhua.vercel.app/privacy
+            </div>
+            <button onClick={handleConsentAgree} className="btn" style={{
+              background:C.vermillion, color:'#f5e8c4',
+              fontFamily:F.brush, fontSize:18, padding:'12px',
+              letterSpacing:'.2em', width:'100%', marginBottom:10,
+            }}>同意并继续</button>
+            <button onClick={() => setShowConsentModal(false)} className="btn" style={{
+              background:'transparent', color:C.silkDim,
+              fontFamily:F.serif, fontSize:13, padding:'8px', width:'100%',
+            }}>取消 · Cancel</button>
+          </div>
+        </div>
+      )}
       </div>
     </div>
   );
