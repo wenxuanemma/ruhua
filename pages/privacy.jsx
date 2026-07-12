@@ -24,7 +24,7 @@ export default function Privacy() {
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data We Collect</h3>
         <p><strong>Camera and Photos</strong></p>
         <ul>
-          <li>We request camera or photo library access solely so you can provide a selfie for the face-compositing feature.</li>
+          <li>We request camera access solely so you can provide a selfie for the face-compositing feature.</li>
           <li>Your selfie image is sent to a third-party AI service to generate a stylized portrait in the style of the selected painting (see "Third-Party AI Services" below).</li>
           <li>We do not store your selfie or the generated portrait on our own servers beyond the single request needed to process and return the result (typically seconds).</li>
           <li>Your selfie is cached on your device (in the app's local storage) so you don't need to retake it each time you try a different painting. This on-device copy persists until you take a new selfie (which replaces it) or delete the app.</li>
@@ -82,7 +82,7 @@ export default function Privacy() {
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>我们收集的数据</h3>
         <p><strong>相机与照片</strong></p>
         <ul>
-          <li>我们仅为面部合成功能申请相机或照片权限，以便您提供自拍照片。</li>
+          <li>我们仅为面部合成功能申请相机权限，以便您提供自拍照片。</li>
           <li>您的自拍图像将被发送至第三方AI服务，以生成所选画作风格的肖像（详见下方"第三方AI服务"）。</li>
           <li>我们不会在自有服务器上长期存储您的自拍或生成的肖像——仅在处理单次请求期间使用（通常为几秒钟）。</li>
           <li>您的自拍会缓存在设备本地存储中，以便您无需重新拍摄即可尝试不同画作。该本地缓存会在您拍摄新的自拍时被替换，或在您删除应用时被清除。</li>
