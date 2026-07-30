@@ -1,49 +1,92 @@
 // pages/api/save-face-regions.js
 // Saves updated FACE_REGIONS to lib/faceRegions.js
-// IMPORTANT: preserves existing angle and faceAngle values
+//
+// IMPORTANT — merge, never clobber:
+// The calibrate tool only ever holds a snapshot of FACE_REGIONS taken when
+// the browser tab loaded (or last hit "Reset"). That snapshot can go stale —
+// a hand-edit to this file, a second browser tab, a figure/painting the
+// client hasn't touched yet — and a naive "rebuild the whole file from what
+// the client sent" save will silently delete anything not in that snapshot.
+// This has actually happened (foreheadClip dropped after a hand-edit,
+// hanxizai fields lost previously).
+//
+// So: read the CURRENT on-disk FACE_REGIONS first (real eval, not regex —
+// regexes only know about the specific fields someone remembered to list),
+// then merge the client's submission on top of it. Any painting, figure, or
+// field the client didn't send is preserved from disk untouched. This makes
+// the save operation additive/safe by construction instead of relying on a
+// hand-maintained allowlist of "fields to remember to preserve."
 import fs from 'fs';
 import path from 'path';
+
+function readExisting(filePath) {
+  let regions = {};
+  let footer = '';
+  try {
+    const existing = fs.readFileSync(filePath, 'utf8');
+    const match = existing.match(/export const FACE_REGIONS\s*=\s*(\{[\s\S]*?\n\};)/);
+    if (match) {
+      regions = new Function(`return ${match[1].replace(/;$/, '')}`)();
+    }
+    const footerMatch = existing.match(/\};\s*\n([\s\S]*)$/);
+    if (footerMatch) footer = '\n' + footerMatch[1].trim();
+  } catch {
+    // No existing file yet — start from empty, that's fine.
+  }
+  return { regions, footer };
+}
+
+// Fields with dedicated formatting (arrays/objects, or values needing
+// specific numeric formatting). Everything else is passed through generically
+// so a new field never needs a matching code change here to survive a save.
+const SPECIAL_FIELDS = new Set([
+  'x', 'y', 'w', 'h', 'angle', 'faceAngle',
+  'skinSample', 'faceCenter', 'faceSize',
+  'foreheadClip', 'disabled', 'exactSample',
+  'saturation', 'brightness', 'rMax', 'gMax', 'bMax',
+]);
+
+function serializeFigure(figId, v) {
+  const x = Number(v.x) || 0, y = Number(v.y) || 0, w = Number(v.w) || 0, h = Number(v.h) || 0;
+  const angle = v.angle ?? 0;
+  const faceAngle = v.faceAngle || 'front';
+
+  const faceCenterStr   = v.faceCenter   ? `, faceCenter:{ cx:${(+v.faceCenter.cx).toFixed(4)}, cy:${(+v.faceCenter.cy).toFixed(4)} }` : '';
+  const skinSampleStr   = v.skinSample   ? `, skinSample:{ cx:${(+v.skinSample.cx).toFixed(4)}, cy:${(+v.skinSample.cy).toFixed(4)}, r:${(+v.skinSample.r).toFixed(4)} }` : '';
+  const foreheadClipStr = v.foreheadClip ? `, foreheadClip:true` : '';
+  const disabledStr     = v.disabled     ? `, disabled:true`     : '';
+  const exactSampleStr  = v.exactSample  ? `, exactSample:true`  : '';
+  const saturationStr   = v.saturation != null ? `, saturation:${v.saturation}` : '';
+  const brightnessStr   = v.brightness != null ? `, brightness:${v.brightness}` : '';
+  const rMaxStr         = v.rMax != null ? `, rMax:${v.rMax}` : '';
+  const gMaxStr         = v.gMax != null ? `, gMax:${v.gMax}` : '';
+  const bMaxStr         = v.bMax != null ? `, bMax:${v.bMax}` : '';
+  const faceSizeStr     = v.faceSize != null ? `, faceSize:${v.faceSize}` : '';
+
+  // Any field not in SPECIAL_FIELDS gets passed through generically, so a
+  // future new field doesn't silently vanish just because this file wasn't
+  // updated to know about it explicitly.
+  const extra = Object.entries(v)
+    .filter(([k, val]) => !SPECIAL_FIELDS.has(k) && k !== '_original' && val !== undefined)
+    .map(([k, val]) => `, ${k}:${JSON.stringify(val)}`)
+    .join('');
+
+  return `    ${figId.padEnd(12)}: { x:${x.toFixed(4)}, y:${y.toFixed(4)}, w:${w.toFixed(4)}, h:${h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${foreheadClipStr}${disabledStr}${faceSizeStr}${faceCenterStr}${saturationStr}${brightnessStr}${rMaxStr}${gMaxStr}${bMaxStr}${exactSampleStr}${skinSampleStr}${extra} },`;
+}
 
 export default function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { regions } = req.body;
-  if (!regions) return res.status(400).json({ error: 'regions required' });
+  const { regions: incoming } = req.body;
+  if (!incoming) return res.status(400).json({ error: 'regions required' });
 
   const filePath = path.join(process.cwd(), 'lib/faceRegions.js');
+  const { regions: existing, footer } = readExisting(filePath);
 
-  // Read existing fields to preserve from current file
-  const existingAngles = {};
-  const existingFaceAngles = {};
-  const existingColorShifts = {};
-  const existingFaceSizes = {};
-  const existingFaceCenters = {};
-  const existingSkinSamples = {};
-  let existingFooter = ''; // preserve GUEST_SPOTS and anything after FACE_REGIONS
-  try {
-    const existing = fs.readFileSync(filePath, 'utf8');
-    // Extract rotation angles
-    const angleMatches = existing.matchAll(/(\w+)\s*:[^\n]*[^e]angle\s*:\s*(-?\d+)/g);
-    for (const m of angleMatches) existingAngles[m[1]] = parseInt(m[2]);
-    // Extract faceAngles
-    const faceAngleMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceAngle\s*:\s*'([^']+)'/g);
-    for (const m of faceAngleMatches) existingFaceAngles[m[1]] = m[2];
-    // Extract colorShift
-    const colorShiftMatches = existing.matchAll(/(\w+)\s*:[^\n]*colorShift\s*:\s*([\d.]+)/g);
-    for (const m of colorShiftMatches) existingColorShifts[m[1]] = parseFloat(m[2]);
-    // Extract faceSize
-    const faceSizeMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceSize\s*:\s*([\d.]+)/g);
-    for (const m of faceSizeMatches) existingFaceSizes[m[1]] = parseFloat(m[2]);
-    // Extract faceCenter
-    const faceCenterMatches = existing.matchAll(/(\w+)\s*:[^\n]*faceCenter\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)/g);
-    for (const m of faceCenterMatches) existingFaceCenters[m[1]] = { cx: parseFloat(m[2]), cy: parseFloat(m[3]) };
-    // Extract skinSample
-    const skinSampleMatches = existing.matchAll(/(\w+)\s*:.*skinSample\s*:\s*\{\s*cx\s*:\s*([\d.]+)\s*,\s*cy\s*:\s*([\d.]+)\s*,\s*r\s*:\s*([\d.]+)/g);
-    for (const m of skinSampleMatches) existingSkinSamples[m[1]] = { cx:parseFloat(m[2]), cy:parseFloat(m[3]), r:parseFloat(m[4]) };
-    // Preserve everything after FACE_REGIONS closing
-    const footerMatch = existing.match(/\};\s*\n([\s\S]*)$/);
-    if (footerMatch) existingFooter = '\n' + footerMatch[1].trim();
-  } catch {}
+  // Union of every painting id we know about from either side, so a
+  // painting missing from the client's snapshot (e.g. never opened in this
+  // tab) is preserved rather than dropped.
+  const paintingIds = Array.from(new Set([...Object.keys(existing), ...Object.keys(incoming)]));
 
   const lines = [
     '// lib/faceRegions.js',
@@ -55,36 +98,28 @@ export default function handler(req, res) {
     'export const FACE_REGIONS = {',
   ];
 
-  for (const [paintingId, figures] of Object.entries(regions)) {
+  for (const paintingId of paintingIds) {
+    const existingFigures = existing[paintingId] || {};
+    const incomingFigures = incoming[paintingId] || {};
+    const figureIds = Array.from(new Set([...Object.keys(existingFigures), ...Object.keys(incomingFigures)]));
+
     lines.push(`  ${paintingId}: {`);
-    for (const [figId, v] of Object.entries(figures)) {
-      const existingAngle = existingAngles[figId];
-      const angle = (v.angle === 0 && existingAngle && existingAngle !== 0)
-        ? existingAngle
-        : (v.angle ?? 0);
-      const faceAngle = existingFaceAngles[figId] || 'front';
-      const colorShift = v.colorShift ?? existingColorShifts[figId];
-      const faceSize   = v.faceSize   ?? existingFaceSizes[figId];
-      const skinSample = v.skinSample ?? existingSkinSamples[figId];
-      const faceCenter  = v.faceCenter  ?? existingFaceCenters[figId];
-      const faceCenterStr = faceCenter ? `, faceCenter:{ cx:${faceCenter.cx.toFixed(4)}, cy:${faceCenter.cy.toFixed(4)} }` : '';
-      const skinSampleStr = skinSample ? `, skinSample:{ cx:${skinSample.cx.toFixed(4)}, cy:${skinSample.cy.toFixed(4)}, r:${skinSample.r.toFixed(4)} }` : '';
-      const foreheadClipStr = v.foreheadClip ? `, foreheadClip:true` : '';
-      const disabledStr     = v.disabled     ? `, disabled:true`     : '';
-      const saturationStr   = v.saturation  != null ? `, saturation:${v.saturation}`   : '';
-      const brightnessStr   = v.brightness  != null ? `, brightness:${v.brightness}`   : '';
-      const rMaxStr         = v.rMax        != null ? `, rMax:${v.rMax}`               : '';
-      const bMaxStr         = v.bMax        != null ? `, bMax:${v.bMax}`               : '';
-      const exactSampleStr  = v.exactSample          ? `, exactSample:true`             : '';
-      const faceSizeStr     = faceSize != null ? `, faceSize:${faceSize}` : '';
-      lines.push(`    ${figId.padEnd(12)}: { x:${v.x.toFixed(4)}, y:${v.y.toFixed(4)}, w:${v.w.toFixed(4)}, h:${v.h.toFixed(4)}, angle:${angle}, faceAngle:'${faceAngle}'${foreheadClipStr}${disabledStr}${faceSizeStr}${faceCenterStr}${saturationStr}${brightnessStr}${rMaxStr}${bMaxStr}${exactSampleStr}${skinSampleStr} },`);
+    for (const figId of figureIds) {
+      const existingV = existingFigures[figId] || {};
+      const incomingV = incomingFigures[figId];
+      // Figure the client never touched this session → keep on-disk as-is.
+      // Figure the client did send → merge on top of existing (client wins
+      // for anything it explicitly provided; disk wins for anything it
+      // didn't, e.g. hand-edited fields with no UI control yet).
+      const merged = incomingV ? { ...existingV, ...incomingV } : existingV;
+      lines.push(serializeFigure(figId, merged));
     }
     lines.push(`  },`);
   }
   lines.push('};');
-  if (existingFooter) lines.push(existingFooter);
+  if (footer) lines.push(footer);
   lines.push('');
 
   fs.writeFileSync(filePath, lines.join('\n'), 'utf8');
-  res.status(200).json({ ok: true });
+  res.status(200).json({ ok: true, paintings: paintingIds.length });
 }
