@@ -581,11 +581,56 @@ export default async function handler(req, res) {
       .png().toBuffer();
 
     // ── Step 5: Profile crop (from full-res composited) ───────────────────────
-    const pad = Math.round(targetH * 1.5);
-    const profX = Math.max(0, px - pad);
-    const profY = Math.max(0, py - pad);
-    const profW = Math.min(PW - profX, S + pad * 2);
-    const profH = Math.min(PH - profY, S + pad * 2);
+    // Pad around the pasted face for a nicer avatar crop. Previously this
+    // padding was purely a multiple of the figure's own height, with no cap
+    // relative to the painting's actual size. Measured pad-to-canvas ratios
+    // across every figure in the 6 shipped paintings top out at 19.0%
+    // (tiaoqin.seated) — everything else is well below that. The couples
+    // portraits' figures occupy a much larger fraction of a much smaller
+    // canvas, so the same formula produced a ~37.5% ratio for e.g. taizu's
+    // empress: enough to reach the canvas edge, skew asymmetrically when
+    // clamped there (profW wasn't pulled back to compensate), and sweep
+    // into the neighboring figure.
+    //
+    // Capping pad at 20% of the shorter canvas dimension — just above the
+    // verified 19.0% ceiling, so none of the 6 shipped paintings are
+    // affected (confirmed unchanged for tiaoqin.seated, the tightest case)
+    // — while bringing the couples portraits' crops back down to a
+    // comparable, reasonable proportion of their canvas.
+    const rawPad = Math.round(targetH * 1.5);
+    const pad = Math.min(rawPad, Math.round(Math.min(PW, PH) * 0.20));
+    let profX = Math.max(0, px - pad);
+    let profY = Math.max(0, py - pad);
+    let profW = Math.min(PW - profX, S + pad * 2);
+    let profH = Math.min(PH - profY, S + pad * 2);
+
+    // Belt-and-suspenders: also constrain against any sibling figure's
+    // actual calibrated region in this same painting, so the crop can never
+    // cross into it even in a layout the canvas-fraction cap above doesn't
+    // fully anticipate.
+    const siblingMargin = Math.round(targetH * 0.3);
+    for (const [otherId, otherRegion] of Object.entries(FACE_REGIONS[paintingId] || {})) {
+      if (otherId === figureId || otherRegion.disabled) continue;
+      const oX = otherRegion.x * PW;
+      const oCenterX = oX + (otherRegion.w * PW) / 2;
+
+      if (oCenterX >= cx) {
+        // Sibling is to the right — cap the crop's right edge short of it.
+        const maxRight = oX - siblingMargin;
+        if (profX + profW > maxRight) profW = Math.max(S, Math.round(maxRight - profX));
+      } else {
+        // Sibling is to the left — cap the crop's left edge past it.
+        const minLeft = oX + otherRegion.w * PW + siblingMargin;
+        if (profX < minLeft) { profW -= Math.round(minLeft - profX); profX = Math.round(minLeft); }
+      }
+      // Note: only handles horizontal (side-by-side) layouts, the only kind
+      // in use currently. A future vertically-stacked painting would need
+      // the same treatment against oCenterY vs cy.
+    }
+    profW = Math.max(1, profW);
+    profH = Math.max(1, profH);
+
+    console.log(`[composite:${figureId} profile] pad=${pad} profX=${profX} profY=${profY} profW=${profW} profH=${profH} (canvas ${PW}x${PH})`);
 
     const profileBuf = await sharp(compositedFull)
       .extract({ left: profX, top: profY, width: Math.max(1,profW), height: Math.max(1,profH) })
