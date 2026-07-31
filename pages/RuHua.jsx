@@ -1026,6 +1026,32 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
               }}>
                 {capturedImg === lastSelfie ? '重新拍摄' : '重拍'}
               </button>
+
+              {/* DEBUG: upload from photo library — enable with localStorage.setItem('ruhua_debug','true') in console */}
+              {typeof window !== 'undefined' && localStorage.getItem('ruhua_debug') === 'true' && (
+                <label style={{
+                  fontFamily:F.serif, fontSize:12, color:C.silkDim,
+                  border:`1px solid ${C.border}`, padding:'8px 16px',
+                  cursor:'pointer', textAlign:'center', marginTop:4,
+                  display:'block', borderRadius:4,
+                }}>
+                  📁 从相册选择（调试用）
+                  <input type="file" accept="image/*" style={{ display:'none' }}
+                    onChange={e => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      const reader = new FileReader();
+                      reader.onload = ev => {
+                        const dataUrl = ev.target.result;
+                        setCapturedImg(dataUrl);
+                        setCamState('done');
+                        onCaptured(dataUrl);
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+              )}
             </>
           )}
 
