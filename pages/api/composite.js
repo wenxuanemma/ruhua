@@ -422,8 +422,21 @@ export default async function handler(req, res) {
     // width and stretches both the face image and its mask horizontally
     // (around ovalCx) to close that gap. Profile faces are excluded -- they
     // already have dedicated width handling via profileFaceWidthFrac.
+    //
+    // GATED behind region.widthCalibrated: for the 6 originally shipped
+    // paintings, region.w was calibrated back when it had zero effect on
+    // rendering (width was purely landmark-derived), so it was never
+    // actually validated as a width value for any of them -- e.g.
+    // hanxizai.guest is w:0.0631, h:0.0940, narrower than tall by a wide
+    // margin, which is fine when w is unused but silently stretches the
+    // face wider than v1.0's rendering once w starts actively driving a
+    // stretch factor. Rather than assume every existing figure's w happens
+    // to be an accurate width (risky, unvalidated, affects all 6 shipped
+    // paintings at once), this only activates for figures explicitly
+    // recalibrated with width in mind -- currently just the 3 couples
+    // paintings, which is what this fix was actually built for.
     let widthStretch = 1.0;
-    if (landmarks && landmarks.length >= 468 && !isProfile) {
+    if (region.widthCalibrated && landmarks && landmarks.length >= 468 && !isProfile) {
       const lmPxRaw = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
       const jawXs = JAW_INDICES.map(i => lmPxRaw(landmarks[i]));
       const naturalJawWidth = Math.max(...jawXs) - Math.min(...jawXs);
