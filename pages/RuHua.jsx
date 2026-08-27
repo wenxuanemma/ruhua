@@ -2059,7 +2059,7 @@ export default function RuHua() {
           <div
             onClick={() => setShowPaywallModal(true)}
             style={{
-              position:'absolute', top:'calc(env(safe-area-inset-top, 44px) + 8px)', right:16, zIndex:50,
+              position:'absolute', top:'max(env(safe-area-inset-top, 0px), 44px)', right:16, zIndex:50, marginTop:8,
               display:'flex', alignItems:'center', gap:6,
               background:'rgba(24,17,10,0.85)', border:`1px solid ${C.goldMid}`,
               borderRadius:999, padding:'6px 12px', cursor:'pointer',
