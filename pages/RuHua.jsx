@@ -1980,7 +1980,7 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
 
-  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
+  const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, errorCode, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
   // Fresh selfie:  submitting(1) → styling(2) → compositing(3) → succeeded(4)
@@ -2025,6 +2025,18 @@ export default function RuHua() {
     // On failure: stay on processing screen where error message is shown
     // Don't bounce back to selfie — confusing and loses context
   }, [status]);
+
+  // Server rejected for insufficient credits (the real gate — see
+  // pages/api/composite.js) — surface the paywall directly rather than
+  // making the user parse a raw error message. Also refresh balance,
+  // since the client-side check that normally prevents this (see
+  // proceedToGenerate) can be stale or bypassed.
+  useEffect(() => {
+    if (errorCode === 'insufficient_credits') {
+      refreshCredits();
+      setShowPaywallModal(true);
+    }
+  }, [errorCode]);
 
   const reset = () => {
     setSelfie(null);

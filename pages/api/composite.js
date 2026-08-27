@@ -26,10 +26,77 @@ async function fetchBuf(url) {
   return Buffer.from(await r.arrayBuffer());
 }
 
+// -- Credits deduction ------------------------------------------------------
+// Deducts 1 CREDITS from the given RevenueCat customer, called only after
+// a composite has already succeeded (see the end of the handler below) --
+// so a failed composite never gets charged, matching how the paywall was
+// scoped: 1 credit = 1 delivered image, not 1 attempt.
+//
+// This is the actual security boundary for the credits system -- the
+// client-side balance check in RuHua.jsx is UX only (avoids showing
+// "generate" as available when the client already knows balance is 0),
+// but nothing stops a tampered client from calling this endpoint directly
+// with 0 balance. This function is what actually enforces payment: if it
+// fails, the composited image is discarded and never returned to the
+// client (see call site below).
+//
+// KNOWN LIMITATION: uses a fresh idempotency key per call, not a client-
+// supplied one reused across retries of the same logical generate action.
+// If the client times out waiting for a response and retries the whole
+// request after the server already completed (deducted + would have
+// returned success), this would double-charge. Fixing this properly needs
+// the client to generate one stable ID per "generate" tap and pass it
+// through on retries -- flagged as a follow-up, not solved here.
+const RC_SECRET_KEY = process.env.RC_SECRET_KEY;
+const RC_PROJECT_ID = process.env.RC_PROJECT_ID;
+const CREDITS_PER_GENERATION = 1;
+
+async function deductCredit(appUserID) {
+  // Credits system not configured (e.g. local dev) -- no-op, let
+  // compositing succeed as it did before credits existed. Mirrors the
+  // client-side purchasesReady graceful-skip pattern.
+  if (!RC_SECRET_KEY || !RC_PROJECT_ID) {
+    console.warn('[deductCredit] RC_SECRET_KEY/RC_PROJECT_ID not set -- skipping deduction');
+    return { ok: true, skipped: true };
+  }
+  // Credits ARE configured but this request has no customer to charge --
+  // reject rather than silently let it through, since that would be a
+  // trivial bypass (just omit appUserID).
+  if (!appUserID) {
+    return { ok: false, reason: 'missing_app_user_id' };
+  }
+
+  try {
+    const idempotencyKey = (globalThis.crypto?.randomUUID?.() ??
+      `${Date.now()}-${Math.random().toString(36).slice(2)}`);
+    const url = `https://api.revenuecat.com/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(appUserID)}/virtual_currencies/transactions`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RC_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({
+        adjustments: { CREDITS: -CREDITS_PER_GENERATION },
+      }),
+    });
+    if (!r.ok) {
+      const body = await r.text().catch(() => '');
+      console.warn(`[deductCredit] RevenueCat rejected deduction for ${appUserID}: ${r.status} ${body}`);
+      return { ok: false, reason: 'deduction_failed', status: r.status };
+    }
+    return { ok: true, skipped: false };
+  } catch (e) {
+    console.error('[deductCredit] request failed:', e);
+    return { ok: false, reason: 'request_error', error: e.message };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds } = req.body;
+  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds, appUserID } = req.body;
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
@@ -686,6 +753,20 @@ export default async function handler(req, res) {
       .resize(120, 120, { fit: 'contain', background: {r:0,g:0,b:0,alpha:1} })
       .jpeg({ quality: 75 })
       .toBuffer();
+
+    // Compositing succeeded -- NOW deduct the credit, only once we know
+    // there's a real result to charge for. If this fails (insufficient
+    // balance, missing appUserID, or a RevenueCat/network error), the
+    // already-computed image is discarded below rather than returned --
+    // this is what actually enforces the paywall, not the client-side check.
+    const deduction = await deductCredit(appUserID);
+    if (!deduction.ok) {
+      console.warn(`[composite:${figureId}] blocked -- ${deduction.reason}`);
+      return res.status(402).json({
+        error: 'insufficient_credits',
+        reason: deduction.reason,
+      });
+    }
 
     return res.status(200).json({
       outputUrl:       `data:image/jpeg;base64,${composited.toString('base64')}`,

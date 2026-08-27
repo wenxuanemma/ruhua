@@ -5,6 +5,7 @@
 //   Stage 2 — Sharp composite           → outputUrl + profileUrl
 import { FACE_REGIONS } from '../lib/faceRegions';
 import { detectSelfie } from '../lib/detectFaceClient';
+import { getAppUserID } from '../lib/purchases';
 //
 // Caching: if the same selfie is reused (switching painting/figure),
 // Stage 1 is skipped and only Stage 2 reruns (~3s instead of ~35s).
@@ -103,6 +104,7 @@ export function useGenerate() {
   const [portraitLandmarks, setPortraitLandmarks] = useState(null);
   const [profileUrl, setProfileUrl] = useState(null);
   const [error, setError]           = useState(null);
+  const [errorCode, setErrorCode]   = useState(null);
 
   // Cache: selfieHash → styledFaceUrl
   // In-memory ref backed by localStorage for persistence across reloads/deployments
@@ -206,6 +208,7 @@ export function useGenerate() {
   }
 
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
+    const appUserID = await getAppUserID();
     const res = await fetch('/api/composite', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
@@ -217,10 +220,15 @@ export function useGenerate() {
         dynasty:         painting.dynasty,
         faceBounds,
         landmarks:       faceBounds?.landmarks ?? null,
+        appUserID,
       }),
     });
     const data = await res.json();
-    if (!res.ok || data.error) throw new Error(data.error || 'Compositing failed');
+    if (!res.ok || data.error) {
+      const err = new Error(data.error || 'Compositing failed');
+      if (data.error === 'insufficient_credits') err.code = 'insufficient_credits';
+      throw err;
+    }
     if (data.profileUrl) setProfileUrl(data.profileUrl);
     if (data.cropBox)       setCropBox(data.cropBox);
     if (data.paintSampleBox) setPaintSampleBox(data.paintSampleBox);
@@ -238,6 +246,7 @@ export function useGenerate() {
     setOutputUrl(null);
     setProfileUrl(null);
     setError(null);
+    setErrorCode(null);
 
     const selfieHash = quickHash(selfie);
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
@@ -418,6 +427,7 @@ export function useGenerate() {
     } catch (err) {
       console.error('Generate error:', err);
       setError(err.message);
+      setErrorCode(err.code || null);
       setStatus('failed');
     }
   }, [runStyleTransfer, runComposite]);
@@ -458,6 +468,7 @@ export function useGenerate() {
     setStyledUrl(null);
     setProfileUrl(null);
     setError(null);
+    setErrorCode(null);
     // Note: intentionally NOT clearing styledCache on reset
     // so switching paintings from result screen is still fast
   }, []);
@@ -467,5 +478,5 @@ export function useGenerate() {
     clearSelfieCache();
   }, [reset, clearSelfieCache]);
 
-  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
+  return { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, errorCode, reset, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie };
 }
