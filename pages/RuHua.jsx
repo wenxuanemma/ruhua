@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
+import PaywallModal from '../components/PaywallModal';
+import { configurePurchases, getCreditsBalance, getCreditProducts } from '../lib/purchases';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1897,13 +1899,72 @@ export default function RuHua() {
   const [showConsentNudge, setShowConsentNudge] = useState(false); // "需要同意才能继续"
   const [pendingGenerate, setPendingGenerate] = useState(null);
 
+  // Credits / paywall — same gate pattern as consent above, checked right
+  // after consent in triggerGenerate. NOTE: this is a client-side UX check
+  // only. The real deduction (and the real "can this user generate" check)
+  // happens server-side; this just avoids showing generation as available
+  // when we already know the balance is 0, and avoids wasting a Seedream
+  // call that the server would reject anyway.
+  const [showPaywallModal, setShowPaywallModal] = useState(false);
+  const [creditsBalance, setCreditsBalance] = useState(0);
+  const [creditProducts, setCreditProducts] = useState([]);
+  const [purchasesReady, setPurchasesReady] = useState(false);
+
+  const refreshCredits = async () => {
+    const balance = await getCreditsBalance();
+    setCreditsBalance(balance);
+    return balance;
+  };
+
+  useEffect(() => {
+    (async () => {
+      const ok = await configurePurchases();
+      setPurchasesReady(ok);
+      if (ok) {
+        const [balance, products] = await Promise.all([
+          getCreditsBalance(),
+          getCreditProducts(),
+        ]);
+        setCreditsBalance(balance);
+        setCreditProducts(products);
+      }
+    })();
+  }, []);
+
   const hasConsent = () => typeof window !== 'undefined' && localStorage.getItem('ruhua_ai_consent') === 'true';
+  const hasEnoughCredits = () => creditsBalance >= 1;
+
+  // Runs after consent is confirmed. Client-side credits check is UX only
+  // (see note above creditsBalance state) -- the server call in
+  // generateFn() ultimately still has to succeed against the real,
+  // server-side balance.
+  const proceedToGenerate = (generateFn) => {
+    if (purchasesReady && !hasEnoughCredits()) {
+      setPendingGenerate(() => generateFn);
+      setShowPaywallModal(true);
+      return;
+    }
+    generateFn();
+  };
 
   const triggerGenerate = (generateFn) => {
-    if (hasConsent()) { generateFn(); return; }
-    setPendingGenerate(() => generateFn);
-    setConsentIsGate(true);
-    setShowConsentModal(true);
+    if (!hasConsent()) {
+      setPendingGenerate(() => generateFn);
+      setConsentIsGate(true);
+      setShowConsentModal(true);
+      return;
+    }
+    proceedToGenerate(generateFn);
+  };
+
+  const handlePurchaseComplete = async () => {
+    const balance = await refreshCredits();
+    setShowPaywallModal(false);
+    if (pendingGenerate && balance >= 1) {
+      const fn = pendingGenerate;
+      setPendingGenerate(null);
+      fn();
+    }
   };
 
   useEffect(() => {
@@ -1977,6 +2038,20 @@ export default function RuHua() {
     <div style={{ background:C.bg, minHeight:'100vh', display:'flex', justifyContent:'center' }}>
       <style>{STYLES}</style>
       <div style={{ width:'100%', maxWidth:430, minHeight:'100vh', position:'relative', overflow:'hidden' }}>
+        {purchasesReady && (
+          <div
+            onClick={() => setShowPaywallModal(true)}
+            style={{
+              position:'absolute', top:16, right:16, zIndex:50,
+              display:'flex', alignItems:'center', gap:6,
+              background:'rgba(24,17,10,0.85)', border:`1px solid ${C.goldMid}`,
+              borderRadius:999, padding:'6px 12px', cursor:'pointer',
+            }}
+          >
+            <span style={{ fontFamily:F.brush, fontSize:15, color:C.gold }}>{creditsBalance}</span>
+            <span style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim }}>点数</span>
+          </div>
+        )}
         {screen === 'home'       && <HomeScreen onBegin={() => setScreen('gallery')} />}
         {screen === 'gallery'    && <GalleryScreen paintings={PAINTINGS} imgs={imgs}
                                       onSelect={p => { setPainting(p); setScreen('figure'); }}
@@ -2111,7 +2186,11 @@ export default function RuHua() {
               localStorage.setItem('ruhua_ai_consent', 'true');
               setShowConsentModal(false);
               setShowConsentNudge(false);
-              if (pendingGenerate) { pendingGenerate(); setPendingGenerate(null); }
+              if (pendingGenerate) {
+                const fn = pendingGenerate;
+                setPendingGenerate(null);
+                proceedToGenerate(fn);
+              }
             }} className="btn" style={{
               background:C.vermillion, color:'#f5e8c4',
               fontFamily:F.brush, fontSize:18, padding:'12px',
@@ -2127,6 +2206,17 @@ export default function RuHua() {
             }}>取消 · Cancel</button>
           </div>
         </div>
+      )}
+      {showPaywallModal && (
+        <PaywallModal
+          products={creditProducts}
+          balance={creditsBalance}
+          onClose={() => {
+            setShowPaywallModal(false);
+            setPendingGenerate(null);
+          }}
+          onPurchaseComplete={handlePurchaseComplete}
+        />
       )}
       </div>
     </div>
