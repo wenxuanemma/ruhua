@@ -142,6 +142,7 @@ export function useGenerate() {
   }), []);
 
   const runStyleTransfer = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
+    const appUserID = await getAppUserID();
     // Retry up to 2 times on timeout
     for (let attempt = 1; attempt <= 2; attempt++) {
       try {
@@ -157,10 +158,15 @@ export function useGenerate() {
             dynasty:       painting.dynasty,
             faceBounds,
             faceRegion:    FACE_REGIONS[painting.id]?.[figure.id],
+            appUserID,
           }),
         });
         const data = await res.json();
-        if (!res.ok || data.error) throw new Error(data.error || 'Style transfer failed');
+        if (!res.ok || data.error) {
+          const err = new Error(data.error || 'Style transfer failed');
+          if (data.error === 'insufficient_credits') err.code = 'insufficient_credits';
+          throw err;
+        }
         const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
         const detectedBounds = data.selfieFaceBounds || null;
 

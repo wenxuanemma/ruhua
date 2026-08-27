@@ -15,6 +15,47 @@ const DYNASTY_STYLE = {
   '东晋': 'Eastern Jin dynasty handscroll, flowing ink line work, muted silk tones',
 };
 
+// -- Credits pre-flight check ------------------------------------------------
+// A READ-ONLY balance check, not a deduction -- the actual deduction still
+// happens in composite.js, only after a delivered image (see the Option B
+// discussion: 1 credit = 1 output, not 1 attempt). This exists purely to
+// avoid spending real money on a Seedream call (~$0.04 each) for a request
+// that's already going to be rejected downstream anyway. Without this,
+// generate.js -- the actually expensive step -- had NO credits awareness at
+// all; only composite.js (the cheap step) did. A client with a stale/broken
+// purchases SDK (or a tampered one) could hit this endpoint repeatedly at
+// 0 balance with nothing stopping the AI spend.
+const RC_SECRET_KEY = process.env.RC_SECRET_KEY;
+const RC_PROJECT_ID = process.env.RC_PROJECT_ID;
+const CREDITS_CURRENCY_CODE = 'CREDITS';
+
+async function hasEnoughCredits(appUserID) {
+  // Credits system not configured (e.g. local dev) -- allow through,
+  // mirrors the same graceful-skip pattern used in composite.js.
+  if (!RC_SECRET_KEY || !RC_PROJECT_ID) return true;
+  if (!appUserID) return false; // configured but no customer to check -- reject, not a silent bypass
+
+  try {
+    const url = `https://api.revenuecat.com/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(appUserID)}/virtual_currencies?include_empty_balances=true`;
+    const r = await fetch(url, {
+      headers: { 'Authorization': `Bearer ${RC_SECRET_KEY}` },
+    });
+    if (!r.ok) {
+      console.warn(`[hasEnoughCredits] RevenueCat balance check failed: ${r.status}`);
+      // Fail CLOSED here (treat as insufficient) rather than open -- an API
+      // hiccup shouldn't grant free generations. composite.js's own check
+      // right before delivery is still the real backstop either way.
+      return false;
+    }
+    const data = await r.json();
+    const entry = (data.items || []).find(i => i.currency_code === CREDITS_CURRENCY_CODE);
+    return (entry?.balance ?? 0) >= 1;
+  } catch (e) {
+    console.error('[hasEnoughCredits] request failed:', e);
+    return false;
+  }
+}
+
 async function callReplicate(body) {
   const response = await fetch('https://api.replicate.com/v1/predictions', {
     method: 'POST',
@@ -135,8 +176,14 @@ async function extractPaintedFace(styleImageUrl, faceRegion) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
 
-  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion, figureId, gender } = req.body;
+  const { selfie, paintingId, styleImageUrl, dynasty, faceBounds, faceRegion, figureId, gender, appUserID } = req.body;
   if (!selfie) return res.status(400).json({ error: 'selfie is required' });
+
+  // Fail fast before spending money on Seedream -- see hasEnoughCredits()
+  // above for why this exists here too, not just in composite.js.
+  if (!(await hasEnoughCredits(appUserID))) {
+    return res.status(402).json({ error: 'insufficient_credits', reason: 'precheck_failed' });
+  }
 
   const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
   const genderPrompt = gender === 'man'
