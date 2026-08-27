@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
-import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID } from '../lib/purchases';
+import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache } from '../lib/purchases';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1921,6 +1921,15 @@ export default function RuHua() {
       const ok = await configurePurchases();
       setPurchasesReady(ok);
       if (ok) {
+        // Force a fresh read on launch rather than trusting whatever the
+        // SDK's local cache already has -- several confirmed purchases
+        // happened during earlier broken sessions (pre Purchases.then()
+        // fix, pre credential fix) where the internal invalidate call at
+        // the end of purchaseCredits() may never have actually run,
+        // potentially leaving this device's local cache stuck on a stale
+        // value ever since. Cheap to always do on launch, not just after
+        // an in-app purchase/restore event.
+        await invalidateCreditsCache();
         const [balance, products, appUserID] = await Promise.all([
           getCreditsBalance(),
           getCreditProducts(),
