@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
-import { configurePurchases, getCreditsBalance, getCreditProducts } from '../lib/purchases';
+import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID } from '../lib/purchases';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1921,12 +1921,17 @@ export default function RuHua() {
       const ok = await configurePurchases();
       setPurchasesReady(ok);
       if (ok) {
-        const [balance, products] = await Promise.all([
+        const [balance, products, appUserID] = await Promise.all([
           getCreditsBalance(),
           getCreditProducts(),
+          getAppUserID(),
         ]);
         setCreditsBalance(balance);
         setCreditProducts(products);
+        // Debug: compare this against the App User ID shown in RevenueCat's
+        // Customers page to confirm this device is reading the same
+        // customer record you're looking at in the dashboard.
+        console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
       }
     })();
   }, []);
