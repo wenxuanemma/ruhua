@@ -3,6 +3,7 @@ import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
+import { hasClaimedFreeCredits, markFreeCreditsClaimed } from '../lib/deviceStorage';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1941,18 +1942,37 @@ export default function RuHua() {
         await invalidateCreditsCache();
 
         // One-time free credit grant for new users, so the first thing
-        // anyone sees isn't a paywall with nothing to try first. Gated by
-        // a local flag as a cheap "don't bother calling every launch"
-        // check -- the REAL one-time guarantee is enforced server-side via
-        // a deterministic RevenueCat idempotency key (see
-        // pages/api/grant-free-credits.js), so this flag being cleared or
-        // missing is harmless, not a security boundary.
-        if (typeof window !== 'undefined' && !localStorage.getItem('ruhua_free_credits_granted')) {
-          const granted = await grantFreeCredits();
-          if (granted) localStorage.setItem('ruhua_free_credits_granted', 'true');
-          // If it failed (network hiccup, etc.), deliberately don't set the
-          // flag -- try again on the next launch rather than silently
-          // losing the free grant forever.
+        // anyone sees isn't a paywall with nothing to try first.
+        //
+        // Gated by a Keychain flag (lib/deviceStorage.js), not
+        // localStorage -- localStorage gets wiped on app deletion, which
+        // would let anyone reset their free grant just by reinstalling.
+        // Keychain survives deletion on the same device, same pattern
+        // used for this exact problem in VetKeeper/WarrantyKeeper
+        // (UsageTracker.swift there).
+        //
+        // Two independent layers of protection here, not redundant:
+        // - This Keychain check is what actually stops a same-device
+        //   reinstall from re-triggering the grant.
+        // - The deterministic per-appUserID idempotency key in
+        //   pages/api/grant-free-credits.js is what guarantees RevenueCat
+        //   itself never double-grants to one customer record, covering
+        //   races/retries within a single install that this flag alone
+        //   wouldn't catch (e.g. a Keychain write that fails silently).
+        //
+        // Neither layer creates cross-device identity -- a different
+        // device, or this same device with iCloud Keychain sync off
+        // (the default, and what this app uses), starts fresh. That's
+        // accepted, not a bug -- see the comments in
+        // pages/api/grant-free-credits.js and lib/deviceStorage.js for
+        // the full reasoning.
+        const alreadyClaimed = await hasClaimedFreeCredits();
+        if (!alreadyClaimed) {
+          const grantedOk = await grantFreeCredits();
+          if (grantedOk) await markFreeCreditsClaimed();
+          // If it failed (network hiccup, etc.), deliberately don't mark
+          // it claimed -- try again on the next launch rather than
+          // silently losing the free grant forever.
         }
 
         const [balance, products, appUserID] = await Promise.all([
