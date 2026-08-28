@@ -2,7 +2,7 @@ import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
-import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache } from '../lib/purchases';
+import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1939,6 +1939,22 @@ export default function RuHua() {
         // value ever since. Cheap to always do on launch, not just after
         // an in-app purchase/restore event.
         await invalidateCreditsCache();
+
+        // One-time free credit grant for new users, so the first thing
+        // anyone sees isn't a paywall with nothing to try first. Gated by
+        // a local flag as a cheap "don't bother calling every launch"
+        // check -- the REAL one-time guarantee is enforced server-side via
+        // a deterministic RevenueCat idempotency key (see
+        // pages/api/grant-free-credits.js), so this flag being cleared or
+        // missing is harmless, not a security boundary.
+        if (typeof window !== 'undefined' && !localStorage.getItem('ruhua_free_credits_granted')) {
+          const granted = await grantFreeCredits();
+          if (granted) localStorage.setItem('ruhua_free_credits_granted', 'true');
+          // If it failed (network hiccup, etc.), deliberately don't set the
+          // flag -- try again on the next launch rather than silently
+          // losing the free grant forever.
+        }
+
         const [balance, products, appUserID] = await Promise.all([
           getCreditsBalance(),
           getCreditProducts(),
