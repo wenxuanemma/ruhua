@@ -51,7 +51,7 @@ const RC_SECRET_KEY = process.env.RC_SECRET_KEY;
 const RC_PROJECT_ID = process.env.RC_PROJECT_ID;
 const CREDITS_PER_GENERATION = 1;
 
-async function deductCredit(appUserID) {
+async function deductCredit(appUserID, idempotencyKey) {
   // Credits system not configured (e.g. local dev) -- no-op, let
   // compositing succeed as it did before credits existed. Mirrors the
   // client-side purchasesReady graceful-skip pattern.
@@ -67,7 +67,16 @@ async function deductCredit(appUserID) {
   }
 
   try {
-    const idempotencyKey = (globalThis.crypto?.randomUUID?.() ??
+    // Prefer the client-supplied key (derived from selfie+painting+figure,
+    // stable across retries of the same logical generation attempt -- see
+    // resultKey in hooks/useGenerate.js) over a fresh random one. A random
+    // key generated fresh on every server invocation defeats the whole
+    // point of idempotency: if the client times out waiting for this
+    // response and retries the exact same request, a NEW random key here
+    // would look like a brand new transaction to RevenueCat and deduct
+    // twice. Falls back to random only if an older client build doesn't
+    // send one yet.
+    const key = idempotencyKey || (globalThis.crypto?.randomUUID?.() ??
       `${Date.now()}-${Math.random().toString(36).slice(2)}`);
     const url = `https://api.revenuecat.com/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(appUserID)}/virtual_currencies/transactions`;
     const r = await fetch(url, {
@@ -75,7 +84,7 @@ async function deductCredit(appUserID) {
       headers: {
         'Authorization': `Bearer ${RC_SECRET_KEY}`,
         'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
+        'Idempotency-Key': key,
       },
       body: JSON.stringify({
         adjustments: { CREDITS: -CREDITS_PER_GENERATION },
@@ -96,7 +105,7 @@ async function deductCredit(appUserID) {
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
-  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds, appUserID } = req.body;
+  const { styledFaceUrl, paintingImageUrl, paintingId, figureId, faceBounds, appUserID, idempotencyKey } = req.body;
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
@@ -759,7 +768,7 @@ export default async function handler(req, res) {
     // balance, missing appUserID, or a RevenueCat/network error), the
     // already-computed image is discarded below rather than returned --
     // this is what actually enforces the paywall, not the client-side check.
-    const deduction = await deductCredit(appUserID);
+    const deduction = await deductCredit(appUserID, idempotencyKey);
     if (!deduction.ok) {
       console.warn(`[composite:${figureId}] blocked -- ${deduction.reason}`);
       return res.status(402).json({

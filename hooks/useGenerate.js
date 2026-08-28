@@ -213,7 +213,7 @@ export function useGenerate() {
     }
   }
 
-  const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds }) => {
+  const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds, idempotencyKey }) => {
     const appUserID = await getAppUserID();
     const res = await fetch('/api/composite', {
       method: 'POST',
@@ -227,6 +227,7 @@ export function useGenerate() {
         faceBounds,
         landmarks:       faceBounds?.landmarks ?? null,
         appUserID,
+        idempotencyKey,
       }),
     });
     const data = await res.json();
@@ -283,6 +284,7 @@ export function useGenerate() {
           figure,
           paintingImageUrl: styleImageUrl,
           faceBounds: cachedPortraitFaceBounds || cachedFaceBounds,
+          idempotencyKey:   resultKey,
         });
         setOutputUrl(composite);
         setStatus('succeeded');
@@ -420,6 +422,7 @@ export function useGenerate() {
         figure,
         paintingImageUrl: styleImageUrl,
         faceBounds: portraitFaceBounds || detectedFaceBounds,
+        idempotencyKey:   resultKey,
       });
 
       // Save only styledUrl to result cache — compositing is fast (~400ms)
