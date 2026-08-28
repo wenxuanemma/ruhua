@@ -1911,6 +1911,15 @@ export default function RuHua() {
   const [purchasesReady, setPurchasesReady] = useState(false);
 
   const refreshCredits = async () => {
+    // Always invalidate first -- a server-side deduction (the
+    // deductCredit() call in pages/api/composite.js, via the REST API
+    // directly) is invisible to the client SDK's local cache, since no
+    // in-app purchase/restore event occurred to trigger a refresh on its
+    // own. Baking this in here means every caller gets genuinely fresh
+    // data without each call site needing to remember to invalidate
+    // first -- this bit us once already (see the launch effect below,
+    // which used to duplicate this call before it lived here).
+    await invalidateCreditsCache();
     const balance = await getCreditsBalance();
     setCreditsBalance(balance);
     return balance;
@@ -2035,7 +2044,17 @@ export default function RuHua() {
 
   // Navigate when generation finishes or fails
   useEffect(() => {
-    if (status === 'succeeded') setScreen('result');
+    if (status === 'succeeded') {
+      setScreen('result');
+      // A credit was just spent server-side (see the deductCredit() gate
+      // in pages/api/composite.js) but the client has no other way to
+      // learn that -- balance was previously only ever refreshed on app
+      // launch or right after a purchase, never after a successful
+      // generation. Without this, the displayed balance silently drifts
+      // from the real one until something else happens to trigger a
+      // refetch (e.g. relaunching the app).
+      refreshCredits();
+    }
     // On failure: stay on processing screen where error message is shown
     // Don't bounce back to selfie — confusing and loses context
   }, [status]);
