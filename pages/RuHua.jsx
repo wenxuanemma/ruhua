@@ -1982,10 +1982,13 @@ export default function RuHua() {
         ]);
         setCreditsBalance(balance);
         setCreditProducts(products);
-        // Debug: compare this against the App User ID shown in RevenueCat's
-        // Customers page to confirm this device is reading the same
-        // customer record you're looking at in the dashboard.
-        console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
+        const isDebug = typeof window !== 'undefined' && localStorage.getItem('ruhua_debug') === 'true';
+        if (isDebug) {
+          // Compare this against the App User ID shown in RevenueCat's
+          // Customers page to confirm this device is reading the same
+          // customer record you're looking at in the dashboard.
+          console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
+        }
 
         // Credit migration across reinstall -- see the long comment in
         // lib/deviceStorage.js for why this exists: RevenueCat does not
@@ -2006,6 +2009,10 @@ export default function RuHua() {
         // exists server-side (it just made a real network call for this
         // exact customer and got a real answer), so it's now safe to
         // attempt migration.
+        //
+        // NOTE: this migration logic itself always runs, regardless of
+        // the debug flag below -- it's real production behavior, not a
+        // testing aid. Only the console logging around it is gated.
         const lastKnownAppUserID = await getLastKnownAppUserID();
         if (appUserID && lastKnownAppUserID && lastKnownAppUserID !== appUserID) {
           try {
@@ -2019,7 +2026,9 @@ export default function RuHua() {
               await invalidateCreditsCache();
               const freshBalance = await getCreditsBalance();
               setCreditsBalance(freshBalance);
-              console.log('[purchases debug] migrated', migrateData.migrated, 'credits from previous install, new balance:', freshBalance);
+              if (isDebug) {
+                console.log('[purchases debug] migrated', migrateData.migrated, 'credits from previous install, new balance:', freshBalance);
+              }
             }
           } catch (e) {
             console.warn('[purchases] credit migration request failed:', e);
@@ -2030,16 +2039,20 @@ export default function RuHua() {
         }
         if (appUserID) await setLastKnownAppUserID(appUserID);
 
-        // TESTING ONLY -- call window.__resetFreeCredits() from Safari Web
+        // TESTING ONLY, and only exposed under the same ruhua_debug flag
+        // used elsewhere in this app (e.g. the hidden photo-library upload
+        // button) -- call window.__resetFreeCredits() from Safari Web
         // Inspector's console to clear the Keychain flag, then reload the
         // page (or relaunch the app) to see the free-credits grant fire
-        // again. No UI surface, no effect on real users unless someone
-        // deliberately opens the console and calls it.
-        window.__resetFreeCredits = async () => {
-          const ok = await resetFreeCreditsFlag();
-          console.log('[debug] free credits flag reset:', ok, '-- reload to re-trigger the grant');
-          return ok;
-        };
+        // again. Enable with localStorage.setItem('ruhua_debug','true')
+        // in console first, same as that existing debug feature.
+        if (isDebug) {
+          window.__resetFreeCredits = async () => {
+            const ok = await resetFreeCreditsFlag();
+            console.log('[debug] free credits flag reset:', ok, '-- reload to re-trigger the grant');
+            return ok;
+          };
+        }
       }
     })();
   }, []);
