@@ -3,7 +3,7 @@ import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
-import { hasClaimedFreeCredits, markFreeCreditsClaimed } from '../lib/deviceStorage';
+import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag } from '../lib/deviceStorage';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1986,6 +1986,17 @@ export default function RuHua() {
         // Customers page to confirm this device is reading the same
         // customer record you're looking at in the dashboard.
         console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
+
+        // TESTING ONLY -- call window.__resetFreeCredits() from Safari Web
+        // Inspector's console to clear the Keychain flag, then reload the
+        // page (or relaunch the app) to see the free-credits grant fire
+        // again. No UI surface, no effect on real users unless someone
+        // deliberately opens the console and calls it.
+        window.__resetFreeCredits = async () => {
+          const ok = await resetFreeCreditsFlag();
+          console.log('[debug] free credits flag reset:', ok, '-- reload to re-trigger the grant');
+          return ok;
+        };
       }
     })();
   }, []);
