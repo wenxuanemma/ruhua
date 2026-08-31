@@ -3,7 +3,7 @@ import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
-import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag } from '../lib/deviceStorage';
+import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -1974,6 +1974,37 @@ export default function RuHua() {
           // it claimed -- try again on the next launch rather than
           // silently losing the free grant forever.
         }
+
+        // Credit migration across reinstall -- see the long comment in
+        // lib/deviceStorage.js for why this exists: RevenueCat does not
+        // transfer Virtual Currency balances automatically the way it
+        // does for entitlements/subscriptions, so a same-device reinstall
+        // would otherwise permanently orphan any unspent purchased
+        // credits. Runs BEFORE reading balance below, so if a migration
+        // does happen, the balance we display already reflects it rather
+        // than needing a second refetch.
+        const currentAppUserID = await getAppUserID();
+        const lastKnownAppUserID = await getLastKnownAppUserID();
+        if (currentAppUserID && lastKnownAppUserID && lastKnownAppUserID !== currentAppUserID) {
+          try {
+            const migrateRes = await fetch('/api/migrate-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oldAppUserID: lastKnownAppUserID, newAppUserID: currentAppUserID }),
+            });
+            const migrateData = await migrateRes.json().catch(() => ({}));
+            if (migrateData?.migrated > 0) {
+              await invalidateCreditsCache(); // the balance fetch below needs fresh data, not a pre-migration cache
+              console.log('[purchases debug] migrated', migrateData.migrated, 'credits from previous install');
+            }
+          } catch (e) {
+            console.warn('[purchases] credit migration request failed:', e);
+            // Don't update the stored ID below if the request itself
+            // failed outright -- retry the migration attempt on the next
+            // launch rather than silently abandoning the old balance.
+          }
+        }
+        if (currentAppUserID) await setLastKnownAppUserID(currentAppUserID);
 
         const [balance, products, appUserID] = await Promise.all([
           getCreditsBalance(),
