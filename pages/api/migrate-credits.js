@@ -32,6 +32,45 @@ async function getBalance(appUserID) {
   return entry?.balance ?? 0;
 }
 
+function sleep(ms) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Confirmed real failure mode via production logs: granting to a brand
+// new anonymous App User ID can 404 with "Customer could not be found"
+// (RevenueCat error type resource_missing) if the server hasn't finished
+// registering that customer yet. The client now waits for a successful
+// balance read before calling this endpoint at all (see pages/RuHua.jsx),
+// which should mean the customer already exists by the time we get here
+// -- this retry is defense-in-depth for any residual propagation delay
+// beyond that, not the primary fix.
+async function grantWithRetry(appUserID, amount, idempotencyKey, maxAttempts = 3) {
+  for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+    const url = `https://api.revenuecat.com/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(appUserID)}/virtual_currencies/transactions`;
+    const r = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${RC_SECRET_KEY}`,
+        'Content-Type': 'application/json',
+        'Idempotency-Key': idempotencyKey,
+      },
+      body: JSON.stringify({ adjustments: { CREDITS: amount } }),
+    });
+    if (r.ok) return { ok: true };
+
+    const body = await r.text().catch(() => '');
+    let isCustomerMissing = false;
+    try { isCustomerMissing = JSON.parse(body)?.type === 'resource_missing'; } catch {}
+
+    if (isCustomerMissing && attempt < maxAttempts) {
+      console.warn(`[migrate-credits] customer not found yet (attempt ${attempt}/${maxAttempts}), retrying...`);
+      await sleep(attempt * 500); // 500ms, then 1000ms
+      continue;
+    }
+    return { ok: false, status: r.status, body };
+  }
+}
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).end();
 
@@ -57,22 +96,10 @@ export default async function handler(req, res) {
     // exact migration (same old->new pair) can never double-grant, same
     // reasoning as the free-credits grant's per-customer key.
     const idempotencyKey = `migrate-credits-${oldAppUserID}-${newAppUserID}`;
-    const url = `https://api.revenuecat.com/v2/projects/${RC_PROJECT_ID}/customers/${encodeURIComponent(newAppUserID)}/virtual_currencies/transactions`;
-    const r = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Authorization': `Bearer ${RC_SECRET_KEY}`,
-        'Content-Type': 'application/json',
-        'Idempotency-Key': idempotencyKey,
-      },
-      body: JSON.stringify({
-        adjustments: { CREDITS: oldBalance },
-      }),
-    });
-    if (!r.ok) {
-      const body = await r.text().catch(() => '');
-      console.warn(`[migrate-credits] grant to new ID failed: ${r.status} ${body}`);
-      return res.status(502).json({ error: 'migration_failed', status: r.status });
+    const grantResult = await grantWithRetry(newAppUserID, oldBalance, idempotencyKey);
+    if (!grantResult.ok) {
+      console.warn(`[migrate-credits] grant to new ID failed: ${grantResult.status} ${grantResult.body}`);
+      return res.status(502).json({ error: 'migration_failed', status: grantResult.status });
     }
 
     // Zero out the old ID's balance so it can't later be independently

@@ -1975,37 +1975,6 @@ export default function RuHua() {
           // silently losing the free grant forever.
         }
 
-        // Credit migration across reinstall -- see the long comment in
-        // lib/deviceStorage.js for why this exists: RevenueCat does not
-        // transfer Virtual Currency balances automatically the way it
-        // does for entitlements/subscriptions, so a same-device reinstall
-        // would otherwise permanently orphan any unspent purchased
-        // credits. Runs BEFORE reading balance below, so if a migration
-        // does happen, the balance we display already reflects it rather
-        // than needing a second refetch.
-        const currentAppUserID = await getAppUserID();
-        const lastKnownAppUserID = await getLastKnownAppUserID();
-        if (currentAppUserID && lastKnownAppUserID && lastKnownAppUserID !== currentAppUserID) {
-          try {
-            const migrateRes = await fetch('/api/migrate-credits', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ oldAppUserID: lastKnownAppUserID, newAppUserID: currentAppUserID }),
-            });
-            const migrateData = await migrateRes.json().catch(() => ({}));
-            if (migrateData?.migrated > 0) {
-              await invalidateCreditsCache(); // the balance fetch below needs fresh data, not a pre-migration cache
-              console.log('[purchases debug] migrated', migrateData.migrated, 'credits from previous install');
-            }
-          } catch (e) {
-            console.warn('[purchases] credit migration request failed:', e);
-            // Don't update the stored ID below if the request itself
-            // failed outright -- retry the migration attempt on the next
-            // launch rather than silently abandoning the old balance.
-          }
-        }
-        if (currentAppUserID) await setLastKnownAppUserID(currentAppUserID);
-
         const [balance, products, appUserID] = await Promise.all([
           getCreditsBalance(),
           getCreditProducts(),
@@ -2017,6 +1986,49 @@ export default function RuHua() {
         // Customers page to confirm this device is reading the same
         // customer record you're looking at in the dashboard.
         console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
+
+        // Credit migration across reinstall -- see the long comment in
+        // lib/deviceStorage.js for why this exists: RevenueCat does not
+        // transfer Virtual Currency balances automatically the way it
+        // does for entitlements/subscriptions, so a same-device reinstall
+        // would otherwise permanently orphan any unspent purchased
+        // credits.
+        //
+        // IMPORTANT ORDERING: this runs AFTER the getCreditsBalance() call
+        // above, not before. An earlier version ran this first, right
+        // after getAppUserID() returns -- but getAppUserID() only
+        // generates the ID LOCALLY; it doesn't guarantee RevenueCat's
+        // server has actually registered that customer yet. That race
+        // caused real "Customer could not be found" (404) errors when
+        // migrate-credits tried to grant to a newAppUserID the server
+        // didn't recognize yet. A successful getCreditsBalance() call
+        // above is a genuine confirmation the customer record already
+        // exists server-side (it just made a real network call for this
+        // exact customer and got a real answer), so it's now safe to
+        // attempt migration.
+        const lastKnownAppUserID = await getLastKnownAppUserID();
+        if (appUserID && lastKnownAppUserID && lastKnownAppUserID !== appUserID) {
+          try {
+            const migrateRes = await fetch('/api/migrate-credits', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ oldAppUserID: lastKnownAppUserID, newAppUserID: appUserID }),
+            });
+            const migrateData = await migrateRes.json().catch(() => ({}));
+            if (migrateData?.migrated > 0) {
+              await invalidateCreditsCache();
+              const freshBalance = await getCreditsBalance();
+              setCreditsBalance(freshBalance);
+              console.log('[purchases debug] migrated', migrateData.migrated, 'credits from previous install, new balance:', freshBalance);
+            }
+          } catch (e) {
+            console.warn('[purchases] credit migration request failed:', e);
+            // Don't update the stored ID below if the request itself
+            // failed outright -- retry the migration attempt on the next
+            // launch rather than silently abandoning the old balance.
+          }
+        }
+        if (appUserID) await setLastKnownAppUserID(appUserID);
 
         // TESTING ONLY -- call window.__resetFreeCredits() from Safari Web
         // Inspector's console to clear the Keychain flag, then reload the
