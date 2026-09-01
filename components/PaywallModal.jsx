@@ -5,7 +5,7 @@
 // duplication, avoids touching an already-large file for this).
 
 import { useState } from 'react';
-import { purchaseCredits, restorePurchases } from '../lib/purchases';
+import { purchaseCredits } from '../lib/purchases';
 
 const C = {
   bg: '#0c0904',
@@ -30,9 +30,23 @@ const F = {
 // onClose: () => void
 // onPurchaseComplete: () => void — called after a successful purchase so
 //   the parent can refresh balance and retry whatever was gated on it
+//
+// NOTE: no "Restore Purchases" button here. Apple rejected v1.2's
+// submission (Guideline 3.1.1) over exactly this: the app called
+// StoreKit's native restore mechanism (prompting for the user's Apple
+// Account password) for CONSUMABLE products, which Apple's own review
+// notes state consumables cannot be restored via -- "please revise your
+// binary to implement your own restore mechanism." That's precisely what
+// already exists and works: the Keychain-based credit migration system
+// (see lib/deviceStorage.js, pages/api/migrate-credits.js) runs
+// automatically on launch and doesn't need any user-facing button at
+// all. The native-restore button was actively misleading anyway -- we'd
+// already confirmed through real testing that tapping it did nothing for
+// lost consumable balances (RevenueCat doesn't transfer Virtual Currency
+// balances via standard restore), so removing it isn't a loss of real
+// functionality, just removing a button that never did what it implied.
 export default function PaywallModal({ products, balance, onClose, onPurchaseComplete }) {
   const [purchasingId, setPurchasingId] = useState(null);
-  const [restoring, setRestoring] = useState(false);
   const [error, setError] = useState(null);
 
   const handleBuy = async (product) => {
@@ -50,20 +64,6 @@ export default function PaywallModal({ products, balance, onClose, onPurchaseCom
       }
     } finally {
       setPurchasingId(null);
-    }
-  };
-
-  const handleRestore = async () => {
-    setError(null);
-    setRestoring(true);
-    try {
-      await restorePurchases();
-      onPurchaseComplete?.();
-    } catch (e) {
-      console.warn('[PaywallModal] restore failed:', e);
-      setError('恢复失败，请重试 · Restore failed, please try again');
-    } finally {
-      setRestoring(false);
     }
   };
 
@@ -137,19 +137,6 @@ export default function PaywallModal({ products, balance, onClose, onPurchaseCom
             {error}
           </div>
         )}
-
-        <button
-          onClick={handleRestore}
-          disabled={restoring}
-          className="btn"
-          style={{
-            background: 'transparent', color: C.silkDim,
-            fontFamily: F.serif, fontSize: 12, padding: '8px', width: '100%',
-            marginBottom: 6,
-          }}
-        >
-          {restoring ? '恢复中... · Restoring...' : '恢复购买 · Restore Purchases'}
-        </button>
 
         <button
           onClick={onClose}
