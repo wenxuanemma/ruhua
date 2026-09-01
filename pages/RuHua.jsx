@@ -1941,8 +1941,32 @@ export default function RuHua() {
         // an in-app purchase/restore event.
         await invalidateCreditsCache();
 
+        const [balance, products, appUserID] = await Promise.all([
+          getCreditsBalance(),
+          getCreditProducts(),
+          getAppUserID(),
+        ]);
+        setCreditsBalance(balance);
+        setCreditProducts(products);
+        const isDebug = typeof window !== 'undefined' && localStorage.getItem('ruhua_debug') === 'true';
+        if (isDebug) {
+          // Compare this against the App User ID shown in RevenueCat's
+          // Customers page to confirm this device is reading the same
+          // customer record you're looking at in the dashboard.
+          console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
+        }
+
         // One-time free credit grant for new users, so the first thing
-        // anyone sees isn't a paywall with nothing to try first.
+        // anyone sees isn't a paywall with nothing to try first. This
+        // fires for anyone who's never had this Keychain flag set --
+        // that includes a genuinely brand-new install, but ALSO an
+        // existing user updating from a pre-credits version (v1.0/v1.1),
+        // since Purchases.configure() was never called for them before
+        // and none of these Keychain keys exist yet on their device
+        // either. That's intentional, not a bug: an existing user
+        // updating gets treated the same as a new one and receives the
+        // same free credits, a graceful transition rather than an
+        // immediate paywall on their very next open.
         //
         // Gated by a Keychain flag (lib/deviceStorage.js), not
         // localStorage -- localStorage gets wiped on app deletion, which
@@ -1966,28 +1990,33 @@ export default function RuHua() {
         // accepted, not a bug -- see the comments in
         // pages/api/grant-free-credits.js and lib/deviceStorage.js for
         // the full reasoning.
+        //
+        // IMPORTANT ORDERING: this runs AFTER the getCreditsBalance()
+        // call above, not before. An earlier version called this first,
+        // right after configurePurchases() succeeds -- but that's only
+        // local SDK configuration; it doesn't guarantee RevenueCat's
+        // server has actually registered this customer yet. That's the
+        // exact same race that caused real "Customer could not be found"
+        // (404) errors in the credit migration code below before it was
+        // fixed the same way -- this endpoint hit the identical failure
+        // mode and was never reordered to match until now. A successful
+        // getCreditsBalance() call above is genuine confirmation the
+        // customer record already exists server-side.
         const alreadyClaimed = await hasClaimedFreeCredits();
         if (!alreadyClaimed) {
           const grantedOk = await grantFreeCredits();
-          if (grantedOk) await markFreeCreditsClaimed();
+          if (grantedOk) {
+            await markFreeCreditsClaimed();
+            await invalidateCreditsCache();
+            const freshBalance = await getCreditsBalance();
+            setCreditsBalance(freshBalance);
+            if (isDebug) {
+              console.log('[purchases debug] granted free credits, new balance:', freshBalance);
+            }
+          }
           // If it failed (network hiccup, etc.), deliberately don't mark
           // it claimed -- try again on the next launch rather than
           // silently losing the free grant forever.
-        }
-
-        const [balance, products, appUserID] = await Promise.all([
-          getCreditsBalance(),
-          getCreditProducts(),
-          getAppUserID(),
-        ]);
-        setCreditsBalance(balance);
-        setCreditProducts(products);
-        const isDebug = typeof window !== 'undefined' && localStorage.getItem('ruhua_debug') === 'true';
-        if (isDebug) {
-          // Compare this against the App User ID shown in RevenueCat's
-          // Customers page to confirm this device is reading the same
-          // customer record you're looking at in the dashboard.
-          console.log('[purchases debug] appUserID:', appUserID, '| balance:', balance);
         }
 
         // Credit migration across reinstall -- see the long comment in
