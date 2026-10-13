@@ -9,6 +9,29 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 // face boundary.
 const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
   397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+// sRGB <-> CIELAB (D65), for the Lab colour transfer below.
+const srgbToLin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const linToSrgb = (c) => { const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055; return Math.max(0, Math.min(255, Math.round(v * 255))); };
+const labF = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+const labFi = (t) => t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27);
+function rgbToLab(r, g, b) {
+  const R = srgbToLin(r), G = srgbToLin(g), B = srgbToLin(b);
+  const x = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047;
+  const y = (0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+  const fx = labF(x), fy = labF(y), fz = labF(z);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function labToRgb(L, a, b) {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const x = labFi(fx) * 0.95047, y = labFi(fy), z = labFi(fz) * 1.08883;
+  const R = 3.2406 * x - 1.5372 * y - 0.4986 * z;
+  const G = -0.9689 * x + 1.8758 * y + 0.0415 * z;
+  const B = 0.0557 * x - 0.2040 * y + 1.0570 * z;
+  return [linToSrgb(R), linToSrgb(G), linToSrgb(B)];
+}
+const meanStd = (arr) => { const m = arr.reduce((s, v) => s + v, 0) / arr.length; return [m, Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length) || 1]; };
+
 const JAW_INDICES = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
 
 async function fetchBuf(url) {
@@ -429,13 +452,88 @@ export default async function handler(req, res) {
 
     console.log(`[composite:${figureId} color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
-    // Color match \u2014 keep exact S x S dimensions
-    const colorFace = await sharp(facePng)
-      .removeAlpha()
-      .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
-      .modulate({ saturation: region.saturation ?? 0.72, brightness: region.brightness ?? 1.0 })
-      .png()
-      .toBuffer();
+    // Colour mode. 'legacy' = per-channel mean scale + 0.72 saturation cut (the
+    // shipped look; on warm, saturated paintings it reads grey). 'lab' = match the
+    // face's Lab mean/spread to the painting's skin (brighter half of the pixels
+    // in the calibrated oval, so outlines/eyes/hair don't drag it darker).
+    // Default: lab for every figure; region.colorMode:'legacy' keeps the old
+    // look (faded paintings, pending a contrast adjustment); dev-only
+    // debugColor overrides both.
+    const devColor = process.env.NODE_ENV === 'development' ? req.body.debugColor : undefined;
+    const colorMode = devColor || region.colorMode || 'lab';
+    let colorFace;
+    if (colorMode === 'lab') {
+      // Painting skin: brighter half of the pixels inside the calibrated oval.
+      const bx = Math.max(0, targetX), by = Math.max(0, targetY);
+      const bw = Math.min(targetW, PW - bx), bh = Math.min(targetH, PH - by);
+      const { data: pd, info: pinf } = await sharp(paintingBuf)
+        .extract({ left: bx, top: by, width: bw, height: bh }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const pLab = [];
+      for (let y = 0; y < pinf.height; y++) for (let x = 0; x < pinf.width; x++) {
+        const nx = (x + 0.5) / pinf.width - 0.5, ny = (y + 0.5) / pinf.height - 0.5;
+        if (nx * nx + ny * ny > 0.16) continue;
+        const i = (y * pinf.width + x) * 3;
+        pLab.push(rgbToLab(pd[i], pd[i + 1], pd[i + 2]));
+      }
+      pLab.sort((u, v) => u[0] - v[0]);
+      const pSkin = pLab.slice(pLab.length >> 1);
+
+      // Face skin: central oval of the cropped face, dropping the darkest 30%
+      // (eyes, brows, nostrils, lip line).
+      const { data: fd, info: finf } = await sharp(facePng).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const fLabAll = new Array(finf.width * finf.height);
+      const fSample = [];
+      for (let y = 0; y < finf.height; y++) for (let x = 0; x < finf.width; x++) {
+        const i = (y * finf.width + x) * 3;
+        const lab = rgbToLab(fd[i], fd[i + 1], fd[i + 2]);
+        fLabAll[y * finf.width + x] = lab;
+        const nx = (x + 0.5) / finf.width - 0.5, ny = (y + 0.5) / finf.height - 0.55;
+        if ((nx / 0.30) ** 2 + (ny / 0.32) ** 2 <= 1) fSample.push(lab);
+      }
+      fSample.sort((u, v) => u[0] - v[0]);
+      const fSkin = fSample.slice(Math.floor(fSample.length * 0.3));
+
+      if (pSkin.length > 20 && fSkin.length > 20) {
+        const ch = (arr, k) => meanStd(arr.map(v => v[k]));
+        const [pL, psL] = ch(pSkin, 0), [pA, psA] = ch(pSkin, 1), [pB, psB] = ch(pSkin, 2);
+        const [fL, fsL] = ch(fSkin, 0), [fA, fsA] = ch(fSkin, 1), [fB, fsB] = ch(fSkin, 2);
+        // Spread ratios clamped: keep the face's own shading/features readable
+        // (L never flattened below 0.6x); a/b spread capped at 1.15x so lips and
+        // cheeks don't go garish on saturated paintings.
+        // Faded paintings (region.labFade, 0..1): the painted face's own contrast
+        // can't be measured reliably (silk grain and cracks read as contrast), so
+        // fade the face directly -- scale its lightness contrast and colour
+        // intensity (lips, cheeks) down toward the painting's flat skin tone.
+        const dev = process.env.NODE_ENV === 'development';
+        const fade = (dev && req.body.debugLabFade != null) ? req.body.debugLabFade : (region.labFade ?? 0);
+        const kL = Math.max(0.6, Math.min(1.1, psL / fsL)) * (1 - 0.5 * fade);
+        const kA = Math.max(0.5, Math.min(1.15, psA / fsA)) * (1 - 0.6 * fade);
+        const kB = Math.max(0.5, Math.min(1.15, psB / fsB)) * (1 - 0.6 * fade);
+        const bright = (region.brightness ?? 1.0);
+        const out = Buffer.alloc(finf.width * finf.height * 3);
+        for (let p = 0; p < fLabAll.length; p++) {
+          const [L, A, B] = fLabAll[p];
+          // a/b floored just below neutral: eye whites are far less yellow than
+          // skin, and on pale paintings the shift pushed them into blue/green.
+          const rgb = labToRgb(
+            Math.max(0, Math.min(100, (pL + (L - fL) * kL) * bright)),
+            Math.max(Math.min(A, 0), -1, pA + (A - fA) * kA),
+            Math.max(Math.min(B, 0), -1, pB + (B - fB) * kB));
+          out[p * 3] = rgb[0]; out[p * 3 + 1] = rgb[1]; out[p * 3 + 2] = rgb[2];
+        }
+        colorFace = await sharp(out, { raw: { width: finf.width, height: finf.height, channels: 3 } }).png().toBuffer();
+        console.log(`[composite:${figureId} colour] lab: paintSkin L/a/b=(${pL.toFixed(1)},${pA.toFixed(1)},${pB.toFixed(1)}) faceSkin=(${fL.toFixed(1)},${fA.toFixed(1)},${fB.toFixed(1)}) k=(${kL.toFixed(2)},${kA.toFixed(2)},${kB.toFixed(2)})`);
+      }
+    }
+    if (!colorFace) {
+      // Color match \u2014 keep exact S x S dimensions
+      colorFace = await sharp(facePng)
+        .removeAlpha()
+        .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
+        .modulate({ saturation: region.saturation ?? 0.72, brightness: region.brightness ?? 1.0 })
+        .png()
+        .toBuffer();
+    }
 
     // Force exact S x S after color operations (recomb can shift by 1px)
     const colorFaceExact = await sharp(colorFace)
