@@ -495,7 +495,12 @@ export default async function handler(req, res) {
 
       if (pSkin.length > 20 && fSkin.length > 20) {
         const ch = (arr, k) => meanStd(arr.map(v => v[k]));
-        const [pL, psL] = ch(pSkin, 0), [pA, psA] = ch(pSkin, 1), [pB, psB] = ch(pSkin, 2);
+        let [pL, psL] = ch(pSkin, 0), [pA, psA] = ch(pSkin, 1), [pB, psB] = ch(pSkin, 2);
+        // region.labOffset {L,a,b}: per-figure nudge of the target skin tone, for
+        // painted faces whose powder/whiteness the silk-and-texture sample
+        // under-reads (调琴啜茗图, 明宣宗后). Dev override: debugLabOffset.
+        const off = (process.env.NODE_ENV === 'development' && req.body.debugLabOffset) || region.labOffset;
+        if (off) { pL += off.L || 0; pA += off.a || 0; pB += off.b || 0; }
         const [fL, fsL] = ch(fSkin, 0), [fA, fsA] = ch(fSkin, 1), [fB, fsB] = ch(fSkin, 2);
         // Spread ratios clamped: keep the face's own shading/features readable
         // (L never flattened below 0.6x); a/b spread capped at 1.15x so lips and
