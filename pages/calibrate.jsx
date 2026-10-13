@@ -265,14 +265,23 @@ export default function Calibrate() {
     for (let fi = 0; fi < painting.figures.length; fi++) {
       const fig = painting.figures[fi];
       const v = getVal(fig.id);
+      // Handles are drawn rotated with the box (CSS rotate around its centre),
+      // so hit-test the rotated positions -- on tilted boxes (戏婴图, ~15-20°)
+      // the unrotated corners missed the visible arrows entirely.
+      const a = (v.angle || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+      const cxp = (v.x + v.w / 2) * rect.width, cyp = (v.y + v.h / 2) * rect.height;
+      const rot = (dx, dy) => {
+        const px = dx * v.w * rect.width, py = dy * v.h * rect.height;
+        return { x: (cxp + px * ca - py * sa) / rect.width, y: (cyp + px * sa + py * ca) / rect.height };
+      };
       const corners = [
-        {name:'tl', x:v.x,     y:v.y},
-        {name:'tr', x:v.x+v.w, y:v.y},
-        {name:'bl', x:v.x,     y:v.y+v.h},
-        {name:'br', x:v.x+v.w, y:v.y+v.h},
+        {name:'tl', ...rot(-0.5, -0.5)},
+        {name:'tr', ...rot( 0.5, -0.5)},
+        {name:'bl', ...rot(-0.5,  0.5)},
+        {name:'br', ...rot( 0.5,  0.5)},
       ];
       for (const c of corners) {
-        if (near(pos.x, pos.y, c.x, c.y, 10)) {
+        if (near(pos.x, pos.y, c.x, c.y, 14)) {
           const d = { type:'resize', paintingId:painting.id, figId:fig.id,
                       corner:c.name, startX:pos.x, startY:pos.y, origBox:{...v} };
           draggingRef.current = d; setDragging(d); return;
