@@ -212,7 +212,6 @@ const PAINTINGS = [
       { id:'lady',    name:'调琴仕女', nameEn:'Lady at the Lute', descZh:'轻拨琴弦，以指尖的律动传递内心的雅致与从容，是园中最动人的风景。', descEn:'Tuning the qin with unhurried fingers, her inner elegance expressed through each gentle pluck of the strings.', gender:'woman', rec:true },
       { id:'seated',  name:'静坐仕女', nameEn:'Lady at Rest',     descZh:'白衣端坐，神情悠然，于琴声与园景之间静享这份难得的闲适时光。',   descEn:'Seated in white robes with serene composure, quietly savoring a rare moment of unhurried peace amid the garden and music.', gender:'woman', rec:true },
       { id:'attendant', name:'托盘侍女', nameEn:'Maid with a Tray', descZh:'双手托盘侍立一旁，等候主人调罢琴弦。', descEn:'Standing by with a tray in both hands, waiting for her mistress to finish tuning the qin.', gender:'woman', rec:true },
-      { id:'teamaid', name:'奉茶侍女', nameEn:'Tea Maid', descZh:'侧身立于画右，手捧茶盏，静候奉茗。', descEn:'Standing in profile at the right, cradling a tea bowl, waiting to serve.', gender:'woman', rec:true },
     ],
     youAre: '调琴仕女 · Lady of Refined Taste',
     context: 'Zhou Fang, master of Tang court beauty painting, depicts ladies in an aristocratic garden — one tuning a qin lute, another seated in quiet repose. The painting epitomizes the cultivated leisure of Tang elite women.',

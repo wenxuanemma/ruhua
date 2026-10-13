@@ -51,7 +51,6 @@ const PAINTINGS = [
       {id:'lady',   name:'调琴仕女'},
       {id:'seated', name:'静坐仕女'},
       {id:'attendant', name:'托盘侍女'},
-      {id:'teamaid', name:'奉茶侍女'},
     ]},
   { id:'huishan', title:'挥扇仕女图', directImageUrl:'/paintings/huishan.jpg',
     figures:[
