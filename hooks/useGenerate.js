@@ -33,12 +33,19 @@ function compressSelfie(b64, maxPx = 1200, quality = 0.85) {
     img.src = b64;
   });
 }
+// Hashes the WHOLE string. It used to stop at 2000 chars -- about 1.5KB of
+// JPEG, i.e. header plus the top rows of pixels -- so two different selfies
+// with the same size and a plain wall at the top got the same key and the app
+// served the previous person's portrait. Two independent 32-bit hashes + length
+// keep accidental collisions negligible; cost is a few ms on a ~200KB selfie.
 function quickHash(str) {
-  let h = 0;
-  for (let i = 0; i < Math.min(str.length, 2000); i++) {
-    h = (Math.imul(31, h) + str.charCodeAt(i)) | 0;
+  let h1 = 0x811c9dc5, h2 = 0;
+  for (let i = 0; i < str.length; i++) {
+    const c = str.charCodeAt(i);
+    h1 = Math.imul(h1 ^ c, 16777619);
+    h2 = (Math.imul(31, h2) + c) | 0;
   }
-  return h.toString(36);
+  return `${(h1 >>> 0).toString(36)}${(h2 >>> 0).toString(36)}${str.length.toString(36)}`;
 }
 
 // LocalStorage-backed cache — persists across page reloads and deployments
