@@ -941,6 +941,23 @@ export default async function handler(req, res) {
       }
     }
 
+    // Profile: after the back clip the visible face sits in the front part of
+    // the canvas, but the canvas is centred on the calibrated box -- the face
+    // landed shifted forward (nose past the box). Centre the visible face.
+    if (skinMasked && isProfile) {
+      const { data: cd, info: ci } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
+      let a0 = ci.width, a1 = -1;
+      for (let y = 0; y < ci.height; y++) for (let x = 0; x < ci.width; x++)
+        if (cd[y * ci.width + x] > 128) { if (x < a0) a0 = x; if (x > a1) a1 = x; }
+      const shift = a1 > a0 ? Math.round(ci.width / 2 - (a0 + a1) / 2) : 0;
+      if (shift) {
+        const piece = await sharp(masked).extract({ left: Math.max(0, -shift), top: 0, width: ci.width - Math.abs(shift), height: ci.height }).png().toBuffer();
+        masked = await sharp({ create: { width: ci.width, height: ci.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+          .composite([{ input: piece, left: Math.max(0, shift), top: 0 }]).png().toBuffer();
+        console.log(`[composite:${figureId}] profile recentre: shift=${shift}px`);
+      }
+    }
+
     const hairKeyMode = (process.env.NODE_ENV === 'development' && req.body.debugHairKey)
       || (isFront || skinMasked ? 'off' : 'on');
     if (hairKeyMode !== 'off') {
