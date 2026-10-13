@@ -79,8 +79,6 @@ const PAINTINGS = [
       {id:'girl', name:'拦童少女'},
       {id:'skeleton', name:'提线骷髅'},
     ]},
-  { id:'zhongkui_renyi', title:'任颐·钟馗', directImageUrl:'/paintings/zhongkui_renyi.jpg',
-    figures:[ {id:'zhongkui', name:'钟馗'} ]},
   { id:'zhongkui_fangxun', title:'方薰·钟馗像', directImageUrl:'/paintings/zhongkui_fangxun.jpg',
     figures:[ {id:'zhongkui', name:'钟馗'} ]},
 ];
