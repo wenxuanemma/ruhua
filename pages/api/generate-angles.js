@@ -108,29 +108,12 @@ export default async function handler(req, res) {
   }
 
   try {
-    // Step 1: hair edit on its own. Classical figures wear their hair drawn
-    // back; loose hair over the forehead/cheeks gets cut away by the face-skin
-    // mask in composite and leaves a gap where the painting's own face shows.
-    // Kontext ignores a hairstyle change bundled into the rotate instruction,
-    // so it gets a dedicated, single-purpose edit first. Front figures keep
-    // using the untouched front portrait (`front` below); this only feeds the
-    // angled variants. Falls back to the original portrait on failure.
-    let angleSource = frontPortraitUrl;
-    let hairUpUrl = null;
-    try {
-      hairUpUrl = await runKontext(frontPortraitUrl,
-        'Same person, same gongbi Chinese painting style, same brushwork and silk texture. ' +
-        'Change only the hairstyle: comb all the hair straight back and tie it up into a bun behind the head, ' +
-        'the whole forehead, both temples, both cheeks and both ears completely uncovered, no loose strands on the face. ' +
-        'Keep the face, expression, pose and framing identical.'
-      );
-      angleSource = hairUpUrl;
-      console.log(`[generate-angles] hair-up=${hairUpUrl.slice(0,60)}`);
-    } catch (e) {
-      console.warn('[generate-angles] hair-up edit failed, rotating original portrait:', e.message);
-    }
+    // The front portrait already has its hair combed back (大光明头, requested
+    // in the Seedream prompt), so rotations start straight from it. (A separate
+    // Kontext hair-up edit used to run here; no longer needed.)
+    const angleSource = frontPortraitUrl;
 
-    // Step 2: rotations, in parallel, from the hair-up portrait
+    // Rotations, in parallel
     const [tqUrl, profileUrl] = await Promise.all([
       runKontext(angleSource,
         'Same person, same gongbi Chinese painting style, same fine brushwork and ochre silk texture. ' +
@@ -176,7 +159,6 @@ export default async function handler(req, res) {
     // Return all 5 as base64 data URLs (stored in memory cache by useGenerate)
     const result = {
       front:           frontPortraitUrl,
-      hair_up:         hairUpUrl,      // intermediate, for debugging only
       three_quarter_a: await bufToDataUrl(tqA),
       three_quarter_b: await bufToDataUrl(tqB),
       profile_a:       await bufToDataUrl(profA),

@@ -276,11 +276,10 @@ export function useGenerate() {
       console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
       if (portraitFaceBounds.fromLandmarks) setPortraitLandmarks(portraitFaceBounds);
       // Face-skin segmentation so composite can drop the portrait's own hair
-      // (edges and sides included) instead of guessing by brightness. Only
-      // fetched when composite will use it (angled figures, or skinMask:true) --
-      // front figures keep their shipped rendering and skip the model download.
-      const isFrontFigure = !region?.faceAngle || region.faceAngle === 'front';
-      if (region?.skinMask ?? !isFrontFigure) {
+      // (edges and sides included) instead of guessing by brightness, letting
+      // the painted figure's own hairstyle show. All figures unless
+      // region.skinMask === false.
+      if (region?.skinMask !== false) {
         portraitFaceBounds.skinMaskUrl = (await getFaceSkinMask(selectedPortrait))?.url ?? null;
       }
     }
@@ -335,7 +334,9 @@ export function useGenerate() {
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
     // figure.look (e.g. 'bearded') changes the Seedream portrait, so it gets its
     // own cache slot; figures without a look keep the original `${hash}_${gender}` key.
-    const styleKey = `${selfieHash}_${gender || 'woman'}${figure?.look ? `_${figure.look}` : ''}`;
+    // '_hb' = hair-back (大光明头) portrait prompt; older cached portraits keep
+    // their own keys untouched.
+    const styleKey = `${selfieHash}_${gender || 'woman'}${figure?.look ? `_${figure.look}` : ''}_hb`;
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite

@@ -545,7 +545,7 @@ export default async function handler(req, res) {
     // Whether the face-skin segmentation mask will be applied (see below). Decided
     // up here because the width fit and the three-quarter polygon depend on it.
     const devSkin = process.env.NODE_ENV === 'development' ? req.body.debugSkinMask : undefined;
-    const wantSkinMask = devSkin ? devSkin === 'on' : (region.skinMask ?? !isFront);
+    const wantSkinMask = devSkin ? devSkin === 'on' : (region.skinMask !== false);
     const skinMaskComing = wantSkinMask && !!req.body.faceSkinMaskUrl;
 
     let widthStretch = 1.0;
@@ -756,8 +756,8 @@ export default async function handler(req, res) {
     // crop → resize → stretch the face went through, then intersected with the
     // polygon mask: the portrait's hair drops out wherever it is -- temple,
     // hair edge, down the cheeks -- while eyes/brows stay (they're face skin).
-    // Opt-in per figure via region.skinMask; defaults ON for angled figures and
-    // OFF for front ones so already-shipped front figures render exactly as before.
+    // On for every figure (front too: no fringe from the portrait, the painted
+    // hairstyle shows); region.skinMask === false opts a figure out.
     // Dev override: debugSkinMask 'on' | 'off'.
     let skinMasked = false;
     if (wantSkinMask && req.body.faceSkinMaskUrl) {

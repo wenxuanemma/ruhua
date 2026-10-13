@@ -244,7 +244,11 @@ export default async function handler(req, res) {
           bearded: '成年男子, 留有细长八字胡和山羊胡须, mature man with a thin drooping moustache and a goatee beard, masculine jaw, ',
         };
         const lookPrompt = LOOK_PROMPTS[look] || '';
-        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, ${lookPrompt}gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, facing directly forward frontal view, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, no full body`;
+        // 大光明头: hair combed fully back. Composite cuts the portrait's hair away
+        // with face-skin segmentation so the painted figure's own hairstyle shows;
+        // a fringe or loose strands on the forehead would leave a hole there.
+        const hairPrompt = '大光明头, 头发全部向后梳起, 露出完整光洁的额头, 无刘海, hair fully combed back off the face, entire forehead and hairline visible, no bangs, no loose strands, ';
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, ${lookPrompt}${hairPrompt}gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, facing directly forward frontal view, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, no full body`;
 
         let rawUrl = null;
         for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {
