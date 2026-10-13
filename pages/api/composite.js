@@ -927,12 +927,16 @@ export default async function handler(req, res) {
     // region.widthCalibrated:false opts out.
     if (skinMasked && !isFront && region.widthCalibrated !== false) {
       const { data: ad, info: ai } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
-      let bx0 = ai.width, bx1 = -1;
+      let bx0 = ai.width, bx1 = -1, by0 = ai.height, by1 = -1;
       for (let y = 0; y < ai.height; y++) for (let x = 0; x < ai.width; x++)
-        if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; }
+        if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
       if (bx1 > bx0) {
-        const visW = bx1 - bx0 + 1;
-        const f = Math.max(0.70, Math.min(1.35, targetW / visW));
+        const visW = bx1 - bx0 + 1, visH = by1 - by0 + 1;
+        // Hat figures: the cut-out stops under the brim and fills only ~85% of
+        // the box height, so fitting it to the full box width made the face
+        // too broad (韩熙载 men). Keep the box's proportions instead.
+        const fitW = region.foreheadClip ? Math.min(targetW, Math.round(visH * targetW / targetH)) : targetW;
+        const f = Math.max(0.70, Math.min(1.35, fitW / visW));
         if (Math.abs(f - 1) > 0.02) {
           const newW = Math.max(1, Math.round(pasteS * f));
           const centre = (bx0 + bx1) / 2;
@@ -944,7 +948,7 @@ export default async function handler(req, res) {
           const piece = await sharp(scaled).extract({ left: srcL, top: 0, width: w, height: pasteS }).png().toBuffer();
           masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
             .composite([{ input: piece, left: dstL, top: 0 }]).png().toBuffer();
-          console.log(`[composite:${figureId}] width fit: visible=${visW}px target=${targetW}px factor=${f.toFixed(3)}`);
+          console.log(`[composite:${figureId}] width fit: visible=${visW}px target=${fitW}px factor=${f.toFixed(3)}`);
         }
       }
     }
