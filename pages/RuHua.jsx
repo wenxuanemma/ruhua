@@ -263,7 +263,7 @@ const PAINTINGS = [
     color: '#9a7418',
     figures: [
       { id:'empress', name:'孝慈高皇后', nameEn:'Empress Ma',  descZh:'明太祖结发妻，以贤德持家、劝谏太祖著称，是中国历史上最受敬重的皇后之一。', descEn:'Wife of the founding emperor, revered through history for her wisdom and moderating counsel — one of the most respected empresses in Chinese history.', gender:'woman', rec:true },
-      { id:'emperor', name:'明太祖',     nameEn:'Emperor Taizu (Zhu Yuanzhang)', descZh:'白手起家的开国皇帝，自布衣至天子，一手建立大明王朝，奠定近三百年基业。', descEn:'The founding emperor who rose from a peasant orphan to unite China, establishing the Ming dynasty that would last nearly three centuries.', gender:'man', rec:true },
+      { id:'emperor', name:'明太祖',     nameEn:'Emperor Taizu (Zhu Yuanzhang)', descZh:'白手起家的开国皇帝，自布衣至天子，一手建立大明王朝，奠定近三百年基业。', descEn:'The founding emperor who rose from a peasant orphan to unite China, establishing the Ming dynasty that would last nearly three centuries.', gender:'man', look:'bearded', rec:true },
     ],
     youAre: '孝慈高皇后 · Empress Ma',
     context: 'These formal court portraits, part of the Qing-dynasty Nanxundian collection, depict Ming founder Zhu Yuanzhang and his empress Ma in old age. Unlike flattering idealized portraiture, Ming imperial portraits were prized for unflinching realism — every wrinkle and feature rendered true to life. Held at the National Palace Museum, Taipei.',
@@ -288,7 +288,7 @@ const PAINTINGS = [
     color: '#9a7418',
     figures: [
       { id:'empress', name:'孝恭章皇后', nameEn:'Empress Sun',  descZh:'以美貌与聪慧著称，深受宣宗宠爱，母仪天下，是明代宫廷中颇具传奇色彩的皇后。', descEn:'Renowned for her beauty and intelligence, deeply favored by the emperor — one of the most storied empresses of the Ming court.', gender:'woman', rec:true },
-      { id:'emperor', name:'明宣宗',     nameEn:'Emperor Xuanzong (Zhu Zhanji)', descZh:'文武兼修的守成之君，开创「仁宣之治」，工书善画，是明代少有的艺术家皇帝。', descEn:'A cultured ruler whose reign is remembered as a golden age of stability — himself a skilled painter and calligrapher, rare among emperors.', gender:'man', rec:true },
+      { id:'emperor', name:'明宣宗',     nameEn:'Emperor Xuanzong (Zhu Zhanji)', descZh:'文武兼修的守成之君，开创「仁宣之治」，工书善画，是明代少有的艺术家皇帝。', descEn:'A cultured ruler whose reign is remembered as a golden age of stability — himself a skilled painter and calligrapher, rare among emperors.', gender:'man', look:'bearded', rec:true },
     ],
     youAre: '孝恭章皇后 · Empress Sun',
     context: 'Zhu Zhanji presided over the "Renxuan Reign," an era of peace and prosperity still remembered as a high point of Ming governance. An accomplished painter himself, he is portrayed here beside Empress Sun in the formal Nanxundian court style. Held at the National Palace Museum, Taipei.',
@@ -313,7 +313,7 @@ const PAINTINGS = [
     color: '#9a7418',
     figures: [
       { id:'empress', name:'孝康敬皇后', nameEn:'Empress Zhang', descZh:'明孝宗一生唯一的妻子，二人相守终身，未曾立妃，为历代帝王中所罕见。', descEn:'The only wife Emperor Xiaozong ever took — the two remained devoted to each other for life, with no other consorts, a rarity among emperors.', gender:'woman', rec:true },
-      { id:'emperor', name:'明孝宗',     nameEn:'Emperor Xiaozong (Zhu Youtang)', descZh:'史上罕见的「一夫一妻」皇帝，勤政爱民，开创「弘治中兴」，被誉为明代最专情的帝王。', descEn:'Remembered as history\'s most monogamous emperor — a devoted, hardworking ruler whose reign is called the "Hongzhi Restoration."', gender:'man', rec:true },
+      { id:'emperor', name:'明孝宗',     nameEn:'Emperor Xiaozong (Zhu Youtang)', descZh:'史上罕见的「一夫一妻」皇帝，勤政爱民，开创「弘治中兴」，被誉为明代最专情的帝王。', descEn:'Remembered as history\'s most monogamous emperor — a devoted, hardworking ruler whose reign is called the "Hongzhi Restoration."', gender:'man', look:'bearded', rec:true },
     ],
     youAre: '孝康敬皇后 · Empress Zhang',
     context: 'Zhu Youtang is celebrated as the most faithful emperor in Chinese history — he took no concubines and remained devoted solely to Empress Zhang throughout his reign, an extraordinary choice for a Ming sovereign. Together they preside over what historians call the "Hongzhi Restoration." Held at the National Palace Museum, Taipei.',
@@ -363,7 +363,7 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140806 0%,#4a1a12 24%,#b0604a 50%,#6a2a1e 74%,#140806 100%)',
     color: '#b0604a',
     figures: [
-      { id:'zhongkui', name:'钟馗', nameEn:'Zhong Kui', descZh:'鬓插榴花，虬髯如戟，倚栏而坐、怒目逼视——天下鬼魅见之皆避。', descEn:'A pomegranate flower in his hair, beard bristling like spears, he sits by the railing with a glare that sends every demon fleeing.', gender:'man', look:'zhongkui', rec:true },
+      { id:'zhongkui', name:'钟馗', nameEn:'Zhong Kui', descZh:'鬓插榴花，虬髯如戟，倚栏而坐、怒目逼视——天下鬼魅见之皆避。', descEn:'A pomegranate flower in his hair, beard bristling like spears, he sits by the railing with a glare that sends every demon fleeing.', gender:'man', look:'bearded', rec:true },
     ],
     youAre: '钟馗 · Zhong Kui',
     context: 'Zhong Kui, the scholar who became the king of ghosts, has guarded doorways at New Year and the Duanwu festival for over a thousand years. Ren Yi painted him in 1883 with a pomegranate flower in his hair — a summer emblem against evil. Held at the Metropolitan Museum of Art (CC0).',
@@ -387,7 +387,7 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#100c06 0%,#3a3020 24%,#8a7a5a 50%,#4a3e28 74%,#100c06 100%)',
     color: '#8a7a5a',
     figures: [
-      { id:'zhongkui', name:'钟馗', nameEn:'Zhong Kui', descZh:'头戴乌纱，袍袖宽大，摊开双手似在训诫；身旁小鬼捧碗奉酒，诚惶诚恐。', descEn:'In black gauze cap and sweeping robes, hands raised as if mid-lecture, while a little demon cowers beside him offering a bowl of wine.', gender:'man', look:'zhongkui', rec:true },
+      { id:'zhongkui', name:'钟馗', nameEn:'Zhong Kui', descZh:'头戴乌纱，袍袖宽大，摊开双手似在训诫；身旁小鬼捧碗奉酒，诚惶诚恐。', descEn:'In black gauze cap and sweeping robes, hands raised as if mid-lecture, while a little demon cowers beside him offering a bowl of wine.', gender:'man', look:'bearded', rec:true },
     ],
     youAre: '钟馗 · Zhong Kui',
     context: 'Fang Xun, a leading painter of the mid-Qing, shows Zhong Kui at ease rather than in battle: the demon queller strolls with sword at his hip while a captured little demon serves him wine. Held at the Shanghai Museum.',

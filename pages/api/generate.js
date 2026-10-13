@@ -242,7 +242,6 @@ export default async function handler(req, res) {
         // painted face. Figures without a look get exactly the original prompt.
         const LOOK_PROMPTS = {
           bearded: '成年男子, 留有细长八字胡和山羊胡须, mature man with a thin drooping moustache and a goatee beard, masculine jaw, ',
-          zhongkui: '钟馗, 成年男子, 浓眉怒目, 满腮浓密虬髯, mature man with fierce bushy eyebrows and a full thick curly black beard covering cheeks and chin, ',
         };
         const lookPrompt = LOOK_PROMPTS[look] || '';
         // 大光明头: hair combed fully back. Composite cuts the portrait's hair away
