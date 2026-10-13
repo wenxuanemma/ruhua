@@ -915,7 +915,9 @@ export default async function handler(req, res) {
 
     // Width fit for angled faces: scale the cut-out horizontally so its visible
     // width (alpha bbox) matches the calibrated box width.
-    if (skinMasked && !isFront && region.widthCalibrated) {
+    // Default ON for every angled figure (calibrated widths are hand-checked);
+    // region.widthCalibrated:false opts out.
+    if (skinMasked && !isFront && region.widthCalibrated !== false) {
       const { data: ad, info: ai } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
       let bx0 = ai.width, bx1 = -1;
       for (let y = 0; y < ai.height; y++) for (let x = 0; x < ai.width; x++)
