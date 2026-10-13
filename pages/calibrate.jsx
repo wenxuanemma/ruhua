@@ -243,8 +243,12 @@ export default function Calibrate() {
     if (!imgRef.current) return;
     e.preventDefault();
     const pos = getMousePos(e);
-    const CORNER_HIT = 0.025 / zoom;
-    const DOT_HIT = 0.018 / zoom;
+    // Hit areas in screen pixels. They used to be fractions of the painting's
+    // width/height, so on very wide paintings (调琴啜茗图, 戏婴图) or when zoomed
+    // the skin-sample dot's grab area grew huge and swallowed clicks on the box.
+    const rect = imgRef.current.getBoundingClientRect();
+    const near = (ax, ay, bx, by, px) =>
+      Math.abs((ax - bx) * rect.width) < px && Math.abs((ay - by) * rect.height) < px;
 
     // Check skinSample dot drag first
     for (let fi = 0; fi < painting.figures.length; fi++) {
@@ -252,7 +256,7 @@ export default function Calibrate() {
       const v = getVal(fig.id);
       if (v.skinSample) {
         const { cx, cy } = v.skinSample;
-        if (Math.abs(pos.x - cx) < DOT_HIT && Math.abs(pos.y - cy) < DOT_HIT) {
+        if (near(pos.x, pos.y, cx, cy, 7)) {
           const d = { type:'skinSample', paintingId:painting.id, figId:fig.id,
                       startX:pos.x, startY:pos.y, origBox:{...v} };
           draggingRef.current = d; setDragging(d); return;
@@ -270,7 +274,7 @@ export default function Calibrate() {
         {name:'br', x:v.x+v.w, y:v.y+v.h},
       ];
       for (const c of corners) {
-        if (Math.abs(pos.x-c.x) < CORNER_HIT && Math.abs(pos.y-c.y) < CORNER_HIT) {
+        if (near(pos.x, pos.y, c.x, c.y, 10)) {
           const d = { type:'resize', paintingId:painting.id, figId:fig.id,
                       corner:c.name, startX:pos.x, startY:pos.y, origBox:{...v} };
           draggingRef.current = d; setDragging(d); return;
@@ -282,7 +286,7 @@ export default function Calibrate() {
         draggingRef.current = d; setDragging(d); return;
       }
     }
-  }, [painting]);
+  }, [painting, zoom]);
 
   // Build output
   const allOutput = PAINTINGS.map(p => {
