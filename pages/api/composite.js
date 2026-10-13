@@ -1032,6 +1032,12 @@ export default async function handler(req, res) {
       const dw = Math.min(PW - dx, maskedSize + 2 * pad), dh = Math.min(PH - dy, maskedSize + 2 * pad);
       await dbg('8_result', await sharp(compositedFull).extract({ left: dx, top: dy, width: dw, height: dh }).toBuffer());
       await dbg('0_original', await sharp(paintingBuf).extract({ left: dx, top: dy, width: dw, height: dh }).toBuffer());
+      // Calibration overlay: the region box as an ellipse, rotated like the figure.
+      const ecx = targetX + targetW / 2 - dx, ecy = targetY + targetH / 2 - dy;
+      const ell = Buffer.from(`<svg width="${dw}" height="${dh}"><ellipse cx="${ecx}" cy="${ecy}" rx="${targetW / 2}" ry="${targetH / 2}" ` +
+        `transform="rotate(${region.angle || 0} ${ecx} ${ecy})" fill="none" stroke="#ffd400" stroke-width="${Math.max(1, Math.round(dw / 150))}"/></svg>`);
+      await dbg('0_calibration', await sharp(paintingBuf).extract({ left: dx, top: dy, width: dw, height: dh })
+        .composite([{ input: ell }]).toBuffer());
     }
 
     // ── Step 5: Profile crop (from full-res composited) ───────────────────────

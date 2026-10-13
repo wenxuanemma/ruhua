@@ -327,8 +327,8 @@ const PAINTINGS = [
     color: '#8a6a28',
     figures: [
       { id:'mother', name:'哺乳妇人', nameEn:'Nursing Mother', descZh:'倚坐货郎担旁，怀抱婴孩哺乳，静静望着眼前的骷髅傀儡戏——生与死同在一幅画中，唯她神色从容。', descEn:'Seated beside the peddler\'s cart nursing her baby, she watches the skeleton puppet show in perfect calm — life and death share the frame, and only she seems unbothered.', gender:'woman', rec:true },
-      { id:'girl', name:'拦童少女', nameEn:'Girl Reaching for the Child', descZh:'TODO', descEn:'TODO', gender:'woman', rec:true },
-      { id:'skeleton', name:'提线骷髅', nameEn:'Skeleton Puppeteer', descZh:'TODO', descEn:'TODO', gender:'woman', rec:true },
+      { id:'girl', name:'拦童少女', nameEn:'Girl Reaching for the Child', descZh:'张开双臂迎向爬行的孩童，似要拦住他扑向那具跳动的小骷髅——画中唯一面露关切之人。', descEn:'Arms open toward the crawling child as if to stop him reaching the little dancing skeleton — the only face in the scene that shows concern.', gender:'woman', rec:true },
+      { id:'skeleton', name:'提线骷髅', nameEn:'Skeleton Puppeteer', descZh:'头戴纱幞、身着长衫的大骷髅，席地操弄小骷髅傀儡——以你的面容，隐于白骨之下，演一出生死幻戏。', descEn:'A great skeleton in gauze cap and robe, working a tiny skeleton on strings — your face glimpsed beneath the bones, staging the old play of life and death.', gender:'man', rec:true },
     ],
     youAre: '哺乳妇人 · Nursing Mother',
     context: 'A large skeleton in a gauze cap works a marionette of a small skeleton, while a crawling child reaches for it and a young woman moves to hold him back. Southern Song court painter Li Song set life and death side by side on this round silk fan. Held at the Palace Museum, Beijing.',
