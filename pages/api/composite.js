@@ -513,12 +513,15 @@ export default async function handler(req, res) {
         const out = Buffer.alloc(finf.width * finf.height * 3);
         for (let p = 0; p < fLabAll.length; p++) {
           const [L, A, B] = fLabAll[p];
-          // a/b floored just below neutral: eye whites are far less yellow than
-          // skin, and on pale paintings the shift pushed them into blue/green.
+          // a/b floored just below neutral -- or just below the painting's own
+          // skin when that is itself cool (调琴啜茗图's bluish-white faces):
+          // eye whites are far less yellow than skin and would otherwise be
+          // pushed into blue/green, but the face must be able to match a cool
+          // painted skin.
           const rgb = labToRgb(
             Math.max(0, Math.min(100, (pL + (L - fL) * kL) * bright)),
-            Math.max(Math.min(A, 0), -1, pA + (A - fA) * kA),
-            Math.max(Math.min(B, 0), -1, pB + (B - fB) * kB));
+            Math.max(Math.min(A, 0), Math.min(-1, pA - 4), pA + (A - fA) * kA),
+            Math.max(Math.min(B, 0), Math.min(-1, pB - 4), pB + (B - fB) * kB));
           out[p * 3] = rgb[0]; out[p * 3 + 1] = rgb[1]; out[p * 3 + 2] = rgb[2];
         }
         colorFace = await sharp(out, { raw: { width: finf.width, height: finf.height, channels: 3 } }).png().toBuffer();
