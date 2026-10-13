@@ -62,12 +62,19 @@ const PAINTINGS = [
       {id:'empress', name:'孝康敬皇后'},
       {id:'emperor', name:'明孝宗'},
     ]},
+  { id:'kulou', title:'骷髅幻戏图', directImageUrl:'/paintings/kulou.jpg',
+    figures:[
+      {id:'mother', name:'哺乳妇人'},
+      {id:'girl', name:'拦童少女'},
+      {id:'skeleton', name:'提线骷髅'},
+    ]},
 ];
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
 
 export default function Calibrate() {
   const [pIdx, setPIdx] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [vals, setVals] = useState({});   // {paintingId_figureId: {x,y,w,h}}
   const [imgUrl, setImgUrl] = useState('');
   const [imgSize, setImgSize] = useState({w:1,h:1});
@@ -123,6 +130,7 @@ export default function Calibrate() {
   const onImgLoad = () => {
     if (imgRef.current) setImgSize({w:imgRef.current.offsetWidth, h:imgRef.current.offsetHeight});
   };
+  useEffect(() => { onImgLoad(); }, [zoom]);
 
   const getVal = (figId) => {
     const key = `${painting.id}_${figId}`;
@@ -220,8 +228,8 @@ export default function Calibrate() {
     if (!imgRef.current) return;
     e.preventDefault();
     const pos = getMousePos(e);
-    const CORNER_HIT = 0.025;
-    const DOT_HIT = 0.018;
+    const CORNER_HIT = 0.025 / zoom;
+    const DOT_HIT = 0.018 / zoom;
 
     // Check skinSample dot drag first
     for (let fi = 0; fi < painting.figures.length; fi++) {
@@ -293,12 +301,23 @@ export default function Calibrate() {
         ))}
       </div>
 
+      {/* Zoom */}
+      <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,fontSize:11,color:C.dim}}>
+        zoom:
+        {[1,2,3,4,6].map(z=>(
+          <button key={z} style={B(z===zoom)} onClick={()=>setZoom(z)}>{z}×</button>
+        ))}
+        {zoom>1 && <span>scroll inside the frame to pan</span>}
+      </div>
+
       {/* Image + boxes */}
-      <div style={{position:'relative',display:'inline-block',marginBottom:12}}
+      <div style={{maxWidth:'100%',maxHeight:zoom>1?'80vh':'none',overflow:zoom>1?'auto':'visible',marginBottom:12}}>
+      <div style={{position:'relative',display:'inline-block'}}
            onMouseDown={onImgMouseDown}>
         {imgUrl
           ? <img ref={imgRef} src={imgUrl} alt={painting.title}
-              style={{display:'block',maxWidth:'100%',maxHeight:500,
+              style={{display:'block',
+                      ...(zoom>1 ? {height:500*zoom,maxWidth:'none'} : {maxWidth:'100%',maxHeight:500}),
                       border:'1px solid rgba(201,168,76,0.2)',userSelect:'none'}}
               onLoad={onImgLoad} draggable={false}/>
           : <div style={{width:500,height:300,background:'#18110a',
@@ -381,6 +400,7 @@ export default function Calibrate() {
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Legend + Angle sliders */}
