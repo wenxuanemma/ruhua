@@ -158,6 +158,7 @@ const PAINTINGS = [
       { id:'stretcher', name:'展练仕女', nameEn:'Lady Stretching Silk', descZh:'执绢一端，身子微微后仰，与同伴一同拉展新练的白绢。', descEn:'Holding one end of the bolt and leaning back, she pulls the freshly pounded silk taut with her companion.', gender:'woman', rec:true },
       { id:'ironer', name:'熨绢仕女', nameEn:'Lady Ironing Silk', descZh:'低首执熨斗，细细熨平绢面，神情专注而安静。', descEn:'Head bent over the iron, she smooths the silk with quiet, careful attention.', gender:'woman', rec:true },
       { id:'fanner', name:'扇火侍女', nameEn:'Maid Fanning the Brazier', descZh:'蹲坐炭盆旁，手执团扇扇火，为熨绢备好炭火。', descEn:'Crouched by the brazier with a round fan, keeping the coals hot for the ironing.', gender:'woman', rec:true },
+      { id:'pounder', name:'捣练仕女', nameEn:'Lady Pounding Silk', descZh:'倚着捣杵小憩，额间一点花钿，眉眼含笑，是捣练劳作间最闲适的一瞬。', descEn:'Leaning on her pestle for a breather, a flower mark on her brow and a smile in her eyes — the most relaxed moment in the work of pounding silk.', gender:'woman', rec:true },
     ],
     youAre: '熨绢仕女 · Lady of the Silk Chamber',
     context: 'Zhang Xuan\'s original is lost; this Song dynasty copy by Emperor Huizong depicts three groups of Tang court ladies processing newly woven silk — pounding, threading, and ironing. Held at the Museum of Fine Arts, Boston.',

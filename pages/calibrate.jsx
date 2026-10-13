@@ -37,6 +37,7 @@ const PAINTINGS = [
       {id:'stretcher', name:'展练仕女'},
       {id:'ironer', name:'熨绢仕女'},
       {id:'fanner', name:'扇火侍女'},
+      {id:'pounder', name:'捣练仕女'},
     ]},
   { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
     figures:[
