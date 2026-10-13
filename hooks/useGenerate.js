@@ -387,9 +387,12 @@ export function useGenerate() {
         styled = (cachedPortraitSet?.front) || cachedStyled;
         setStyledUrl(styled);
 
-        // If cached value is just a front URL string (loaded from localStorage after reload),
-        // regenerate angle portraits via Kontext now (no Seedream needed)
-        if (needAngles && !cachedPortraitSet && styled) {
+        // Regenerate angle portraits via Kontext (no Seedream needed) when the
+        // cache only has the front: either a front URL string loaded from
+        // localStorage after a reload, or a { front } set cached by a painting
+        // with only front figures earlier this session -- without the second
+        // check, angled figures silently got the front portrait.
+        if (needAngles && !cachedPortraitSet?.three_quarter_a && styled) {
           console.log('[angles] Cache hit but no angle portraits — regenerating via Kontext...');
           try {
             const anglesRes = await fetch('/api/generate-angles', {
