@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
+import { checkSelfieFace } from '../lib/detectFaceClient';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
@@ -724,9 +725,21 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
   const [camState, setCamState] = useState(lastSelfie ? 'done' : 'starting');
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(lastSelfie || null);
+  // No-face guard: 'checking' | 'ok' | 'none' | 'small'. Blocks 入画 (and the
+  // Seedream call + credit behind it) when the photo has no usable face.
+  const [faceCheck, setFaceCheck] = useState('checking');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+
+  useEffect(() => {
+    if (!capturedImg) return;
+    let live = true;
+    setFaceCheck('checking');
+    checkSelfieFace(capturedImg).then(r => { if (live) setFaceCheck(r.ok ? 'ok' : r.reason); });
+    return () => { live = false; };
+  }, [capturedImg]);
+  const faceBlocked = faceCheck === 'none' || faceCheck === 'small';
 
   // Start front camera on mount — skip if already showing cached selfie
   useEffect(() => {
@@ -1003,21 +1016,32 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
           {camState === 'done' && (
             <div className="fade-a" style={{
               position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)',
-              background:'rgba(12,9,4,.75)', border:`1px solid ${C.gold}`,
-              color:C.gold, fontFamily:F.serif, fontSize:11,
+              background:'rgba(12,9,4,.75)', border:`1px solid ${faceBlocked ? C.vermillion : C.gold}`,
+              color: faceBlocked ? C.vermillion : C.gold, fontFamily:F.serif, fontSize:11,
               padding:'4px 14px', letterSpacing:'.12em', whiteSpace:'nowrap',
               zIndex:5,
             }}>
-              {capturedImg === lastSelfie ? '↩ 上次自拍' : '✓ 自拍已捕捉'}
+              {faceBlocked ? '✕ 未检测到人脸' : capturedImg === lastSelfie ? '↩ 上次自拍' : '✓ 自拍已捕捉'}
             </div>
           )}
         </div>
 
         {/* Pose hint */}
         <div style={{ width:'100%', maxWidth:300, marginTop:11 }}>
-          <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
-            ✓ 请保持正面朝向镜头以获得最佳效果
-          </div>
+          {camState === 'done' && faceBlocked ? (
+            <div style={{ fontFamily:F.serif, fontSize:12, color:C.vermillion, lineHeight:1.65 }}>
+              {faceCheck === 'small'
+                ? '脸离镜头太远了，请靠近一些、正对镜头重拍'
+                : '没有检测到人脸，请正对镜头、在光线充足处重拍'}
+              <div style={{ fontFamily:F.latin, fontSize:10, color:C.silkFaint }}>
+                {faceCheck === 'small' ? 'Your face is too small in the photo — move closer and retake.' : 'No face detected — face the camera in good light and retake.'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
+              ✓ 请保持正面朝向镜头以获得最佳效果
+            </div>
+          )}
         </div>
 
         {/* Buttons */}
@@ -1042,12 +1066,16 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
             </>
           ) : (
             <>
-              <button onClick={() => capturedImg === lastSelfie ? onConfirmWithSelfie(lastSelfie) : onConfirm()} className="btn" style={{
-                background:C.vermillion, color:'#f5e8c4',
+              <button
+                disabled={faceCheck !== 'ok'}
+                onClick={() => { if (faceCheck !== 'ok') return; capturedImg === lastSelfie ? onConfirmWithSelfie(lastSelfie) : onConfirm(); }}
+                className="btn" style={{
+                background: faceCheck === 'ok' ? C.vermillion : 'rgba(191,36,41,.3)', color:'#f5e8c4',
                 fontFamily:F.brush, fontSize:20, padding:'14px', letterSpacing:'.35em',
-                boxShadow:`0 4px 22px rgba(191,36,41,.32)`,
+                boxShadow: faceCheck === 'ok' ? `0 4px 22px rgba(191,36,41,.32)` : 'none',
+                cursor: faceCheck === 'ok' ? 'pointer' : 'default',
               }}>
-                入画 →
+                {faceCheck === 'checking' ? '检测中…' : '入画 →'}
               </button>
               <button onClick={handleRetake} className="btn" style={{
                 background:'transparent', border:`1px solid ${C.border}`,
