@@ -768,18 +768,22 @@ export default async function handler(req, res) {
         // silhouette (and the hairline lift leaves a corner + notch at the
         // temple) -- the cut edge comes out concave even though the face is
         // convex. When face-skin segmentation is coming, let it define the
-        // far-side edge: open the polygon across the whole far half (nose →
-        // canvas edge, top of the mask → chin). The near side keeps the landmark
+        // far-side edge: open the polygon across the whole far half (face
+        // midline → canvas edge, top of the mask → chin). The near side keeps the landmark
         // contour, which also keeps the ear out. Hat figures keep the raw top
         // (under the brim); others use the lifted hairline top.
         if (!isFront && skinMaskComing) {
           const noseX = lmPx(landmarks[1]);
-          const farIsLeft = noseX < (lmPx(landmarks[234]) + lmPx(landmarks[454])) / 2;
+          const midX = (lmPx(landmarks[234]) + lmPx(landmarks[454])) / 2;
+          const farIsLeft = noseX < midX;
           const rawTop = Math.min(...FACE_OVAL.map(i => lmPy(landmarks[i])));
           const browY = (lmPy(landmarks[105]) + lmPy(landmarks[334])) / 2;
           const topY = region.foreheadClip ? rawTop : browY - (browY - rawTop) * 2;
           const chinY = lmPy(landmarks[152]);
-          const rx = farIsLeft ? 0 : noseX, rw = farIsLeft ? noseX : pasteS - noseX;
+          // Open up to the face midline, not just the nose tip: on a strongly
+          // turned face the nose sticks out past the landmark contour, and a
+          // nose-wide box left a transparent crack between it and the contour.
+          const rx = farIsLeft ? 0 : midX, rw = farIsLeft ? midX : pasteS - midX;
           svgContent += `<rect x="${rx.toFixed(1)}" y="${topY.toFixed(1)}" width="${rw.toFixed(1)}" height="${(chinY - topY).toFixed(1)}" fill="white"/>`;
           console.log(`[composite:${figureId}] mask: far side (${farIsLeft ? 'left' : 'right'}) from segmentation`);
         }
@@ -880,6 +884,32 @@ export default async function handler(req, res) {
         console.log(`[composite:${figureId}] face-skin mask applied`);
       } catch (e) {
         console.warn(`[composite:${figureId}] face-skin mask skipped:`, e.message);
+      }
+    }
+
+    // Profile: segmentation labels the ear as face skin, so the portrait's ear
+    // landed on the painted figure's hair. Keep only the calibrated face width
+    // measured back from the front edge (nose/lips); everything further back --
+    // the ear -- fades out over a few pixels.
+    if (skinMasked && isProfile) {
+      const facesRight = region.faceAngle === 'profile_right';
+      const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+      let front = facesRight ? -1 : mi.width;
+      for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++)
+        if (md[(y * mi.width + x) * mi.channels + 3] > 128)
+          front = facesRight ? Math.max(front, x) : Math.min(front, x);
+      if (front >= 0 && front < mi.width) {
+        const keep = targetW, feather = Math.max(2, Math.round(targetW * 0.08));
+        let cut = 0;
+        for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++) {
+          const depth = facesRight ? front - x : x - front; // distance back from the front edge
+          if (depth <= keep - feather) continue;
+          const i = (y * mi.width + x) * mi.channels + 3;
+          const k = depth >= keep ? 0 : (keep - depth) / feather;
+          if (md[i]) { md[i] = Math.round(md[i] * k); cut++; }
+        }
+        masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+        console.log(`[composite:${figureId}] profile back clip: front=${front} keep=${keep}px cut=${cut}px`);
       }
     }
 
