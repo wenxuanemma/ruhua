@@ -79,6 +79,10 @@ const PAINTINGS = [
       {id:'girl', name:'拦童少女'},
       {id:'skeleton', name:'提线骷髅'},
     ]},
+  { id:'zhongkui_renyi', title:'任颐·钟馗', directImageUrl:'/paintings/zhongkui_renyi.jpg',
+    figures:[ {id:'zhongkui', name:'钟馗'} ]},
+  { id:'zhongkui_fangxun', title:'方薰·钟馗像', directImageUrl:'/paintings/zhongkui_fangxun.jpg',
+    figures:[ {id:'zhongkui', name:'钟馗'} ]},
 ];
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
