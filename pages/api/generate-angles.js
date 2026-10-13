@@ -18,6 +18,17 @@
 // }
 
 import sharp from 'sharp';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+// Dev-only disk cache: same front portrait → same angle set, no Kontext spend
+// while testing/calibrating. Keyed by a hash of the exact frontPortraitUrl.
+// Lives in .dev-cache/ (gitignored); never active outside `next dev`.
+const DEV_CACHE = process.env.NODE_ENV === 'development'
+  ? path.join(process.cwd(), '.dev-cache', 'angles') : null;
+const cacheFile = (url) =>
+  path.join(DEV_CACHE, crypto.createHash('sha1').update(url).digest('hex').slice(0, 16) + '.json');
 
 export const config = { api: { bodyParser: { sizeLimit: '12mb' } } };
 
@@ -91,15 +102,42 @@ export default async function handler(req, res) {
   const { frontPortraitUrl } = req.body;
   if (!frontPortraitUrl) return res.status(400).json({ error: 'frontPortraitUrl required' });
 
+  if (DEV_CACHE && fs.existsSync(cacheFile(frontPortraitUrl))) {
+    console.log(`[generate-angles] dev cache HIT ${path.basename(cacheFile(frontPortraitUrl))}`);
+    return res.status(200).json(JSON.parse(fs.readFileSync(cacheFile(frontPortraitUrl), 'utf8')));
+  }
+
   try {
-    // Run both Kontext calls in parallel
+    // Step 1: hair edit on its own. Classical figures wear their hair drawn
+    // back; loose hair over the forehead/cheeks gets cut away by the face-skin
+    // mask in composite and leaves a gap where the painting's own face shows.
+    // Kontext ignores a hairstyle change bundled into the rotate instruction,
+    // so it gets a dedicated, single-purpose edit first. Front figures keep
+    // using the untouched front portrait (`front` below); this only feeds the
+    // angled variants. Falls back to the original portrait on failure.
+    let angleSource = frontPortraitUrl;
+    let hairUpUrl = null;
+    try {
+      hairUpUrl = await runKontext(frontPortraitUrl,
+        'Same person, same gongbi Chinese painting style, same brushwork and silk texture. ' +
+        'Change only the hairstyle: comb all the hair straight back and tie it up into a bun behind the head, ' +
+        'the whole forehead, both temples, both cheeks and both ears completely uncovered, no loose strands on the face. ' +
+        'Keep the face, expression, pose and framing identical.'
+      );
+      angleSource = hairUpUrl;
+      console.log(`[generate-angles] hair-up=${hairUpUrl.slice(0,60)}`);
+    } catch (e) {
+      console.warn('[generate-angles] hair-up edit failed, rotating original portrait:', e.message);
+    }
+
+    // Step 2: rotations, in parallel, from the hair-up portrait
     const [tqUrl, profileUrl] = await Promise.all([
-      runKontext(frontPortraitUrl,
+      runKontext(angleSource,
         'Same person, same gongbi Chinese painting style, same fine brushwork and ochre silk texture. ' +
         'Rotate the face to a three-quarter angle view. Keep all facial features, identity, and painting style identical. ' +
         'Only change the face angle.'
       ),
-      runKontext(frontPortraitUrl,
+      runKontext(angleSource,
         'Same person, same gongbi Chinese painting style, same fine brushwork and ochre silk texture. ' +
         'Rotate face to strict 90-degree side profile. Only one side of face visible, far eye completely hidden, ear visible. ' +
         'Keep painting style identical.'
@@ -136,13 +174,21 @@ export default async function handler(req, res) {
     console.log(`[generate-angles] direction validation: 3q=${tqDir||'unknown'} profile=${profileDir||'unknown'}`);
 
     // Return all 5 as base64 data URLs (stored in memory cache by useGenerate)
-    return res.status(200).json({
+    const result = {
       front:           frontPortraitUrl,
+      hair_up:         hairUpUrl,      // intermediate, for debugging only
       three_quarter_a: await bufToDataUrl(tqA),
       three_quarter_b: await bufToDataUrl(tqB),
       profile_a:       await bufToDataUrl(profA),
       profile_b:       await bufToDataUrl(profB),
-    });
+    };
+    if (DEV_CACHE) {
+      try {
+        fs.mkdirSync(DEV_CACHE, { recursive: true });
+        fs.writeFileSync(cacheFile(frontPortraitUrl), JSON.stringify(result));
+      } catch (e) { console.warn('[generate-angles] dev cache write failed:', e.message); }
+    }
+    return res.status(200).json(result);
 
   } catch (err) {
     const msg = err?.message || JSON.stringify(err) || 'unknown error';
