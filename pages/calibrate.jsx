@@ -17,6 +17,10 @@ const PAINTINGS = [
       {id:'guest',  name:'宾客'},
       {id:'host',   name:'韩熙载'},
       {id:'dancer', name:'乐伎'},
+      {id:'official', name:'侍立官员'},
+      {id:'attendant', name:'执杖宾客'},
+      {id:'lady', name:'白衣侍女'},
+      {id:'maid', name:'蓝衣少女'},
     ]},
   { id:'gongle', title:'宫乐图', directImageUrl:'/paintings/gongle.jpg',
     figures:[
@@ -24,11 +28,15 @@ const PAINTINGS = [
       {id:'guzheng',  name:'古筝仕女'},
       {id:'clapper',  name:'执拍侍女'},
       {id:'listener', name:'听乐仕女'},
+      {id:'maid', name:'侍立宫女'},
     ]},
   { id:'daolian', title:'捣练图', directImageUrl:'/paintings/daolian.jpg',
     figures:[
       {id:'girl',     name:'粉衣小童'},
       {id:'threader', name:'穿针仕女'},
+      {id:'stretcher', name:'展练仕女'},
+      {id:'ironer', name:'熨绢仕女'},
+      {id:'fanner', name:'扇火侍女'},
     ]},
   { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
     figures:[
@@ -41,11 +49,14 @@ const PAINTINGS = [
     figures:[
       {id:'lady',   name:'调琴仕女'},
       {id:'seated', name:'静坐仕女'},
+      {id:'attendant', name:'托盘侍女'},
+      {id:'teamaid', name:'奉茶侍女'},
     ]},
   { id:'huishan', title:'挥扇仕女图', directImageUrl:'/paintings/huishan.jpg',
     figures:[
       {id:'center', name:'执瓶仕女'},
       {id:'seated', name:'倚坐仕女'},
+      {id:'dreamer', name:'支颐仕女'},
     ]},
   { id:'mingdaidihou_taizu', title:'明太祖 · 孝慈高皇后', directImageUrl:'/paintings/mingdaidihou_taizu.jpg',
     figures:[
