@@ -347,9 +347,11 @@ export function useGenerate() {
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
     // figure.look (e.g. 'bearded') changes the Seedream portrait, so it gets its
     // own cache slot; figures without a look keep the original `${hash}_${gender}` key.
-    // '_hb' = hair-back (大光明头) portrait prompt; older cached portraits keep
-    // their own keys untouched.
-    const styleKey = `${selfieHash}_${gender || 'woman'}${figure?.look ? `_${figure.look}` : ''}_hb`;
+    // Suffix = portrait pipeline version; bump it whenever the Seedream prompt or
+    // fallback chain changes so stale portraits regenerate. 'p3': hair up,
+    // no glasses, plain background, no InstantID fallback (an InstantID
+    // portrait cached under the old key kept showing on the test iPhone).
+    const styleKey = `${selfieHash}_${gender || 'woman'}${figure?.look ? `_${figure.look}` : ''}_p3`;
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
