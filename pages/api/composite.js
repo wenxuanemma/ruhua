@@ -928,49 +928,29 @@ export default async function handler(req, res) {
       }
     }
 
-    // Width fit for angled faces: scale the cut-out horizontally so its visible
-    // width (alpha bbox) matches the calibrated box width.
-    // Default ON for every angled figure (calibrated widths are hand-checked);
-    // region.widthCalibrated:false opts out.
-    if (skinMasked && !isFront && region.widthCalibrated !== false) {
+    // Fit angled faces to the calibrated box: scale the VISIBLE cut-out (alpha
+    // bbox) to the box's width and height, then centre it on the canvas, which
+    // is pasted centred on the box. Width/height used to be handled separately
+    // and the canvas (not the face) was centred, so faces came out too
+    // wide/narrow or sat high with the painted chin showing below
+    // (韩熙载 men), and profiles landed shifted forward.
+    // region.widthCalibrated:false keeps the natural width.
+    if (skinMasked && !isFront) {
       const { data: ad, info: ai } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
       let bx0 = ai.width, bx1 = -1, by0 = ai.height, by1 = -1;
       for (let y = 0; y < ai.height; y++) for (let x = 0; x < ai.width; x++)
         if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
-      if (bx1 > bx0) {
+      if (bx1 > bx0 && by1 > by0) {
         const visW = bx1 - bx0 + 1, visH = by1 - by0 + 1;
-        const fitW = targetW;
-        const f = Math.max(0.70, Math.min(1.35, fitW / visW));
-        if (Math.abs(f - 1) > 0.02) {
-          const newW = Math.max(1, Math.round(pasteS * f));
-          const centre = (bx0 + bx1) / 2;
-          const scaled = await sharp(masked).resize(newW, pasteS, { fit: 'fill' }).png().toBuffer();
-          // Keep the visible face centred where it was on the pasteS canvas.
-          const shift = Math.round(centre - centre * f);
-          const left = shift, srcL = Math.max(0, -left), dstL = Math.max(0, left);
-          const w = Math.min(newW - srcL, pasteS - dstL);
-          const piece = await sharp(scaled).extract({ left: srcL, top: 0, width: w, height: pasteS }).png().toBuffer();
-          masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-            .composite([{ input: piece, left: dstL, top: 0 }]).png().toBuffer();
-          console.log(`[composite:${figureId}] width fit: visible=${visW}px target=${fitW}px factor=${f.toFixed(3)}`);
-        }
-      }
-    }
-
-    // Profile: after the back clip the visible face sits in the front part of
-    // the canvas, but the canvas is centred on the calibrated box -- the face
-    // landed shifted forward (nose past the box). Centre the visible face.
-    if (skinMasked && isProfile) {
-      const { data: cd, info: ci } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
-      let a0 = ci.width, a1 = -1;
-      for (let y = 0; y < ci.height; y++) for (let x = 0; x < ci.width; x++)
-        if (cd[y * ci.width + x] > 128) { if (x < a0) a0 = x; if (x > a1) a1 = x; }
-      const shift = a1 > a0 ? Math.round(ci.width / 2 - (a0 + a1) / 2) : 0;
-      if (shift) {
-        const piece = await sharp(masked).extract({ left: Math.max(0, -shift), top: 0, width: ci.width - Math.abs(shift), height: ci.height }).png().toBuffer();
-        masked = await sharp({ create: { width: ci.width, height: ci.height, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-          .composite([{ input: piece, left: Math.max(0, shift), top: 0 }]).png().toBuffer();
-        console.log(`[composite:${figureId}] profile recentre: shift=${shift}px`);
+        const fx = region.widthCalibrated === false ? 1 : Math.max(0.70, Math.min(1.35, targetW / visW));
+        const fy = Math.max(0.80, Math.min(1.25, targetH / visH));
+        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * fx)));
+        const newH = Math.min(pasteS, Math.max(1, Math.round(visH * fy)));
+        const piece = await sharp(masked).extract({ left: bx0, top: by0, width: visW, height: visH })
+          .resize(newW, newH, { fit: 'fill' }).png().toBuffer();
+        masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+          .composite([{ input: piece, left: Math.round((pasteS - newW) / 2), top: Math.round((pasteS - newH) / 2) }]).png().toBuffer();
+        console.log(`[composite:${figureId}] box fit: visible=${visW}x${visH} -> ${newW}x${newH} (box ${targetW}x${targetH})`);
       }
     }
 
