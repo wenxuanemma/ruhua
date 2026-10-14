@@ -10,13 +10,6 @@ export const config = {
   maxDuration: 300,
 };
 
-const DYNASTY_STYLE = {
-  '北宋': 'Northern Song dynasty court painting, gongbi fine brushwork, mineral pigments on silk, warm ochre tones',
-  '五代': 'Five Dynasties period court painting, fine brushwork on silk, muted warm palette',
-  '唐':   'Tang dynasty figure painting, mineral pigments on silk, rich warm court colors, flowing robes',
-  '东晋': 'Eastern Jin dynasty handscroll, flowing ink line work, muted silk tones',
-};
-
 // -- Credits pre-flight check ------------------------------------------------
 // A READ-ONLY balance check, not a deduction -- the actual deduction still
 // happens in composite.js, only after a delivered image (see the Option B
@@ -187,37 +180,6 @@ export default async function handler(req, res) {
     return res.status(402).json({ error: 'insufficient_credits', reason: 'precheck_failed' });
   }
 
-  const styleDesc = DYNASTY_STYLE[dynasty] || 'classical Chinese court painting, mineral pigments on silk';
-  const genderPrompt = gender === 'man'
-    ? 'man, male face, masculine features'
-    : 'woman, female face, feminine features';
-  const FIGURE_PROMPTS = {
-    // 清明上河图
-    qingming_scholar:  'Song dynasty traveling scholar, simple dark robes, plain headwrap',
-    qingming_merchant: 'Song dynasty market merchant, plain merchant robes',
-    qingming_boatman:  'Song dynasty river boatman, simple working clothes, weathered face',
-    // 韩熙载夜宴图
-    hanxizai_guest:    'Five Dynasties period nobleman, black gauze official cap, dark formal robes',
-    hanxizai_host:     'Five Dynasties period aristocrat, black gauze cap, dignified expression',
-    hanxizai_dancer:   'Five Dynasties period court dancer, colorful silk robes, elegant posture',
-    // 步辇图
-    bunianta_official: 'Tang dynasty court official, red official robes, black gauze cap',
-    bunianta_envoy:    'Tibetan envoy in Tang court, distinctive ethnic robes and headdress',
-    // 虢国夫人游春图
-    guoguo_lady:       'Tang dynasty noblewoman, elaborate silk robes, elegant high hairstyle',
-    guoguo_attendant:  'Tang dynasty lady attendant, fine silk robes, graceful bearing',
-    guoguo_rider:      'Tang dynasty mounted escort, riding robes, outdoor setting',
-    // 洛神赋图
-    luoshen_cao:       'Eastern Jin period nobleman poet, flowing robes, contemplative expression',
-    luoshen_attendant: "nobleman's attendant in Eastern Jin period, simple elegant robes",
-    // 宫乐图
-    gongle_listener:   'Tang dynasty court lady, elaborate silk robes, listening to music',
-    gongle_musician:   'Tang dynasty court musician playing pipa, colorful silk robes',
-    gongle_serving:    'Tang dynasty serving lady, simple silk robes, graceful bearing',
-  };
-
-  const figureKey = `${paintingId}_${figureId}`;
-  const figureDesc = FIGURE_PROMPTS[figureKey] || 'classical Chinese court figure, elegant robes';
 
   // Use selfie directly — face bounds pre-crop disabled temporarily for debugging
   let faceImage = selfie;
@@ -317,99 +279,11 @@ export default async function handler(req, res) {
       }
     }
 
-    const LOCAL_SERVER = process.env.LOCAL_INFERENCE_URL;
-    if (LOCAL_SERVER) {
-      try {
-        const controller = new AbortController();
-        const loraTimeout = setTimeout(() => controller.abort(), 55000);
-
-        const genderNeg = gender === 'man'
-          ? 'female, woman, feminine'
-          : 'male, man, masculine, beard, mustache, stubble, facial hair';
-
-        const loraRes = await fetch(`${LOCAL_SERVER}/generate`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          signal: controller.signal,
-          body: JSON.stringify({
-            prompt: `gongbi_portrait, ${gender === 'man' ? 'man' : 'woman'}, Tang dynasty Chinese court painting, gongbi fine line brushwork, flat 2D matte warm skin, warm ochre and vermillion mineral pigments, no subsurface scattering, no specular highlights, no shadows, flat even lighting, painted on silk, traditional Chinese figure painting`,
-            negative_prompt: `photorealistic, photograph, 3d render, 3d cg, subsurface scattering, specular highlight, shadow, modern, anime, oil painting, western art, european, japanese style, ${genderNeg}`,
-            init_image: faceImage,
-            strength: 0.60,
-            steps: 30,
-            guidance: 8.0,
-            width: 640,
-            height: 640,
-            seed: -1,
-          }),
-        });
-        clearTimeout(loraTimeout);
-
-        if (loraRes.ok) {
-          const buf = Buffer.from(await loraRes.arrayBuffer());
-          let outputUrl = `data:image/png;base64,${buf.toString('base64')}`;
-
-          try {
-            const sharp = (await import('sharp')).default;
-            const meta = await sharp(buf).metadata();
-
-            // Use selfie face detection box to crop LoRA output
-            // (face position should correspond between selfie and LoRA output)
-            // Square crop centred on image - face position matches between selfie and LoRA output
-            let cropX, cropY, cropW, cropH;
-            {
-              const size = Math.round(meta.height * 0.75);
-              cropX = Math.max(0, Math.round((meta.width - size) / 2) + Math.round(meta.width * 0.08));
-              cropY = 0;
-              cropW = Math.min(size, meta.width  - cropX);
-              cropH = Math.min(size, meta.height - cropY);
-            }
-
-            const cropped = await sharp(buf)
-              .extract({ left: cropX, top: cropY, width: cropW, height: cropH })
-              .resize(640, 640, { fit: 'cover', position: 'centre' })
-              .jpeg({ quality: 95 })
-              .toBuffer();
-            outputUrl = `data:image/jpeg;base64,${cropped.toString('base64')}`;
-          } catch (e) {
-            console.warn('Face crop failed:', e.message);
-          }
-
-          return res.status(200).json({ outputUrl, selfieFaceBounds });
-        }
-      } catch (e) {
-        console.warn('LoRA img2img failed, falling back to InstantID:', e.message);
-      }
-    }
-
-    // Final fallback: InstantID on Replicate
-    const prediction = await callReplicate({
-      version: 'c98b2e7a196828d00955767813b81fc05c5c9b294c670c6d147d545fed4ceecf',
-      input: {
-        image: faceImage,
-        prompt: [
-          `portrait of a ${genderPrompt}, headshot, face and shoulders only`,
-          'face centered in frame, close up portrait',
-          figureDesc, styleDesc,
-          'Tang dynasty Chinese court painting style, gongbi brushwork',
-          'flat matte skin, mineral pigments on silk, soft even lighting',
-        ].join(', '),
-        negative_prompt: [
-          'full body', 'whole body', 'torso', 'chest visible',
-          ...(gender === 'woman' ? ['male', 'man', 'masculine', 'beard', 'mustache'] : ['female', 'woman', 'feminine']),
-          'glasses', 'earrings', 'jewelry', 'braids',
-          'black and white', 'grayscale', 'blurry', 'watermark',
-          'japanese', 'anime', 'manga', 'ukiyo-e', 'western',
-        ].join(', '),
-        ip_adapter_image:    styleImageUrl,
-        ip_adapter_scale:    0.40,
-        sdxl_weights:        'protovision-xl-high-fidel',
-        guidance_scale:      7.5,
-        num_inference_steps: 35,
-        width: 640, height: 640,
-      },
-    });
-    return res.status(200).json({ predictionId: prediction.id });
+    // Both Seedream models failed (or timed out). No other fallback: the old
+    // InstantID path ignored the prompt (wrong style, glasses, no beard) and its
+    // off-style portrait got cached for the selfie. No credit is charged here --
+    // deduction only happens after a successful composite.
+    return res.status(503).json({ error: '生成失败，请重试 · Generation failed, please try again', reason: 'seedream_unavailable' });
 
   } catch (err) {
     console.error('Generate error:', err);
