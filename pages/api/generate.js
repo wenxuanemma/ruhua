@@ -247,7 +247,9 @@ export default async function handler(req, res) {
         // 大光明头: hair combed fully back. Composite cuts the portrait's hair away
         // with face-skin segmentation so the painted figure's own hairstyle shows;
         // a fringe or loose strands on the forehead would leave a hole there.
-        const hairPrompt = '大光明头, 头发全部向后梳起, 露出完整光洁的额头, 无刘海, hair fully combed back off the face, entire forehead and hairline visible, no bangs, no loose strands, ';
+        // Explicitly NOT bald: "combed back" alone drifted into shaved/grey scalps,
+        // and segmentation counts a bald scalp as face skin.
+        const hairPrompt = '大光明头, 乌黑浓密的头发全部向后梳成发髻, 保留自然发际线, 露出完整额头, 无刘海, 不是光头, thick dark hair neatly combed back into a bun, natural hairline, full forehead visible, no bangs, no loose strands, not bald, not shaved, ';
         // No glasses: classical figures don't wear them, and frames on a turned
         // face break the face cut-out (glasses aren't skin).
         const noGlasses = '不戴眼镜, 去掉眼镜, without glasses, no eyeglasses, bare eyes, ';
