@@ -485,14 +485,15 @@ function HomeScreen({ onBegin }) {
       </div>
 
       <div className="r6" style={{ marginTop:18, fontFamily:F.latin, fontSize:11, color:C.silkFaint, letterSpacing:'.15em' }}>
-        6 paintings · historically grounded · social-ready
+        {PAINTINGS.length} paintings · historically grounded · social-ready
       </div>
 
       <div className="r6" style={{ marginTop:36, width:'100%' }}><Divider /></div>
 
       {/* Small footnote */}
       <div style={{ marginTop:18, display:'flex', gap:16, alignItems:'center', opacity:.35 }}>
-        {['北宋','唐','东晋','五代'].map(d => (
+        {/* Dynasties in the collection, oldest first (derived, so it stays current). */}
+        {['唐','五代','北宋','南宋','元','明','清'].filter(d => PAINTINGS.some(p => p.dynasty === d)).map(d => (
           <div key={d} style={{ fontFamily:F.serif, fontSize:10, color:C.silk }}>{d}</div>
         ))}
       </div>
@@ -926,7 +927,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
           }} />
           <div>
             <div style={{ fontFamily:F.brush, fontSize:17, color:C.silk }}>
-              {figure?.name} · {figure?.en}
+              {figure?.name}{figure?.nameEn ? ` · ${figure.nameEn}` : ''}
             </div>
             <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, marginTop:2 }}>
               {painting?.title} · {painting?.dynasty}
@@ -1509,7 +1510,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
             <div style={{ fontFamily:F.brush, fontSize:24, color:C.silk, marginBottom:5 }}>
               {figure?.name}
               <span style={{ fontFamily:F.serif, fontSize:14, color:C.silkDim, marginLeft:10, fontWeight:300 }}>
-                {figure?.en}
+                {figure?.nameEn}
               </span>
             </div>
             <div style={{ fontFamily:F.serif, fontSize:13, color:C.silk, lineHeight:1.85, marginBottom:8 }}>
