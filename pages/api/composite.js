@@ -1090,36 +1090,26 @@ export default async function handler(req, res) {
     // comparable, reasonable proportion of their canvas.
     const rawPad = Math.round(targetH * 1.5);
     const pad = Math.min(rawPad, Math.round(Math.min(PW, PH) * 0.20));
-    let profX = Math.max(0, px - pad);
-    let profY = Math.max(0, py - pad);
-    let profW = Math.min(PW - profX, S + pad * 2);
-    let profH = Math.min(PH - profY, S + pad * 2);
-
-    // Belt-and-suspenders: also constrain against any sibling figure's
-    // actual calibrated region in this same painting, so the crop can never
-    // cross into it even in a layout the canvas-fraction cap above doesn't
-    // fully anticipate.
-    const siblingMargin = Math.round(targetH * 0.3);
+    // Avatar crop: a SQUARE centred on the pasted face. If another figure's
+    // face falls inside, shrink the square evenly (never below 1.3x the face)
+    // until it's out; at the canvas edge, shift instead of shrink. The old
+    // version only cut the WIDTH for neighbours, so in crowded paintings
+    // (韩熙载夜宴图, 7 figures) the crop became a thin strip and the 400x400
+    // cover-resize showed only the chin.
+    const fcx = px + maskedSize / 2, fcy = py + maskedSize / 2;
+    let side = Math.min(S + pad * 2, PW, PH);
+    const minSide = Math.min(Math.round(S * 1.3), PW, PH);
     for (const [otherId, otherRegion] of Object.entries(FACE_REGIONS[paintingId] || {})) {
       if (otherId === figureId || otherRegion.disabled) continue;
-      const oX = otherRegion.x * PW;
-      const oCenterX = oX + (otherRegion.w * PW) / 2;
-
-      if (oCenterX >= cx) {
-        // Sibling is to the right — cap the crop's right edge short of it.
-        const maxRight = oX - siblingMargin;
-        if (profX + profW > maxRight) profW = Math.max(S, Math.round(maxRight - profX));
-      } else {
-        // Sibling is to the left — cap the crop's left edge past it.
-        const minLeft = oX + otherRegion.w * PW + siblingMargin;
-        if (profX < minLeft) { profW -= Math.round(minLeft - profX); profX = Math.round(minLeft); }
-      }
-      // Note: only handles horizontal (side-by-side) layouts, the only kind
-      // in use currently. A future vertically-stacked painting would need
-      // the same treatment against oCenterY vs cy.
+      const ocx = (otherRegion.x + otherRegion.w / 2) * PW, ocy = (otherRegion.y + otherRegion.h / 2) * PH;
+      // keep the other face's centre outside the square
+      const need = 2 * Math.max(Math.abs(ocx - fcx), Math.abs(ocy - fcy)) - otherRegion.h * PH * 0.5;
+      if (need < side) side = Math.max(minSide, Math.round(need));
     }
-    profW = Math.max(1, profW);
-    profH = Math.max(1, profH);
+    side = Math.max(1, Math.round(side));
+    let profX = Math.round(Math.max(0, Math.min(PW - side, fcx - side / 2)));
+    let profY = Math.round(Math.max(0, Math.min(PH - side, fcy - side / 2)));
+    let profW = side, profH = side;
 
     console.log(`[composite:${figureId} profile] pad=${pad} profX=${profX} profY=${profY} profW=${profW} profH=${profH} (canvas ${PW}x${PH})`);
 
