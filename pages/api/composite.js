@@ -798,8 +798,29 @@ export default async function handler(req, res) {
           // Open up to the face midline, not just the nose tip: on a strongly
           // turned face the nose sticks out past the landmark contour, and a
           // nose-wide box left a transparent crack between it and the contour.
-          const rx = farIsLeft ? 0 : midX, rw = farIsLeft ? midX : pasteS - midX;
-          svgContent += `<rect x="${rx.toFixed(1)}" y="${topY.toFixed(1)}" width="${rw.toFixed(1)}" height="${(chinY - topY).toFixed(1)}" fill="white"/>`;
+          // A half-ellipse rather than a rect: the rect's flat top and bottom
+          // met the forehead contour in a step at the midline and cut the
+          // far-side jaw at a sharp corner. The ellipse is generous (0.8x face
+          // width) so segmentation still decides the far cheek's edge.
+          // It starts and ends where the near-side contour crosses the midline
+          // (on a turned face lm10 and the chin sit towards the nose, so the
+          // contour crosses lower than topY / higher than chinY), so the two
+          // shapes join without a step.
+          const faceW = Math.abs(lmPx(landmarks[454]) - lmPx(landmarks[234]));
+          const contour = FACE_OVAL.map(i => {
+            const l = landmarks[i]; let y = lmPy(l);
+            if (!region.foreheadClip && y < browY) y = browY - (browY - y) * 2;
+            return [lmPx(l), y];
+          });
+          const cross = [];
+          for (let k = 0; k < contour.length; k++) {
+            const [x0, y0] = contour[k], [x1, y1] = contour[(k + 1) % contour.length];
+            if ((x0 - midX) * (x1 - midX) <= 0 && x0 !== x1) cross.push(y0 + (y1 - y0) * (midX - x0) / (x1 - x0));
+          }
+          const eTop = cross.length >= 2 ? Math.min(...cross) : topY;
+          const eBot = cross.length >= 2 ? Math.max(...cross) : chinY;
+          const erx = Math.max(faceW * 0.8, 1), ery = Math.max((eBot - eTop) / 2, 1);
+          svgContent += `<path d="M ${midX.toFixed(1)} ${eTop.toFixed(1)} A ${erx.toFixed(1)} ${ery.toFixed(1)} 0 0 ${farIsLeft ? 0 : 1} ${midX.toFixed(1)} ${eBot.toFixed(1)} Z" fill="white"/>`;
           console.log(`[composite:${figureId}] mask: far side (${farIsLeft ? 'left' : 'right'}) from segmentation`);
         }
 
@@ -942,15 +963,26 @@ export default async function handler(req, res) {
         if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
       if (bx1 > bx0 && by1 > by0) {
         const visW = bx1 - bx0 + 1, visH = by1 - by0 + 1;
+        // Hat figures (foreheadClip): the box is hairline-to-chin, as for front
+        // faces, but the cut-out stops at lm10 under the hat. Size the whole
+        // (hairline-to-chin) face to the box and keep the clipped top short, so
+        // the painted hat brim stays visible instead of being covered.
+        const lm = faceBounds?.landmarks;
+        let hatR = 1;
+        if (region.foreheadClip && lm?.[10] && faceBounds.foreheadY != null && faceBounds.chinY != null) {
+          const r = (faceBounds.chinY - faceBounds.foreheadY) / (faceBounds.chinY - lm[10].y);
+          if (r > 1 && r < 1.6) hatR = r;
+        }
         const fx = region.widthCalibrated === false ? 1 : Math.max(0.70, Math.min(1.35, targetW / visW));
-        const fy = Math.max(0.80, Math.min(1.25, targetH / visH));
+        const fy = Math.max(0.80, Math.min(1.25, targetH / (visH * hatR)));
         const newW = Math.min(pasteS, Math.max(1, Math.round(visW * fx)));
         const newH = Math.min(pasteS, Math.max(1, Math.round(visH * fy)));
+        const fullH = Math.round(newH * hatR);
         const piece = await sharp(masked).extract({ left: bx0, top: by0, width: visW, height: visH })
           .resize(newW, newH, { fit: 'fill' }).png().toBuffer();
         masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-          .composite([{ input: piece, left: Math.round((pasteS - newW) / 2), top: Math.round((pasteS - newH) / 2) }]).png().toBuffer();
-        console.log(`[composite:${figureId}] box fit: visible=${visW}x${visH} -> ${newW}x${newH} (box ${targetW}x${targetH})`);
+          .composite([{ input: piece, left: Math.round((pasteS - newW) / 2), top: Math.max(0, Math.round((pasteS - fullH) / 2) + fullH - newH) }]).png().toBuffer();
+        console.log(`[composite:${figureId}] box fit: visible=${visW}x${visH} -> ${newW}x${newH} hatR=${hatR.toFixed(2)} (box ${targetW}x${targetH})`);
       }
     }
 
