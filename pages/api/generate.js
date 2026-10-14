@@ -249,11 +249,15 @@ export default async function handler(req, res) {
         // a fringe or loose strands on the forehead would leave a hole there.
         // Explicitly NOT bald: "combed back" alone drifted into shaved/grey scalps,
         // and segmentation counts a bald scalp as face skin.
-        const hairPrompt = '大光明头, 乌黑浓密的头发全部向后梳成发髻, 保留自然发际线, 露出完整额头, 无刘海, 不是光头, thick dark hair neatly combed back into a bun, natural hairline, full forehead visible, no bangs, no loose strands, not bald, not shaved, ';
+        const hairPrompt = '大光明头, 乌黑浓密的头发全部向后梳起盘成发髻, 没有披散的头发, 保留自然发际线, 露出完整额头, 无刘海, 不是光头, thick dark hair all pulled up into a bun, no hair hanging down, natural hairline, full forehead visible, no bangs, not bald, ';
+        // Plain background: the longer prompt let Seedream copy the selfie's
+        // room (walls, furniture) instead of redrawing it -- users see this
+        // portrait behind the loading spinner.
+        const bgPrompt = '纯色绢本背景, plain flat silk background, no room, no furniture, no objects behind the person, ';
         // No glasses: classical figures don't wear them, and frames on a turned
         // face break the face cut-out (glasses aren't skin).
         const noGlasses = '不戴眼镜, 去掉眼镜, without glasses, no eyeglasses, bare eyes, ';
-        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, ${lookPrompt}${hairPrompt}${noGlasses}gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, facing directly forward frontal view, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, no full body`;
+        const seedreamPrompt = `工笔画风格人物肖像, ${gender === 'man' ? '男性面孔' : '女性面孔'}, ${lookPrompt}${hairPrompt}${noGlasses}${bgPrompt}gongbi fine brushwork portrait, Tang dynasty Chinese court painting style, warm ochre vermillion mineral pigments on silk, fine line brushwork, traditional Chinese figure painting, preserve facial features identity likeness of the person in the first photo, facing directly forward frontal view, close-up bust portrait, face and shoulders only, face occupies upper half of image, head centered in frame, no full body`;
 
         let rawUrl = null;
         for (const model of ['bytedance/seedream-4-5', 'bytedance/seedream-v4-edit']) {
