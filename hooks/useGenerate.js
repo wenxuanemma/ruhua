@@ -244,7 +244,20 @@ export function useGenerate() {
     if (region?.faceAngle?.includes('profile')) {
       // Landmarks are unreliable on a full side view; the face-skin segmentation
       // isn't. Its bounding box drives the crop and its mask cuts the face.
-      const seg = await getFaceSkinMask(selectedPortrait);
+      let seg = await getFaceSkinMask(selectedPortrait);
+      // Kontext picks the turn direction at random and nothing in production
+      // checked profiles: a face pointing the wrong way had its FACE clipped
+      // off by the back-of-head clip (韩熙载 dancer, device test). Swap to the
+      // mirrored profile when the hair says the face points the other way.
+      const want = faceAngle === 'profile_right' ? 'right' : 'left';
+      if (seg?.facing && seg.facing !== want && portraitSet && typeof portraitSet === 'object') {
+        const mirrored = selectedPortrait === portraitSet.profile_a ? portraitSet.profile_b : portraitSet.profile_a;
+        if (mirrored) {
+          console.log(`[composite] profile faces ${seg.facing}, figure needs ${want} -- using mirrored variant`);
+          selectedPortrait = mirrored;
+          seg = await getFaceSkinMask(selectedPortrait);
+        }
+      }
       if (!seg) return { selectedPortrait, portraitFaceBounds: null };
       const b = seg.bbox;
       return {
