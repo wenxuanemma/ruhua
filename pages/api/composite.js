@@ -1212,8 +1212,11 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    // Downscale full painting before returning — full 4000px JPEG exceeds 4MB API route limit.
-    const paintingScale = Math.min(1, 2400 / Math.max(PW, PH));
+    // Downscale full painting before returning — full-size JPEGs can exceed the
+    // 4MB API route limit. Budget by total pixels (~4.5MP, ~1.4MB JPEG), not the
+    // longest side: a 2400px cap shrank long scrolls (捣练图 6819px, 挥扇仕女图
+    // 8695px) to 28-35%, leaving faces ~40px wide and visibly blurry.
+    const paintingScale = Math.min(1, Math.sqrt(4.5e6 / (PW * PH)));
     const outW = Math.round(PW * paintingScale);
     const outH = Math.round(PH * paintingScale);
     const composited = await sharp(compositedFull)
