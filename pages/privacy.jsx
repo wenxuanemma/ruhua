@@ -10,7 +10,7 @@ export default function Privacy() {
           隐私政策 · Privacy Policy
         </h1>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: '#888' }}>
-          RuHua · 入画 &nbsp;·&nbsp; Last updated: July 12, 2026
+          RuHua · 入画 &nbsp;·&nbsp; Last updated: October 14, 2026
         </p>
       </div>
 
@@ -42,9 +42,8 @@ export default function Privacy() {
         </ul>
         <p><strong>Third-Party AI Services</strong></p>
         <ul>
-          <li>Portrait generation uses third-party AI APIs, primarily aimlapi.com (hosting the Seedream model). Your selfie image is transmitted to this service solely to generate the stylized portrait.</li>
-          <li>If the primary service is unavailable, the app may fall back to Replicate (replicate.com) to complete the same generation step. Your selfie image would be transmitted to Replicate under the same conditions.</li>
-          <li>Generated portraits are hosted temporarily on these services' infrastructure and retrieved via secure URLs; we do not maintain a separate copy on our own servers.</li>
+          <li>Portrait generation uses a third-party AI API, aimlapi.com (hosting the Seedream model). Your selfie image is transmitted to this service solely to generate the stylized portrait.</li>
+          <li>Generated portraits are hosted temporarily on this service's infrastructure and retrieved via secure URLs; we do not maintain a separate copy on our own servers.</li>
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data We Do NOT Collect</h3>
@@ -100,9 +99,8 @@ export default function Privacy() {
         </ul>
         <p><strong>第三方AI服务</strong></p>
         <ul>
-          <li>肖像生成使用第三方AI接口，主要为aimlapi.com（托管Seedream模型）。您的自拍图像仅为生成风格化肖像而被发送至该服务。</li>
-          <li>若主要服务不可用，应用可能会切换至Replicate（replicate.com）以完成相同的生成步骤，您的自拍图像在此情况下也会以相同方式被发送至该服务。</li>
-          <li>生成的肖像临时托管在上述服务的基础设施中，并通过安全链接获取；我们不会在自有服务器上另行保留副本。</li>
+          <li>肖像生成使用第三方AI接口aimlapi.com（托管Seedream模型）。您的自拍图像仅为生成风格化肖像而被发送至该服务。</li>
+          <li>生成的肖像临时托管在该服务的基础设施中，并通过安全链接获取；我们不会在自有服务器上另行保留副本。</li>
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>我们不收集的数据</h3>
