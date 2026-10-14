@@ -529,11 +529,12 @@ export default async function handler(req, res) {
           // skin when that is itself cool (调琴啜茗图's bluish-white faces):
           // eye whites are far less yellow than skin and would otherwise be
           // pushed into blue/green, but the face must be able to match a cool
-          // painted skin.
+          // painted skin. (An extra min(B,0) floor used to pin all warm skin
+          // at b>=0, so cool paintings could never be matched.)
           const rgb = labToRgb(
             Math.max(0, Math.min(100, (pL + (L - fL) * kL) * bright)),
-            Math.max(Math.min(A, 0), Math.min(-1, pA - 4), pA + (A - fA) * kA),
-            Math.max(Math.min(B, 0), Math.min(-1, pB - 4), pB + (B - fB) * kB));
+            Math.max(Math.min(-1, pA - 4), pA + (A - fA) * kA),
+            Math.max(Math.min(-1, pB - 4), pB + (B - fB) * kB));
           out[p * 3] = rgb[0]; out[p * 3 + 1] = rgb[1]; out[p * 3 + 2] = rgb[2];
         }
         colorFace = await sharp(out, { raw: { width: finf.width, height: finf.height, channels: 3 } }).png().toBuffer();
@@ -935,7 +936,9 @@ export default async function handler(req, res) {
         if (md[(y * mi.width + x) * mi.channels + 3] > 128)
           front = facesRight ? Math.max(front, x) : Math.min(front, x);
       if (front >= 0 && front < mi.width) {
-        const keep = targetW, feather = Math.max(2, Math.round(targetW * 0.08));
+        // Rough pass only (the ear); the exact back edge is set after the box
+        // fit, once the face is at its final scale.
+        const keep = Math.round(targetW * 1.5), feather = Math.max(2, Math.round(targetW * 0.08));
         let cut = 0;
         for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++) {
           const depth = facesRight ? front - x : x - front; // distance back from the front edge
@@ -973,15 +976,85 @@ export default async function handler(req, res) {
           const r = (faceBounds.chinY - faceBounds.foreheadY) / (faceBounds.chinY - lm[10].y);
           if (r > 1 && r < 1.6) hatR = r;
         }
-        const fx = region.widthCalibrated === false ? 1 : Math.max(0.70, Math.min(1.35, targetW / visW));
-        const fy = Math.max(0.80, Math.min(1.25, targetH / (visH * hatR)));
-        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * fx)));
-        const newH = Math.min(pasteS, Math.max(1, Math.round(visH * fy)));
-        const fullH = Math.round(newH * hatR);
+        // One uniform scale ("contain"): stretching width and height
+        // separately made faces look swollen. Whichever of width/height hits
+        // the box first sets it, and the chin is anchored to the box bottom;
+        // any gap left at the top falls under the painted hair/hat.
+        // Profiles are sized by height: their width is set by the back clip below.
+        const fW = (region.widthCalibrated === false || isProfile) ? Infinity : targetW / visW;
+        const fH = targetH / (visH * hatR);
+        const f = Math.max(0.70, Math.min(1.35, fW, fH));
+        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * f)));
+        const newH = Math.min(pasteS, Math.max(1, Math.round(visH * f)));
+        const boxBot = Math.round((pasteS + targetH) / 2);
+        // Anchor the nose side too: the painted profile edge is on that side
+        // of the box, and centring left a strip of painted face showing there
+        // (宫乐图 maid). Any gap goes to the back of the head, under the hair.
+        const noseRight = /_right$/.test(region.faceAngle || '');
+        const boxL = Math.round((pasteS - targetW) / 2), boxR = boxL + targetW;
+        const left = Math.max(0, Math.min(pasteS - newW, noseRight ? boxR - newW : boxL));
         const piece = await sharp(masked).extract({ left: bx0, top: by0, width: visW, height: visH })
           .resize(newW, newH, { fit: 'fill' }).png().toBuffer();
         masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
-          .composite([{ input: piece, left: Math.round((pasteS - newW) / 2), top: Math.max(0, Math.round((pasteS - fullH) / 2) + fullH - newH) }]).png().toBuffer();
+          .composite([{ input: piece, left, top: Math.max(0, Math.min(pasteS - newH, boxBot - newH)) }]).png().toBuffer();
+        // Profile back edge: keep the box width (+8%, to reach the painted
+        // hairline just outside the oval) measured back from the box's front
+        // edge. Cut before the fit, the kept strip shrank with the face and the
+        // painted cheek showed behind it (宫乐图 maid, 韩熙载 dancer).
+        if (isProfile) {
+          const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+          const keep = targetW * 1.08, feather = Math.max(2, Math.round(targetW * 0.08));
+          for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++) {
+            const depth = noseRight ? boxR - x : x - boxL;
+            if (depth <= keep - feather) continue;
+            const i = (y * mi.width + x) * mi.channels + 3;
+            md[i] = depth >= keep ? 0 : Math.round(md[i] * (keep - depth) / feather);
+          }
+          masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+        }
+        // Profile forehead fill: painted profiles have a near-vertical
+        // forehead, while the portrait's slopes back towards the hairline, so
+        // a strip of painted forehead showed in front of the face (宫乐图
+        // maid, 韩熙载 dancer). On the forehead rows only (top 35% of the box,
+        // above the brow), extend each row's front-edge colour forward by up
+        // to 7% of the box width (not past the oval), tapering to zero at the
+        // brow and fading at the end. Nose, lips and chin untouched.
+        if (isProfile) {
+          const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+          const C = mi.channels, ocx = pasteS / 2, ocy = pasteS / 2, orx = targetW / 2, ory = targetH / 2;
+          const boxTop = Math.round((pasteS - targetH) / 2), rowsEnd = boxTop + Math.round(targetH * 0.35);
+          const fade = Math.max(2, Math.round(targetW * 0.06));
+          let filled = 0;
+          for (let y = Math.max(0, boxTop); y < Math.min(mi.height, rowsEnd); y++) {
+            const dy = (y + 0.5 - ocy) / ory; if (Math.abs(dy) >= 1) continue;
+            const half = orx * Math.sqrt(1 - dy * dy);
+            const ovalFront = Math.round(noseRight ? ocx + half : ocx - half);
+            let edge = -1;
+            if (noseRight) { for (let x = mi.width - 1; x >= 0; x--) if (md[(y * mi.width + x) * C + 3] > 200) { edge = x; break; } }
+            else { for (let x = 0; x < mi.width; x++) if (md[(y * mi.width + x) * C + 3] > 200) { edge = x; break; } }
+            if (edge < 0) continue;
+            // a few px at most, tapering to nothing at the brow so the profile
+            // line stays continuous
+            const taper = 1 - (y - boxTop) / (rowsEnd - boxTop);
+            const span = Math.min(noseRight ? ovalFront - edge : edge - ovalFront, Math.round(targetW * 0.07 * taper));
+            if (span <= 0) continue;
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let k = 1; k <= 3; k++) {
+              const x = noseRight ? edge - k : edge + k; if (x < 0 || x >= mi.width) break;
+              const i = (y * mi.width + x) * C; if (md[i + 3] > 200) { r += md[i]; g += md[i + 1]; b += md[i + 2]; n++; }
+            }
+            if (!n) continue;
+            for (let d = 1; d <= span; d++) {
+              const x = noseRight ? edge + d : edge - d; if (x < 0 || x >= mi.width) break;
+              const i = (y * mi.width + x) * C;
+              const al = d > span - fade ? Math.round(255 * (span - d) / fade) : 255;
+              if (al <= md[i + 3]) continue;
+              md[i] = r / n; md[i + 1] = g / n; md[i + 2] = b / n; md[i + 3] = al; filled++;
+            }
+          }
+          masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+          console.log(`[composite:${figureId}] profile forehead fill: ${filled}px`);
+        }
         console.log(`[composite:${figureId}] box fit: visible=${visW}x${visH} -> ${newW}x${newH} hatR=${hatR.toFixed(2)} (box ${targetW}x${targetH})`);
       }
     }
