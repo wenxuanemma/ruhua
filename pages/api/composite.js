@@ -225,10 +225,17 @@ export default async function handler(req, res) {
         // This ensures the portrait face fills the calibrated oval in the painting.
         // ovalRy = (targetH/targetSize) * targetSize * 0.42
         // faceInPS = faceH_lm*FH/cropSize * pasteS = 2*ovalRy → cropSize = faceH_lm*FH*pasteS/(2*ovalRy)
-        const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
+        // Angled hat figures: the cut-out stops at the upper forehead (lm10) --
+        // the hat hides the rest -- so scale that visible span, not the
+        // estimated hairline, to the box height. Otherwise the face came out
+        // ~15% short, and was then either too wide or too narrow for the box.
+        const lm10Y = faceBounds.landmarks?.[10]?.y;
+        const visTop = (!isFront && region.foreheadClip && lm10Y != null) ? lm10Y : faceBounds.foreheadY;
+        const faceH_lm = faceBounds.chinY - visTop;
         const ovalRy_target = Math.min((targetH / targetSize) * targetSize * 0.50, targetSize * 0.50);
         const idealCropSize = Math.round((faceH_lm * FH * targetSize) / (2 * ovalRy_target));
-        faceCenterY_frac = faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2;
+        faceCenterY_frac = visTop !== faceBounds.foreheadY ? (visTop + faceBounds.chinY) / 2
+          : (faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2);
         cropTopFrac = Math.max(0, faceCenterY_frac - (idealCropSize / FH) / 2);
         cropBotFrac = Math.min(1, faceCenterY_frac + (idealCropSize / FH) / 2);
         console.log(`[composite:${figureId} crop] LANDMARKS-TIGHT forehead=${faceBounds.foreheadY.toFixed(3)} chin=${faceBounds.chinY.toFixed(3)} faceH=${faceH_lm.toFixed(3)} idealCropSize=${idealCropSize} ovalRy=${ovalRy_target.toFixed(1)}`);
@@ -932,10 +939,7 @@ export default async function handler(req, res) {
         if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
       if (bx1 > bx0) {
         const visW = bx1 - bx0 + 1, visH = by1 - by0 + 1;
-        // Hat figures: the cut-out stops under the brim and fills only ~85% of
-        // the box height, so fitting it to the full box width made the face
-        // too broad (韩熙载 men). Keep the box's proportions instead.
-        const fitW = region.foreheadClip ? Math.min(targetW, Math.round(visH * targetW / targetH)) : targetW;
+        const fitW = targetW;
         const f = Math.max(0.70, Math.min(1.35, fitW / visW));
         if (Math.abs(f - 1) > 0.02) {
           const newW = Math.max(1, Math.round(pasteS * f));
