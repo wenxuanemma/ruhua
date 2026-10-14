@@ -18,6 +18,17 @@
 // }
 
 import sharp from 'sharp';
+import crypto from 'crypto';
+import fs from 'fs';
+import path from 'path';
+
+// Dev-only disk cache: same front portrait → same angle set, no Kontext spend
+// while testing/calibrating. Keyed by a hash of the exact frontPortraitUrl.
+// Lives in .dev-cache/ (gitignored); never active outside `next dev`.
+const DEV_CACHE = process.env.NODE_ENV === 'development'
+  ? path.join(process.cwd(), '.dev-cache', 'angles') : null;
+const cacheFile = (url) =>
+  path.join(DEV_CACHE, crypto.createHash('sha1').update(url).digest('hex').slice(0, 16) + '.json');
 
 export const config = { api: { bodyParser: { sizeLimit: '12mb' } } };
 
@@ -91,15 +102,25 @@ export default async function handler(req, res) {
   const { frontPortraitUrl } = req.body;
   if (!frontPortraitUrl) return res.status(400).json({ error: 'frontPortraitUrl required' });
 
+  if (DEV_CACHE && fs.existsSync(cacheFile(frontPortraitUrl))) {
+    console.log(`[generate-angles] dev cache HIT ${path.basename(cacheFile(frontPortraitUrl))}`);
+    return res.status(200).json(JSON.parse(fs.readFileSync(cacheFile(frontPortraitUrl), 'utf8')));
+  }
+
   try {
-    // Run both Kontext calls in parallel
+    // The front portrait already has its hair combed back (大光明头, requested
+    // in the Seedream prompt), so rotations start straight from it. (A separate
+    // Kontext hair-up edit used to run here; no longer needed.)
+    const angleSource = frontPortraitUrl;
+
+    // Rotations, in parallel
     const [tqUrl, profileUrl] = await Promise.all([
-      runKontext(frontPortraitUrl,
+      runKontext(angleSource,
         'Same person, same gongbi Chinese painting style, same fine brushwork and ochre silk texture. ' +
         'Rotate the face to a three-quarter angle view. Keep all facial features, identity, and painting style identical. ' +
         'Only change the face angle.'
       ),
-      runKontext(frontPortraitUrl,
+      runKontext(angleSource,
         'Same person, same gongbi Chinese painting style, same fine brushwork and ochre silk texture. ' +
         'Rotate face to strict 90-degree side profile. Only one side of face visible, far eye completely hidden, ear visible. ' +
         'Keep painting style identical.'
@@ -136,13 +157,20 @@ export default async function handler(req, res) {
     console.log(`[generate-angles] direction validation: 3q=${tqDir||'unknown'} profile=${profileDir||'unknown'}`);
 
     // Return all 5 as base64 data URLs (stored in memory cache by useGenerate)
-    return res.status(200).json({
+    const result = {
       front:           frontPortraitUrl,
       three_quarter_a: await bufToDataUrl(tqA),
       three_quarter_b: await bufToDataUrl(tqB),
       profile_a:       await bufToDataUrl(profA),
       profile_b:       await bufToDataUrl(profB),
-    });
+    };
+    if (DEV_CACHE) {
+      try {
+        fs.mkdirSync(DEV_CACHE, { recursive: true });
+        fs.writeFileSync(cacheFile(frontPortraitUrl), JSON.stringify(result));
+      } catch (e) { console.warn('[generate-angles] dev cache write failed:', e.message); }
+    }
+    return res.status(200).json(result);
 
   } catch (err) {
     const msg = err?.message || JSON.stringify(err) || 'unknown error';

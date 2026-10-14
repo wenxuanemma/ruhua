@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useGenerate, loadLastSelfie } from '../hooks/useGenerate';
 import { FACE_REGIONS } from '../lib/faceRegions';
+import { checkSelfieFace } from '../lib/detectFaceClient';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
@@ -94,9 +95,13 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#10060300 0%,#100603 0%,#3a100a 24%,#6a2c16 50%,#4a1e0e 74%,#100603 100%)',
     color: '#8a4020',
     figures: [
-      { id:'guest',  name:'宾客',   nameEn:'Honored Guest',    descZh:'夜宴宾客，立于烛光之侧，见证这场盛宴的繁华与忧郁。',               descEn:'A guest at the night banquet, standing in the lamplight, witnessing the splendor and melancholy of this storied gathering.', gender:'man',   rec:true },
-      { id:'host',   name:'韩熙载', nameEn:'Han Xizai (Host)', descZh:'南唐重臣，以纵情声色掩饰政治落寞，夜宴的主人与灵魂。',             descEn:'A high minister of Southern Tang who masked political despair with revelry — the host and soul of the banquet.', gender:'man',   rec:true, disabled:true },
-      { id:'dancer', name:'乐伎',   nameEn:'Court Musician',   descZh:'席间乐伎，以悠扬琵琶声点亮烛光夜宴，是这场盛宴的华彩。',           descEn:'A court musician whose pipa fills the candlelit hall with melody, lending brilliance to the evening\'s revelry.', gender:'woman', rec:false, disabled:true },
+      { id:'guest',  name:'宾客',   nameEn:'Honored Guest',    descZh:'夜宴宾客，立于烛光之侧，见证这场盛宴的繁华与忧郁。',               descEn:'A guest at the night banquet, standing in the lamplight, witnessing the splendor and melancholy of this storied gathering.', gender:'man',   look:'bearded' },
+      { id:'host',   name:'韩熙载', nameEn:'Han Xizai (Host)', descZh:'南唐重臣，以纵情声色掩饰政治落寞，夜宴的主人与灵魂。',             descEn:'A high minister of Southern Tang who masked political despair with revelry — the host and soul of the banquet.', gender:'man',   look:'bearded' },
+      { id:'dancer', name:'乐伎',   nameEn:'Court Musician',   descZh:'席间乐伎，以悠扬琵琶声点亮烛光夜宴，是这场盛宴的华彩。',           descEn:'A court musician whose pipa fills the candlelit hall with melody, lending brilliance to the evening\'s revelry.', gender:'woman' },
+      { id:'official', name:'侍立官员', nameEn:'Attending Official', descZh:'头戴幞头，拱手立于屏风前，侧目望向席间，静观夜宴的一举一动。', descEn:'In a black futou cap, hands folded before the screen, he watches the banquet from the corner of his eye.', gender:'man' },
+      { id:'attendant', name:'执杖宾客', nameEn:'Guest with a Staff', descZh:'手持长杖立于人群之后，目光越过众人望向场中，是这场夜宴的另一位见证者。', descEn:'Holding a long staff behind the gathering, he looks past the crowd toward the music — another witness to the night.', gender:'man' },
+      { id:'lady', name:'白衣侍女', nameEn:'Lady in White', descZh:'素衣长裙，侧身立于宾客之间，眉目低垂，听琵琶声入神。', descEn:'In pale robes she stands among the guests, eyes lowered, lost in the sound of the pipa.', gender:'woman' },
+      { id:'maid', name:'蓝衣少女', nameEn:'Girl in Blue', descZh:'浅蓝衣衫的少女立于主人身侧，侧首倾听，神情恬静。', descEn:'A young woman in pale blue beside the host, head turned to listen, perfectly serene.', gender:'woman' },
     ],
     youAre: '宾客 · Honored Guest',
     context: 'Emperor Li Yu secretly sent painter Gu Hongzhong to spy on Han Xizai\'s private banquets. The result: five scenes of music, dance, and political melancholy in one of history\'s most intimate court scrolls.',
@@ -120,10 +125,11 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a0814 0%,#562040 24%,#925068 50%,#6a3850 74%,#1a0814 100%)',
     color: '#925068',
     figures: [
-      { id:'pipa',    name:'琵琶仕女', nameEn:'Pipa Musician',      descZh:'轻拨琵琶，以指尖流淌的乐音为宴席增添盛唐风华。',                         descEn:'Plucking the pipa with delicate fingers, weaving the flourishing spirit of the Tang into the air of the gathering.', gender:'woman', rec:true },
-      { id:'guzheng', name:'古筝仕女', nameEn:'Guzheng Musician',   descZh:'俯身抚筝，指间流出悠远古韵，是这场丝竹雅集的中心旋律。',                 descEn:'Leaning over the guzheng, her fingers drawing out a timeless melody that anchors the gathering\'s music.', gender:'woman', rec:true },
-      { id:'clapper', name:'执拍侍女', nameEn:'Clapper Attendant',  descZh:'侍立一旁，手执拍板击节相和，以无声的节奏支撑起整场宴乐。',               descEn:'Standing to the side, keeping rhythm with the clapper — the quiet backbone of the entire musical performance.', gender:'woman', rec:true },
-      { id:'listener',name:'听乐仕女', nameEn:'Lady Listening',     descZh:'手持茶碗，侧身聆听，神情闲适淡然，是宴席间最从容优雅的存在。',           descEn:'Holding a drinking bowl, listening with serene composure — the most unhurried and elegant presence at the gathering.', gender:'woman', rec:true },
+      { id:'pipa',    name:'琵琶仕女', nameEn:'Pipa Musician',      descZh:'轻拨琵琶，以指尖流淌的乐音为宴席增添盛唐风华。',                         descEn:'Plucking the pipa with delicate fingers, weaving the flourishing spirit of the Tang into the air of the gathering.', gender:'woman' },
+      { id:'guzheng', name:'古筝仕女', nameEn:'Guzheng Musician',   descZh:'俯身抚筝，指间流出悠远古韵，是这场丝竹雅集的中心旋律。',                 descEn:'Leaning over the guzheng, her fingers drawing out a timeless melody that anchors the gathering\'s music.', gender:'woman' },
+      { id:'clapper', name:'执拍侍女', nameEn:'Clapper Attendant',  descZh:'侍立一旁，手执拍板击节相和，以无声的节奏支撑起整场宴乐。',               descEn:'Standing to the side, keeping rhythm with the clapper — the quiet backbone of the entire musical performance.', gender:'woman' },
+      { id:'listener',name:'听乐仕女', nameEn:'Lady Listening',     descZh:'手持茶碗，侧身聆听，神情闲适淡然，是宴席间最从容优雅的存在。',           descEn:'Holding a drinking bowl, listening with serene composure — the most unhurried and elegant presence at the gathering.', gender:'woman' },
+      { id:'maid', name:'侍立宫女', nameEn:'Standing Maid', descZh:'立于宴席一隅，侧身静候差遣，是满堂乐声中最安静的身影。', descEn:'Standing at the edge of the feast, waiting in profile to be called — the quietest figure amid all the music.', gender:'woman' },
     ],
     youAre: '琵琶仕女 · Pipa Musician',
     context: 'Ten Tang dynasty court ladies gather at a lacquered table — playing pipa, guzheng, hulusi and sheng, or simply listening. Their full-figured forms and elaborate hairstyles embody the cosmopolitan aesthetic of Tang at its height.',
@@ -147,8 +153,12 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#1a1206 0%,#4a3418 24%,#9a7840 50%,#6a5228 74%,#1a1206 100%)',
     color: '#9a7840',
     figures: [
-      { id:'girl',     name:'粉衣小童', nameEn:'Girl in Pink',        descZh:'粉衣小女，俯身于练布之下，姿态天真可爱。',                         descEn:'A little girl in pink, bending beneath the stretched silk with innocent, curious eyes.', gender:'woman', rec:true },
-      { id:'threader', name:'穿针仕女', nameEn:'Lady Threading Silk', descZh:'细心穿针引线，将练丝精准穿入针孔，是织造工序中最考验耐心之人。', descEn:'Threading silk with patient precision — the most careful and exacting work of the silk-making process.', gender:'woman', rec:true },
+      { id:'girl',     name:'粉衣小童', nameEn:'Girl in Pink',        descZh:'粉衣小女，俯身于练布之下，姿态天真可爱。',                         descEn:'A little girl in pink, bending beneath the stretched silk with innocent, curious eyes.', gender:'woman' },
+      { id:'threader', name:'穿针仕女', nameEn:'Lady Threading Silk', descZh:'细心穿针引线，将练丝精准穿入针孔，是织造工序中最考验耐心之人。', descEn:'Threading silk with patient precision — the most careful and exacting work of the silk-making process.', gender:'woman' },
+      { id:'stretcher', name:'展练仕女', nameEn:'Lady Stretching Silk', descZh:'执绢一端，身子微微后仰，与同伴一同拉展新练的白绢。', descEn:'Holding one end of the bolt and leaning back, she pulls the freshly pounded silk taut with her companion.', gender:'woman' },
+      { id:'ironer', name:'熨绢仕女', nameEn:'Lady Ironing Silk', descZh:'低首执熨斗，细细熨平绢面，神情专注而安静。', descEn:'Head bent over the iron, she smooths the silk with quiet, careful attention.', gender:'woman' },
+      { id:'fanner', name:'扇火侍女', nameEn:'Maid Fanning the Brazier', descZh:'蹲坐炭盆旁，手执团扇扇火，为熨绢备好炭火。', descEn:'Crouched by the brazier with a round fan, keeping the coals hot for the ironing.', gender:'woman' },
+      { id:'pounder', name:'捣练仕女', nameEn:'Lady Pounding Silk', descZh:'倚着捣杵小憩，额间一点花钿，眉眼含笑，是捣练劳作间最闲适的一瞬。', descEn:'Leaning on her pestle for a breather, a flower mark on her brow and a smile in her eyes — the most relaxed moment in the work of pounding silk.', gender:'woman' },
     ],
     youAre: '熨绢仕女 · Lady of the Silk Chamber',
     context: 'Zhang Xuan\'s original is lost; this Song dynasty copy by Emperor Huizong depicts three groups of Tang court ladies processing newly woven silk — pounding, threading, and ironing. Held at the Museum of Fine Arts, Boston.',
@@ -172,10 +182,10 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140a04 0%,#3a2010 24%,#7a5028 50%,#4a3018 74%,#140a04 100%)',
     color: '#7a5028',
     figures: [
-      { id:'topleft',    name:'左上仕女', nameEn:'Lady Top Left',    descZh:'身着红衣，膝前婴孩嬉闹，神情温柔专注，尽显内廷生活的温情一面。',       descEn:'Dressed in red, with a child playing before her knees — gentle and attentive, the warmest presence in the inner palace.', gender:'woman', rec:true },
-      { id:'bottomleft', name:'左下仕女', nameEn:'Lady Bottom Left', descZh:'面容端正，背负婴孩，温柔守护，是内廷中最质朴动人的母性身影。',           descEn:'Front-facing with a child on her back, quietly protective — the most unadorned and touching maternal figure in the scene.', gender:'woman', rec:true },
-      { id:'topcenter',  name:'中上仕女', nameEn:'Lady Top Center',  descZh:'端坐中央，面前婴孩牙牙学步，她从容守望，见证着孩童成长的每一刻。',       descEn:'Seated at center, watching a child take tentative steps before her — composed and present for every tender moment of growth.', gender:'woman', rec:true },
-      { id:'right',      name:'右侧仕女', nameEn:'Lady on Right',    descZh:'头戴花饰，侧身望向爬行的婴孩，神情悠然，是画面中最雍容华贵的仕女。',   descEn:'Adorned with floral ornaments, watching a crawling child with serene ease — the most stately and elegant figure in the scene.', gender:'woman', rec:true },
+      { id:'topleft',    name:'左上仕女', nameEn:'Lady Top Left',    descZh:'身着红衣，膝前婴孩嬉闹，神情温柔专注，尽显内廷生活的温情一面。',       descEn:'Dressed in red, with a child playing before her knees — gentle and attentive, the warmest presence in the inner palace.', gender:'woman' },
+      { id:'bottomleft', name:'左下仕女', nameEn:'Lady Bottom Left', descZh:'面容端正，背负婴孩，温柔守护，是内廷中最质朴动人的母性身影。',           descEn:'Front-facing with a child on her back, quietly protective — the most unadorned and touching maternal figure in the scene.', gender:'woman' },
+      { id:'topcenter',  name:'中上仕女', nameEn:'Lady Top Center',  descZh:'端坐中央，面前婴孩牙牙学步，她从容守望，见证着孩童成长的每一刻。',       descEn:'Seated at center, watching a child take tentative steps before her — composed and present for every tender moment of growth.', gender:'woman' },
+      { id:'right',      name:'右侧仕女', nameEn:'Lady on Right',    descZh:'头戴花饰，侧身望向爬行的婴孩，神情悠然，是画面中最雍容华贵的仕女。',   descEn:'Adorned with floral ornaments, watching a crawling child with serene ease — the most stately and elegant figure in the scene.', gender:'woman' },
     ],
     youAre: '左上仕女 · Palace Lady',
     context: 'Tang court ladies at leisure with children in the imperial palace. The full-figured beauties and playful children capture the warmth and intimacy of inner court life at its most unguarded. Held at the Metropolitan Museum of Art (CC0).',
@@ -199,8 +209,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#0e1208 0%,#283820 24%,#506840 50%,#384828 74%,#0e1208 100%)',
     color: '#506840',
     figures: [
-      { id:'lady',    name:'调琴仕女', nameEn:'Lady at the Lute', descZh:'轻拨琴弦，以指尖的律动传递内心的雅致与从容，是园中最动人的风景。', descEn:'Tuning the qin with unhurried fingers, her inner elegance expressed through each gentle pluck of the strings.', gender:'woman', rec:true },
-      { id:'seated',  name:'静坐仕女', nameEn:'Lady at Rest',     descZh:'白衣端坐，神情悠然，于琴声与园景之间静享这份难得的闲适时光。',   descEn:'Seated in white robes with serene composure, quietly savoring a rare moment of unhurried peace amid the garden and music.', gender:'woman', rec:true },
+      { id:'lady',    name:'调琴仕女', nameEn:'Lady at the Lute', descZh:'轻拨琴弦，以指尖的律动传递内心的雅致与从容，是园中最动人的风景。', descEn:'Tuning the qin with unhurried fingers, her inner elegance expressed through each gentle pluck of the strings.', gender:'woman' },
+      { id:'seated',  name:'静坐仕女', nameEn:'Lady at Rest',     descZh:'白衣端坐，神情悠然，于琴声与园景之间静享这份难得的闲适时光。',   descEn:'Seated in white robes with serene composure, quietly savoring a rare moment of unhurried peace amid the garden and music.', gender:'woman' },
+      { id:'attendant', name:'托盘侍女', nameEn:'Maid with a Tray', descZh:'双手托盘侍立一旁，等候主人调罢琴弦。', descEn:'Standing by with a tray in both hands, waiting for her mistress to finish tuning the qin.', gender:'woman' },
     ],
     youAre: '调琴仕女 · Lady of Refined Taste',
     context: 'Zhou Fang, master of Tang court beauty painting, depicts ladies in an aristocratic garden — one tuning a qin lute, another seated in quiet repose. The painting epitomizes the cultivated leisure of Tang elite women.',
@@ -225,8 +236,9 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#0a0810 0%,#281e3a 24%,#584870 50%,#3a2e52 74%,#0a0810 100%)',
     color: '#584870',
     figures: [
-      { id:'center', name:'执瓶仕女', nameEn:'Lady with Vase',    descZh:'手持青瓷瓶，步履从容，华美的外表下隐藏着一丝难以言说的忧郁。',       descEn:'Carrying a celadon vase with unhurried grace, a quiet melancholy hidden beneath her elegant exterior.', gender:'woman', rec:true },
-      { id:'seated', name:'倚坐仕女', nameEn:'Seated Court Lady', descZh:'倚坐于园中，手执团扇，神情慵懒而美丽，是盛夏宫苑中最典型的仕女姿态。', descEn:'Reclining in the garden with a round fan, languid and lovely — the quintessential court beauty of a Tang summer afternoon.', gender:'woman', rec:true },
+      { id:'center', name:'执瓶仕女', nameEn:'Lady with Vase',    descZh:'手持青瓷瓶，步履从容，华美的外表下隐藏着一丝难以言说的忧郁。',       descEn:'Carrying a celadon vase with unhurried grace, a quiet melancholy hidden beneath her elegant exterior.', gender:'woman' },
+      { id:'seated', name:'倚坐仕女', nameEn:'Seated Court Lady', descZh:'倚坐于园中，手执团扇，神情慵懒而美丽，是盛夏宫苑中最典型的仕女姿态。', descEn:'Reclining in the garden with a round fan, languid and lovely — the quintessential court beauty of a Tang summer afternoon.', gender:'woman' },
+      { id:'dreamer', name:'支颐仕女', nameEn:'Lady Resting Her Chin', descZh:'倚在绣架旁，以手支颐，神情慵懒，似在出神。', descEn:'Leaning by the embroidery frame, chin in hand, lost in a lazy daydream.', gender:'woman' },
     ],
     youAre: '执瓶仕女 · Lady of the Inner Court',
     context: 'Zhou Fang\'s masterpiece of Tang court beauty depicts ladies in summer leisure — holding fans, vases, and accessories in the palace gardens. The melancholic stillness beneath the surface elegance made this one of the most celebrated figure paintings of the Tang dynasty.',
@@ -250,8 +262,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140c02 0%,#4a3208 24%,#9a7418 50%,#6a4e10 74%,#140c02 100%)',
     color: '#9a7418',
     figures: [
-      { id:'empress', name:'孝慈高皇后', nameEn:'Empress Ma',  descZh:'明太祖结发妻，以贤德持家、劝谏太祖著称，是中国历史上最受敬重的皇后之一。', descEn:'Wife of the founding emperor, revered through history for her wisdom and moderating counsel — one of the most respected empresses in Chinese history.', gender:'woman', rec:true },
-      { id:'emperor', name:'明太祖',     nameEn:'Emperor Taizu (Zhu Yuanzhang)', descZh:'白手起家的开国皇帝，自布衣至天子，一手建立大明王朝，奠定近三百年基业。', descEn:'The founding emperor who rose from a peasant orphan to unite China, establishing the Ming dynasty that would last nearly three centuries.', gender:'man', rec:true },
+      { id:'empress', name:'孝慈高皇后', nameEn:'Empress Ma',  descZh:'明太祖结发妻，以贤德持家、劝谏太祖著称，是中国历史上最受敬重的皇后之一。', descEn:'Wife of the founding emperor, revered through history for her wisdom and moderating counsel — one of the most respected empresses in Chinese history.', gender:'woman' },
+      { id:'emperor', name:'明太祖',     nameEn:'Emperor Taizu (Zhu Yuanzhang)', descZh:'白手起家的开国皇帝，自布衣至天子，一手建立大明王朝，奠定近三百年基业。', descEn:'The founding emperor who rose from a peasant orphan to unite China, establishing the Ming dynasty that would last nearly three centuries.', gender:'man', look:'bearded' },
     ],
     youAre: '孝慈高皇后 · Empress Ma',
     context: 'These formal court portraits, part of the Qing-dynasty Nanxundian collection, depict Ming founder Zhu Yuanzhang and his empress Ma in old age. Unlike flattering idealized portraiture, Ming imperial portraits were prized for unflinching realism — every wrinkle and feature rendered true to life. Held at the National Palace Museum, Taipei.',
@@ -275,8 +287,8 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140c02 0%,#4a3208 24%,#9a7418 50%,#6a4e10 74%,#140c02 100%)',
     color: '#9a7418',
     figures: [
-      { id:'empress', name:'孝恭章皇后', nameEn:'Empress Sun',  descZh:'以美貌与聪慧著称，深受宣宗宠爱，母仪天下，是明代宫廷中颇具传奇色彩的皇后。', descEn:'Renowned for her beauty and intelligence, deeply favored by the emperor — one of the most storied empresses of the Ming court.', gender:'woman', rec:true },
-      { id:'emperor', name:'明宣宗',     nameEn:'Emperor Xuanzong (Zhu Zhanji)', descZh:'文武兼修的守成之君，开创「仁宣之治」，工书善画，是明代少有的艺术家皇帝。', descEn:'A cultured ruler whose reign is remembered as a golden age of stability — himself a skilled painter and calligrapher, rare among emperors.', gender:'man', rec:true },
+      { id:'empress', name:'孝恭章皇后', nameEn:'Empress Sun',  descZh:'以美貌与聪慧著称，深受宣宗宠爱，母仪天下，是明代宫廷中颇具传奇色彩的皇后。', descEn:'Renowned for her beauty and intelligence, deeply favored by the emperor — one of the most storied empresses of the Ming court.', gender:'woman' },
+      { id:'emperor', name:'明宣宗',     nameEn:'Emperor Xuanzong (Zhu Zhanji)', descZh:'文武兼修的守成之君，开创「仁宣之治」，工书善画，是明代少有的艺术家皇帝。', descEn:'A cultured ruler whose reign is remembered as a golden age of stability — himself a skilled painter and calligrapher, rare among emperors.', gender:'man', look:'bearded' },
     ],
     youAre: '孝恭章皇后 · Empress Sun',
     context: 'Zhu Zhanji presided over the "Renxuan Reign," an era of peace and prosperity still remembered as a high point of Ming governance. An accomplished painter himself, he is portrayed here beside Empress Sun in the formal Nanxundian court style. Held at the National Palace Museum, Taipei.',
@@ -300,14 +312,64 @@ const PAINTINGS = [
     grad: 'linear-gradient(148deg,#140c02 0%,#4a3208 24%,#9a7418 50%,#6a4e10 74%,#140c02 100%)',
     color: '#9a7418',
     figures: [
-      { id:'empress', name:'孝康敬皇后', nameEn:'Empress Zhang', descZh:'明孝宗一生唯一的妻子，二人相守终身，未曾立妃，为历代帝王中所罕见。', descEn:'The only wife Emperor Xiaozong ever took — the two remained devoted to each other for life, with no other consorts, a rarity among emperors.', gender:'woman', rec:true },
-      { id:'emperor', name:'明孝宗',     nameEn:'Emperor Xiaozong (Zhu Youtang)', descZh:'史上罕见的「一夫一妻」皇帝，勤政爱民，开创「弘治中兴」，被誉为明代最专情的帝王。', descEn:'Remembered as history\'s most monogamous emperor — a devoted, hardworking ruler whose reign is called the "Hongzhi Restoration."', gender:'man', rec:true },
+      { id:'empress', name:'孝康敬皇后', nameEn:'Empress Zhang', descZh:'明孝宗一生唯一的妻子，二人相守终身，未曾立妃，为历代帝王中所罕见。', descEn:'The only wife Emperor Xiaozong ever took — the two remained devoted to each other for life, with no other consorts, a rarity among emperors.', gender:'woman' },
+      { id:'emperor', name:'明孝宗',     nameEn:'Emperor Xiaozong (Zhu Youtang)', descZh:'史上罕见的「一夫一妻」皇帝，勤政爱民，开创「弘治中兴」，被誉为明代最专情的帝王。', descEn:'Remembered as history\'s most monogamous emperor — a devoted, hardworking ruler whose reign is called the "Hongzhi Restoration."', gender:'man', look:'bearded' },
     ],
     youAre: '孝康敬皇后 · Empress Zhang',
     context: 'Zhu Youtang is celebrated as the most faithful emperor in Chinese history — he took no concubines and remained devoted solely to Empress Zhang throughout his reign, an extraordinary choice for a Ming sovereign. Together they preside over what historians call the "Hongzhi Restoration." Held at the National Palace Museum, Taipei.',
     contextZh: '朱祐樘是中国历史上罕见的「专一」帝王，终其一生未纳妃嫔，与张皇后相伴始终，开创「弘治中兴」的清明之治，被后世誉为明代最深情的帝王。现藏台北故宫博物院。',
     scene: 'In a court where a thousand consorts were the norm, one emperor chose only one — and history remembers not his power, but his devotion.',
     sceneZh: '后宫佳丽三千本是常态，他却只择一人相伴终生——史书铭记的，不是他的权势，而是他的深情。',
+  },
+  {
+    id: 'kulou',
+    directImageUrl: '/paintings/kulou.jpg',
+    title: '骷髅幻戏图',
+    sub: 'The Skeleton Puppet Show',
+    subZh: '南宋李嵩绘骷髅提线傀儡戏图',
+    dynasty: '南宋',
+    dynastyFull: 'Southern Song Dynasty · c. 1190–1230 CE',
+    dynastyFullZh: '南宋 · 约1190至1230年',
+    artist: '李嵩',
+    artistFull: '李嵩 Li Song',
+    tagZh: '万圣特辑',
+    tagEn: 'Halloween Special',
+    grad: 'linear-gradient(148deg,#120c04 0%,#3a2a0c 24%,#8a6a28 50%,#5a4418 74%,#120c04 100%)',
+    color: '#8a6a28',
+    figures: [
+      { id:'mother', name:'哺乳妇人', nameEn:'Nursing Mother', descZh:'倚坐货郎担旁，怀抱婴孩哺乳，静静望着眼前的骷髅傀儡戏——生与死同在一幅画中，唯她神色从容。', descEn:'Seated beside the peddler\'s cart nursing her baby, she watches the skeleton puppet show in perfect calm — life and death share the frame, and only she seems unbothered.', gender:'woman' },
+      { id:'girl', name:'拦童少女', nameEn:'Girl Reaching for the Child', descZh:'张开双臂迎向爬行的孩童，似要拦住他扑向那具跳动的小骷髅——画中唯一面露关切之人。', descEn:'Arms open toward the crawling child as if to stop him reaching the little dancing skeleton — the only face in the scene that shows concern.', gender:'woman' },
+      { id:'skeleton', name:'提线骷髅', nameEn:'Skeleton Puppeteer', descZh:'头戴纱幞、身着长衫的大骷髅，席地操弄小骷髅傀儡——以你的面容，隐于白骨之下，演一出生死幻戏。', descEn:'A great skeleton in gauze cap and robe, working a tiny skeleton on strings — your face glimpsed beneath the bones, staging the old play of life and death.', gender:'man' },
+    ],
+    youAre: '哺乳妇人 · Nursing Mother',
+    context: 'A large skeleton in a gauze cap works a marionette of a small skeleton, while a crawling child reaches for it and a young woman moves to hold him back. Southern Song court painter Li Song set life and death side by side on this round silk fan. Held at the Palace Museum, Beijing.',
+    contextZh: '大骷髅头戴纱幞，席地提线操弄小骷髅傀儡；孩童爬向傀儡，身后女子伸手欲拦。南宋宫廷画家李嵩在这幅绢本团扇上，将生与死并置于同一画面。现藏北京故宫博物院。',
+    scene: 'At a roadside stop marked "five li," a skeleton pulls the strings of a smaller skeleton — and you sit beside the cart, nursing your child, as if this were the most ordinary show in the world.',
+    sceneZh: '"五里"路牌下，骷髅牵动着小骷髅的提线——你倚在货郎担旁，怀抱婴孩，仿佛眼前只是一场再寻常不过的街头戏。',
+  },
+  {
+    id: 'zhongkui_fangxun',
+    directImageUrl: '/paintings/zhongkui_fangxun.jpg',
+    title: '钟馗像',
+    sub: 'Zhong Kui with a Little Demon',
+    subZh: '清方薰绘钟馗小鬼图',
+    dynasty: '清',
+    dynastyFull: 'Qing Dynasty · 18th century CE',
+    dynastyFullZh: '清代 · 18世纪',
+    artist: '方薰',
+    artistFull: '方薰 Fang Xun',
+    tagZh: '万圣特辑',
+    tagEn: 'Halloween Special',
+    grad: 'linear-gradient(148deg,#100c06 0%,#3a3020 24%,#8a7a5a 50%,#4a3e28 74%,#100c06 100%)',
+    color: '#8a7a5a',
+    figures: [
+      { id:'zhongkui', name:'钟馗', nameEn:'Zhong Kui', descZh:'头戴乌纱，袍袖宽大，摊开双手似在训诫；身旁小鬼捧碗奉酒，诚惶诚恐。', descEn:'In black gauze cap and sweeping robes, hands raised as if mid-lecture, while a little demon cowers beside him offering a bowl of wine.', gender:'man', look:'bearded' },
+    ],
+    youAre: '钟馗 · Zhong Kui',
+    context: 'Fang Xun, a leading painter of the mid-Qing, shows Zhong Kui at ease rather than in battle: the demon queller strolls with sword at his hip while a captured little demon serves him wine. Held at the Shanghai Museum.',
+    contextZh: '清代画家方薰笔下的钟馗不在搏斗，而在闲步：腰悬宝剑，摊手训话，被收服的小鬼战战兢兢捧碗进酒。现藏上海博物馆。',
+    scene: 'The demons are long defeated; one even pours your wine. You raise both hands and deliver a lecture he will not forget.',
+    sceneZh: '群鬼早已降伏，连小鬼都来为你斟酒。你摊开双手，正给他上一堂终生难忘的训诫。',
   },
 ];
 
@@ -651,8 +713,8 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
               if (fig.disabled || figRegion?.disabled) return null;
               return (<div key={fig.id} className={`fig-opt r${i + 3}`} onClick={() => onSelect(fig)}
                 style={{
-                  border:`1px solid ${fig.rec ? 'rgba(201,168,76,.38)' : C.border}`,
-                  background: fig.rec ? C.goldFaint : 'transparent',
+                  border:'1px solid rgba(201,168,76,.38)',
+                  background: C.goldFaint,
                   padding:'14px 16px', borderRadius:4,
                   display:'flex', alignItems:'center', justifyContent:'space-between',
                 }}>
@@ -698,9 +760,21 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
   const [camState, setCamState] = useState(lastSelfie ? 'done' : 'starting');
   const [count, setCount] = useState(3);
   const [capturedImg, setCapturedImg] = useState(lastSelfie || null);
+  // No-face guard: 'checking' | 'ok' | 'none' | 'small'. Blocks 入画 (and the
+  // Seedream call + credit behind it) when the photo has no usable face.
+  const [faceCheck, setFaceCheck] = useState('checking');
   const videoRef = useRef(null);
   const canvasRef = useRef(null);
   const streamRef = useRef(null);
+
+  useEffect(() => {
+    if (!capturedImg) return;
+    let live = true;
+    setFaceCheck('checking');
+    checkSelfieFace(capturedImg).then(r => { if (live) setFaceCheck(r.ok ? 'ok' : r.reason); });
+    return () => { live = false; };
+  }, [capturedImg]);
+  const faceBlocked = faceCheck === 'none' || faceCheck === 'small';
 
   // Start front camera on mount — skip if already showing cached selfie
   useEffect(() => {
@@ -977,21 +1051,32 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
           {camState === 'done' && (
             <div className="fade-a" style={{
               position:'absolute', bottom:12, left:'50%', transform:'translateX(-50%)',
-              background:'rgba(12,9,4,.75)', border:`1px solid ${C.gold}`,
-              color:C.gold, fontFamily:F.serif, fontSize:11,
+              background:'rgba(12,9,4,.75)', border:`1px solid ${faceBlocked ? C.vermillion : C.gold}`,
+              color: faceBlocked ? C.vermillion : C.gold, fontFamily:F.serif, fontSize:11,
               padding:'4px 14px', letterSpacing:'.12em', whiteSpace:'nowrap',
               zIndex:5,
             }}>
-              {capturedImg === lastSelfie ? '↩ 上次自拍' : '✓ 自拍已捕捉'}
+              {faceBlocked ? '✕ 未检测到人脸' : capturedImg === lastSelfie ? '↩ 上次自拍' : '✓ 自拍已捕捉'}
             </div>
           )}
         </div>
 
         {/* Pose hint */}
         <div style={{ width:'100%', maxWidth:300, marginTop:11 }}>
-          <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
-            ✓ 请保持正面朝向镜头以获得最佳效果
-          </div>
+          {camState === 'done' && faceBlocked ? (
+            <div style={{ fontFamily:F.serif, fontSize:12, color:C.vermillion, lineHeight:1.65 }}>
+              {faceCheck === 'small'
+                ? '脸离镜头太远了，请靠近一些、正对镜头重拍'
+                : '没有检测到人脸，请正对镜头、在光线充足处重拍'}
+              <div style={{ fontFamily:F.latin, fontSize:10, color:C.silkFaint }}>
+                {faceCheck === 'small' ? 'Your face is too small in the photo — move closer and retake.' : 'No face detected — face the camera in good light and retake.'}
+              </div>
+            </div>
+          ) : (
+            <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkDim, lineHeight:1.65 }}>
+              ✓ 请保持正面朝向镜头以获得最佳效果
+            </div>
+          )}
         </div>
 
         {/* Buttons */}
@@ -1016,12 +1101,16 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
             </>
           ) : (
             <>
-              <button onClick={() => capturedImg === lastSelfie ? onConfirmWithSelfie(lastSelfie) : onConfirm()} className="btn" style={{
-                background:C.vermillion, color:'#f5e8c4',
+              <button
+                disabled={faceCheck !== 'ok'}
+                onClick={() => { if (faceCheck !== 'ok') return; capturedImg === lastSelfie ? onConfirmWithSelfie(lastSelfie) : onConfirm(); }}
+                className="btn" style={{
+                background: faceCheck === 'ok' ? C.vermillion : 'rgba(191,36,41,.3)', color:'#f5e8c4',
                 fontFamily:F.brush, fontSize:20, padding:'14px', letterSpacing:'.35em',
-                boxShadow:`0 4px 22px rgba(191,36,41,.32)`,
+                boxShadow: faceCheck === 'ok' ? `0 4px 22px rgba(191,36,41,.32)` : 'none',
+                cursor: faceCheck === 'ok' ? 'pointer' : 'default',
               }}>
-                入画 →
+                {faceCheck === 'checking' ? '检测中…' : '入画 →'}
               </button>
               <button onClick={handleRetake} className="btn" style={{
                 background:'transparent', border:`1px solid ${C.border}`,

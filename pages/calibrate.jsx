@@ -17,6 +17,10 @@ const PAINTINGS = [
       {id:'guest',  name:'宾客'},
       {id:'host',   name:'韩熙载'},
       {id:'dancer', name:'乐伎'},
+      {id:'official', name:'侍立官员'},
+      {id:'attendant', name:'执杖宾客'},
+      {id:'lady', name:'白衣侍女'},
+      {id:'maid', name:'蓝衣少女'},
     ]},
   { id:'gongle', title:'宫乐图', directImageUrl:'/paintings/gongle.jpg',
     figures:[
@@ -24,11 +28,16 @@ const PAINTINGS = [
       {id:'guzheng',  name:'古筝仕女'},
       {id:'clapper',  name:'执拍侍女'},
       {id:'listener', name:'听乐仕女'},
+      {id:'maid', name:'侍立宫女'},
     ]},
   { id:'daolian', title:'捣练图', directImageUrl:'/paintings/daolian.jpg',
     figures:[
       {id:'girl',     name:'粉衣小童'},
       {id:'threader', name:'穿针仕女'},
+      {id:'stretcher', name:'展练仕女'},
+      {id:'ironer', name:'熨绢仕女'},
+      {id:'fanner', name:'扇火侍女'},
+      {id:'pounder', name:'捣练仕女'},
     ]},
   { id:'yinger', title:'戏婴图', directImageUrl:'/paintings/yinger.jpg',
     figures:[
@@ -41,11 +50,13 @@ const PAINTINGS = [
     figures:[
       {id:'lady',   name:'调琴仕女'},
       {id:'seated', name:'静坐仕女'},
+      {id:'attendant', name:'托盘侍女'},
     ]},
   { id:'huishan', title:'挥扇仕女图', directImageUrl:'/paintings/huishan.jpg',
     figures:[
       {id:'center', name:'执瓶仕女'},
       {id:'seated', name:'倚坐仕女'},
+      {id:'dreamer', name:'支颐仕女'},
     ]},
   { id:'mingdaidihou_taizu', title:'明太祖 · 孝慈高皇后', directImageUrl:'/paintings/mingdaidihou_taizu.jpg',
     figures:[
@@ -62,12 +73,21 @@ const PAINTINGS = [
       {id:'empress', name:'孝康敬皇后'},
       {id:'emperor', name:'明孝宗'},
     ]},
+  { id:'kulou', title:'骷髅幻戏图', directImageUrl:'/paintings/kulou.jpg',
+    figures:[
+      {id:'mother', name:'哺乳妇人'},
+      {id:'girl', name:'拦童少女'},
+      {id:'skeleton', name:'提线骷髅'},
+    ]},
+  { id:'zhongkui_fangxun', title:'方薰·钟馗像', directImageUrl:'/paintings/zhongkui_fangxun.jpg',
+    figures:[ {id:'zhongkui', name:'钟馗'} ]},
 ];
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];
 
 export default function Calibrate() {
   const [pIdx, setPIdx] = useState(0);
+  const [zoom, setZoom] = useState(1);
   const [vals, setVals] = useState({});   // {paintingId_figureId: {x,y,w,h}}
   const [imgUrl, setImgUrl] = useState('');
   const [imgSize, setImgSize] = useState({w:1,h:1});
@@ -78,7 +98,41 @@ export default function Calibrate() {
 
   useEffect(() => { valsRef.current = vals; }, [vals]);
 
+  // Live preview (dev): composite the saved test portrait with the box as it
+  // is on screen, ~0.5s after a figure's box stops changing.
+  const [previews, setPreviews] = useState({}); // {key: {url} | {loading} | {error}}
+  const previewedRef = useRef({});              // key -> JSON of the box last previewed
+  const runPreview = useCallback(async (paintingId, figId) => {
+    const key = `${paintingId}_${figId}`;
+    const v = valsRef.current[key];
+    if (!v) return;
+    const { _original, ...region } = v;
+    previewedRef.current[key] = JSON.stringify(region);
+    setPreviews(p => ({ ...p, [key]: { ...p[key], loading: true } }));
+    try {
+      const r = await fetch('/api/dev-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paintingId, figureId: figId, region }) });
+      const j = await r.json();
+      setPreviews(p => ({ ...p, [key]: r.ok ? { url: j.url } : { error: j.error || r.status } }));
+    } catch (e) {
+      setPreviews(p => ({ ...p, [key]: { error: e.message } }));
+    }
+  }, []);
+
   const painting = PAINTINGS[pIdx];
+
+  useEffect(() => {
+    if (dragging) return;
+    const t = setTimeout(() => {
+      for (const f of painting.figures) {
+        const key = `${painting.id}_${f.id}`;
+        const v = vals[key]; if (!v) continue;
+        const { _original, ...region } = v;
+        if (previewedRef.current[key] !== JSON.stringify(region)) runPreview(painting.id, f.id);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [vals, dragging, painting, runPreview]);
 
   // Load saved FACE_REGIONS from composite.js via API
   useEffect(() => {
@@ -123,6 +177,7 @@ export default function Calibrate() {
   const onImgLoad = () => {
     if (imgRef.current) setImgSize({w:imgRef.current.offsetWidth, h:imgRef.current.offsetHeight});
   };
+  useEffect(() => { onImgLoad(); }, [zoom]);
 
   const getVal = (figId) => {
     const key = `${painting.id}_${figId}`;
@@ -220,8 +275,12 @@ export default function Calibrate() {
     if (!imgRef.current) return;
     e.preventDefault();
     const pos = getMousePos(e);
-    const CORNER_HIT = 0.025;
-    const DOT_HIT = 0.018;
+    // Hit areas in screen pixels. They used to be fractions of the painting's
+    // width/height, so on very wide paintings (调琴啜茗图, 戏婴图) or when zoomed
+    // the skin-sample dot's grab area grew huge and swallowed clicks on the box.
+    const rect = imgRef.current.getBoundingClientRect();
+    const near = (ax, ay, bx, by, px) =>
+      Math.abs((ax - bx) * rect.width) < px && Math.abs((ay - by) * rect.height) < px;
 
     // Check skinSample dot drag first
     for (let fi = 0; fi < painting.figures.length; fi++) {
@@ -229,7 +288,7 @@ export default function Calibrate() {
       const v = getVal(fig.id);
       if (v.skinSample) {
         const { cx, cy } = v.skinSample;
-        if (Math.abs(pos.x - cx) < DOT_HIT && Math.abs(pos.y - cy) < DOT_HIT) {
+        if (near(pos.x, pos.y, cx, cy, 7)) {
           const d = { type:'skinSample', paintingId:painting.id, figId:fig.id,
                       startX:pos.x, startY:pos.y, origBox:{...v} };
           draggingRef.current = d; setDragging(d); return;
@@ -240,14 +299,23 @@ export default function Calibrate() {
     for (let fi = 0; fi < painting.figures.length; fi++) {
       const fig = painting.figures[fi];
       const v = getVal(fig.id);
+      // Handles are drawn rotated with the box (CSS rotate around its centre),
+      // so hit-test the rotated positions -- on tilted boxes (戏婴图, ~15-20°)
+      // the unrotated corners missed the visible arrows entirely.
+      const a = (v.angle || 0) * Math.PI / 180, ca = Math.cos(a), sa = Math.sin(a);
+      const cxp = (v.x + v.w / 2) * rect.width, cyp = (v.y + v.h / 2) * rect.height;
+      const rot = (dx, dy) => {
+        const px = dx * v.w * rect.width, py = dy * v.h * rect.height;
+        return { x: (cxp + px * ca - py * sa) / rect.width, y: (cyp + px * sa + py * ca) / rect.height };
+      };
       const corners = [
-        {name:'tl', x:v.x,     y:v.y},
-        {name:'tr', x:v.x+v.w, y:v.y},
-        {name:'bl', x:v.x,     y:v.y+v.h},
-        {name:'br', x:v.x+v.w, y:v.y+v.h},
+        {name:'tl', ...rot(-0.5, -0.5)},
+        {name:'tr', ...rot( 0.5, -0.5)},
+        {name:'bl', ...rot(-0.5,  0.5)},
+        {name:'br', ...rot( 0.5,  0.5)},
       ];
       for (const c of corners) {
-        if (Math.abs(pos.x-c.x) < CORNER_HIT && Math.abs(pos.y-c.y) < CORNER_HIT) {
+        if (near(pos.x, pos.y, c.x, c.y, 14)) {
           const d = { type:'resize', paintingId:painting.id, figId:fig.id,
                       corner:c.name, startX:pos.x, startY:pos.y, origBox:{...v} };
           draggingRef.current = d; setDragging(d); return;
@@ -259,7 +327,7 @@ export default function Calibrate() {
         draggingRef.current = d; setDragging(d); return;
       }
     }
-  }, [painting]);
+  }, [painting, zoom]);
 
   // Build output
   const allOutput = PAINTINGS.map(p => {
@@ -293,12 +361,43 @@ export default function Calibrate() {
         ))}
       </div>
 
+      {/* Zoom */}
+      <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:8,fontSize:11,color:C.dim}}>
+        zoom:
+        {[1,2,3,4,6].map(z=>(
+          <button key={z} style={B(z===zoom)} onClick={()=>setZoom(z)}>{z}×</button>
+        ))}
+        {zoom>1 && <span>scroll inside the frame to pan</span>}
+      </div>
+
+      {/* Live preview with the test selfie (dev) */}
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:10}}>
+        {painting.figures.map((f, fi) => {
+          const pv = previews[`${painting.id}_${f.id}`] || {};
+          return (
+            <div key={f.id} style={{width:180,fontSize:11,color:C.dim}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                <span style={{color:FIG_COLORS[fi % FIG_COLORS.length]}}>{f.name}</span>
+                <span>{pv.loading ? '⏳' : ''}
+                  <button style={{...B(false),padding:'0 6px',fontSize:10,marginLeft:4}} onClick={()=>runPreview(painting.id, f.id)}>↻</button></span>
+              </div>
+              {pv.url
+                ? <img src={pv.url} alt={f.name} style={{width:180,height:180,objectFit:'contain',background:'#18110a',opacity:pv.loading?0.5:1,border:'1px solid rgba(201,168,76,0.2)'}}/>
+                : <div style={{width:180,height:180,background:'#18110a',display:'flex',alignItems:'center',justifyContent:'center',textAlign:'center',padding:8,boxSizing:'border-box'}}>
+                    {pv.error ? `⚠ ${pv.error}` : 'preview…'}</div>}
+            </div>
+          );
+        })}
+      </div>
+
       {/* Image + boxes */}
-      <div style={{position:'relative',display:'inline-block',marginBottom:12}}
+      <div style={{maxWidth:'100%',maxHeight:zoom>1?'80vh':'none',overflow:zoom>1?'auto':'visible',marginBottom:12}}>
+      <div style={{position:'relative',display:'inline-block'}}
            onMouseDown={onImgMouseDown}>
         {imgUrl
           ? <img ref={imgRef} src={imgUrl} alt={painting.title}
-              style={{display:'block',maxWidth:'100%',maxHeight:500,
+              style={{display:'block',
+                      ...(zoom>1 ? {height:500*zoom,maxWidth:'none'} : {maxWidth:'100%',maxHeight:500}),
                       border:'1px solid rgba(201,168,76,0.2)',userSelect:'none'}}
               onLoad={onImgLoad} draggable={false}/>
           : <div style={{width:500,height:300,background:'#18110a',
@@ -381,6 +480,7 @@ export default function Calibrate() {
             </div>
           );
         })}
+      </div>
       </div>
 
       {/* Legend + Angle sliders */}

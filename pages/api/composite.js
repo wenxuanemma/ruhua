@@ -9,6 +9,29 @@ export const config = { api: { bodyParser: { sizeLimit: '10mb' } } };
 // face boundary.
 const FACE_OVAL = [10,338,297,332,284,251,389,356,454,323,361,288,
   397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21,54,103,67,109,10];
+// sRGB <-> CIELAB (D65), for the Lab colour transfer below.
+const srgbToLin = (c) => { c /= 255; return c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4; };
+const linToSrgb = (c) => { const v = c <= 0.0031308 ? 12.92 * c : 1.055 * c ** (1 / 2.4) - 0.055; return Math.max(0, Math.min(255, Math.round(v * 255))); };
+const labF = (t) => t > 216 / 24389 ? Math.cbrt(t) : (24389 / 27 * t + 16) / 116;
+const labFi = (t) => t ** 3 > 216 / 24389 ? t ** 3 : (116 * t - 16) / (24389 / 27);
+function rgbToLab(r, g, b) {
+  const R = srgbToLin(r), G = srgbToLin(g), B = srgbToLin(b);
+  const x = (0.4124 * R + 0.3576 * G + 0.1805 * B) / 0.95047;
+  const y = (0.2126 * R + 0.7152 * G + 0.0722 * B);
+  const z = (0.0193 * R + 0.1192 * G + 0.9505 * B) / 1.08883;
+  const fx = labF(x), fy = labF(y), fz = labF(z);
+  return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+}
+function labToRgb(L, a, b) {
+  const fy = (L + 16) / 116, fx = fy + a / 500, fz = fy - b / 200;
+  const x = labFi(fx) * 0.95047, y = labFi(fy), z = labFi(fz) * 1.08883;
+  const R = 3.2406 * x - 1.5372 * y - 0.4986 * z;
+  const G = -0.9689 * x + 1.8758 * y + 0.0415 * z;
+  const B = 0.0557 * x - 0.2040 * y + 1.0570 * z;
+  return [linToSrgb(R), linToSrgb(G), linToSrgb(B)];
+}
+const meanStd = (arr) => { const m = arr.reduce((s, v) => s + v, 0) / arr.length; return [m, Math.sqrt(arr.reduce((s, v) => s + (v - m) ** 2, 0) / arr.length) || 1]; };
+
 const JAW_INDICES = [251,389,356,454,323,361,288,397,365,379,378,400,377,152,148,176,149,150,136,172,58,132,93,234,127,162,21];
 
 async function fetchBuf(url) {
@@ -109,7 +132,19 @@ export default async function handler(req, res) {
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
-  const region = FACE_REGIONS[paintingId]?.[figureId];
+  // Dev-only: debugRegion overrides the saved calibration for this request
+  // (the /calibrate live preview sends the box as it is on screen).
+  const region = process.env.NODE_ENV === 'development' && req.body.debugRegion && FACE_REGIONS[paintingId]?.[figureId]
+    ? { ...FACE_REGIONS[paintingId][figureId], ...req.body.debugRegion }
+    : FACE_REGIONS[paintingId]?.[figureId];
+
+  // Dev-only: debugSteps:true returns every intermediate image in the response
+  // (debugSteps: { name: dataURL }) for side-by-side inspection.
+  const debugSteps = process.env.NODE_ENV === 'development' && req.body.debugSteps ? {} : null;
+  const dbg = async (name, buf) => {
+    if (!debugSteps || !buf) return;
+    debugSteps[name] = `data:image/png;base64,${(await sharp(buf).png().toBuffer()).toString('base64')}`;
+  };
   if (!region) return res.status(400).json({ error: `No region for ${paintingId}/${figureId}` });
 
   try {
@@ -158,7 +193,29 @@ export default async function handler(req, res) {
 
     // Selfie-based crop only for front-facing figures \u2014 three-quarter and profile
     // figures have different poses than the selfie so faceBounds doesn't apply.
-    if (isFront && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
+    // Three-quarter figures take this path too when the client sent MediaPipe
+    // landmarks for the angled portrait -- the LOCAL_SERVER branch below is
+    // dev-only (LAN address) and never runs on Vercel.
+    const useLandmarkCrop = isFront || (!isProfile && faceBounds?.fromLandmarks);
+    if (isProfile && faceBounds?.fromSegmentation && faceBounds.w > 0 && faceBounds.h > 0) {
+      // ── Profile: face-skin segmentation bbox ──────────────────────────────
+      // MediaPipe landmarks are unreliable on a full side view and the old
+      // detector (LOCAL_SERVER) is LAN-only, so profiles crop from the client's
+      // face-skin bounding box: scale so its height (hairline→chin) fills the
+      // calibrated region height, centred on the box. The skin mask then cuts
+      // the face outline (no landmark polygon).
+      const faceHpx = faceBounds.h * FH;
+      cropSize = Math.max(16, Math.min(Math.round(faceHpx * targetSize / targetH), FW, FH));
+      const cxPx = Math.round((faceBounds.x + faceBounds.w / 2) * FW);
+      const cyPx = Math.round((faceBounds.y + faceBounds.h / 2) * FH);
+      cropX = Math.max(0, Math.min(cxPx - Math.round(cropSize / 2), FW - cropSize));
+      cropY = Math.max(0, Math.min(cyPx - Math.round(cropSize / 2), FH - cropSize));
+      faceCenterInCropX = cxPx - cropX;
+      faceCenterInCropY = cyPx - cropY;
+      cropMethod = 'segmentation';
+      console.log(`[composite:${figureId} crop] SEGMENTATION bbox=(${faceBounds.x.toFixed(2)},${faceBounds.y.toFixed(2)},${faceBounds.w.toFixed(2)},${faceBounds.h.toFixed(2)}) cropSize=${cropSize} cropX=${cropX} cropY=${cropY}`);
+
+    } else if (useLandmarkCrop && faceBounds && faceBounds.w > 0 && faceBounds.h > 0) {
       // \u2500\u2500 Front/3Q: portrait face bounds crop \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
       // faceBounds detected directly from portrait via client MediaPipe.
       // Horizontal: always center on portrait midpoint (Seedream always generates
@@ -172,10 +229,17 @@ export default async function handler(req, res) {
         // This ensures the portrait face fills the calibrated oval in the painting.
         // ovalRy = (targetH/targetSize) * targetSize * 0.42
         // faceInPS = faceH_lm*FH/cropSize * pasteS = 2*ovalRy → cropSize = faceH_lm*FH*pasteS/(2*ovalRy)
-        const faceH_lm = faceBounds.chinY - faceBounds.foreheadY;
+        // Angled hat figures: the cut-out stops at the upper forehead (lm10) --
+        // the hat hides the rest -- so scale that visible span, not the
+        // estimated hairline, to the box height. Otherwise the face came out
+        // ~15% short, and was then either too wide or too narrow for the box.
+        const lm10Y = faceBounds.landmarks?.[10]?.y;
+        const visTop = (!isFront && region.foreheadClip && lm10Y != null) ? lm10Y : faceBounds.foreheadY;
+        const faceH_lm = faceBounds.chinY - visTop;
         const ovalRy_target = Math.min((targetH / targetSize) * targetSize * 0.50, targetSize * 0.50);
         const idealCropSize = Math.round((faceH_lm * FH * targetSize) / (2 * ovalRy_target));
-        faceCenterY_frac = faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2;
+        faceCenterY_frac = visTop !== faceBounds.foreheadY ? (visTop + faceBounds.chinY) / 2
+          : (faceBounds.centerY ?? (faceBounds.foreheadY + faceBounds.chinY) / 2);
         cropTopFrac = Math.max(0, faceCenterY_frac - (idealCropSize / FH) / 2);
         cropBotFrac = Math.min(1, faceCenterY_frac + (idealCropSize / FH) / 2);
         console.log(`[composite:${figureId} crop] LANDMARKS-TIGHT forehead=${faceBounds.foreheadY.toFixed(3)} chin=${faceBounds.chinY.toFixed(3)} faceH=${faceH_lm.toFixed(3)} idealCropSize=${idealCropSize} ovalRy=${ovalRy_target.toFixed(1)}`);
@@ -325,6 +389,7 @@ export default async function handler(req, res) {
         .toBuffer();
     }
     console.log(`[composite:${figureId}] cropMethod=${cropMethod} cropSize=${cropSize}`);
+    await dbg('1_crop', faceCropBuf);
 
     // \u2500\u2500 Step 2: Resize face to exact square \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     let faceImg = sharp(faceCropBuf);
@@ -398,13 +463,97 @@ export default async function handler(req, res) {
 
     console.log(`[composite:${figureId} color] paintSample=(${ps.rm.toFixed(1)},${ps.gm.toFixed(1)},${ps.bm.toFixed(1)}) faceMean=(${fs.rm.toFixed(1)},${fs.gm.toFixed(1)},${fs.bm.toFixed(1)}) scale=(${rM.toFixed(3)},${gM.toFixed(3)},${bM.toFixed(3)})`);
 
-    // Color match \u2014 keep exact S x S dimensions
-    const colorFace = await sharp(facePng)
-      .removeAlpha()
-      .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
-      .modulate({ saturation: region.saturation ?? 0.72, brightness: region.brightness ?? 1.0 })
-      .png()
-      .toBuffer();
+    // Colour mode. 'legacy' = per-channel mean scale + 0.72 saturation cut (the
+    // shipped look; on warm, saturated paintings it reads grey). 'lab' = match the
+    // face's Lab mean/spread to the painting's skin (brighter half of the pixels
+    // in the calibrated oval, so outlines/eyes/hair don't drag it darker).
+    // Default: lab for every figure; region.colorMode:'legacy' keeps the old
+    // look (faded paintings, pending a contrast adjustment); dev-only
+    // debugColor overrides both.
+    const devColor = process.env.NODE_ENV === 'development' ? req.body.debugColor : undefined;
+    const colorMode = devColor || region.colorMode || 'lab';
+    let colorFace;
+    if (colorMode === 'lab') {
+      // Painting skin: brighter half of the pixels inside the calibrated oval.
+      const bx = Math.max(0, targetX), by = Math.max(0, targetY);
+      const bw = Math.min(targetW, PW - bx), bh = Math.min(targetH, PH - by);
+      const { data: pd, info: pinf } = await sharp(paintingBuf)
+        .extract({ left: bx, top: by, width: bw, height: bh }).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const pLab = [];
+      for (let y = 0; y < pinf.height; y++) for (let x = 0; x < pinf.width; x++) {
+        const nx = (x + 0.5) / pinf.width - 0.5, ny = (y + 0.5) / pinf.height - 0.5;
+        if (nx * nx + ny * ny > 0.16) continue;
+        const i = (y * pinf.width + x) * 3;
+        pLab.push(rgbToLab(pd[i], pd[i + 1], pd[i + 2]));
+      }
+      pLab.sort((u, v) => u[0] - v[0]);
+      const pSkin = pLab.slice(pLab.length >> 1);
+
+      // Face skin: central oval of the cropped face, dropping the darkest 30%
+      // (eyes, brows, nostrils, lip line).
+      const { data: fd, info: finf } = await sharp(facePng).removeAlpha().raw().toBuffer({ resolveWithObject: true });
+      const fLabAll = new Array(finf.width * finf.height);
+      const fSample = [];
+      for (let y = 0; y < finf.height; y++) for (let x = 0; x < finf.width; x++) {
+        const i = (y * finf.width + x) * 3;
+        const lab = rgbToLab(fd[i], fd[i + 1], fd[i + 2]);
+        fLabAll[y * finf.width + x] = lab;
+        const nx = (x + 0.5) / finf.width - 0.5, ny = (y + 0.5) / finf.height - 0.55;
+        if ((nx / 0.30) ** 2 + (ny / 0.32) ** 2 <= 1) fSample.push(lab);
+      }
+      fSample.sort((u, v) => u[0] - v[0]);
+      const fSkin = fSample.slice(Math.floor(fSample.length * 0.3));
+
+      if (pSkin.length > 20 && fSkin.length > 20) {
+        const ch = (arr, k) => meanStd(arr.map(v => v[k]));
+        let [pL, psL] = ch(pSkin, 0), [pA, psA] = ch(pSkin, 1), [pB, psB] = ch(pSkin, 2);
+        // region.labOffset {L,a,b}: per-figure nudge of the target skin tone, for
+        // painted faces whose powder/whiteness the silk-and-texture sample
+        // under-reads (调琴啜茗图, 明宣宗后). Dev override: debugLabOffset.
+        const off = (process.env.NODE_ENV === 'development' && req.body.debugLabOffset) || region.labOffset;
+        if (off) { pL += off.L || 0; pA += off.a || 0; pB += off.b || 0; }
+        const [fL, fsL] = ch(fSkin, 0), [fA, fsA] = ch(fSkin, 1), [fB, fsB] = ch(fSkin, 2);
+        // Spread ratios clamped: keep the face's own shading/features readable
+        // (L never flattened below 0.6x); a/b spread capped at 1.15x so lips and
+        // cheeks don't go garish on saturated paintings.
+        // Faded paintings (region.labFade, 0..1): the painted face's own contrast
+        // can't be measured reliably (silk grain and cracks read as contrast), so
+        // fade the face directly -- scale its lightness contrast and colour
+        // intensity (lips, cheeks) down toward the painting's flat skin tone.
+        const dev = process.env.NODE_ENV === 'development';
+        const fade = (dev && req.body.debugLabFade != null) ? req.body.debugLabFade : (region.labFade ?? 0);
+        const kL = Math.max(0.6, Math.min(1.1, psL / fsL)) * (1 - 0.5 * fade);
+        const kA = Math.max(0.5, Math.min(1.15, psA / fsA)) * (1 - 0.6 * fade);
+        const kB = Math.max(0.5, Math.min(1.15, psB / fsB)) * (1 - 0.6 * fade);
+        const bright = (region.brightness ?? 1.0);
+        const out = Buffer.alloc(finf.width * finf.height * 3);
+        for (let p = 0; p < fLabAll.length; p++) {
+          const [L, A, B] = fLabAll[p];
+          // a/b floored just below neutral -- or just below the painting's own
+          // skin when that is itself cool (调琴啜茗图's bluish-white faces):
+          // eye whites are far less yellow than skin and would otherwise be
+          // pushed into blue/green, but the face must be able to match a cool
+          // painted skin. (An extra min(B,0) floor used to pin all warm skin
+          // at b>=0, so cool paintings could never be matched.)
+          const rgb = labToRgb(
+            Math.max(0, Math.min(100, (pL + (L - fL) * kL) * bright)),
+            Math.max(Math.min(-1, pA - 4), pA + (A - fA) * kA),
+            Math.max(Math.min(-1, pB - 4), pB + (B - fB) * kB));
+          out[p * 3] = rgb[0]; out[p * 3 + 1] = rgb[1]; out[p * 3 + 2] = rgb[2];
+        }
+        colorFace = await sharp(out, { raw: { width: finf.width, height: finf.height, channels: 3 } }).png().toBuffer();
+        console.log(`[composite:${figureId} colour] lab: paintSkin L/a/b=(${pL.toFixed(1)},${pA.toFixed(1)},${pB.toFixed(1)}) faceSkin=(${fL.toFixed(1)},${fA.toFixed(1)},${fB.toFixed(1)}) k=(${kL.toFixed(2)},${kA.toFixed(2)},${kB.toFixed(2)})`);
+      }
+    }
+    if (!colorFace) {
+      // Color match \u2014 keep exact S x S dimensions
+      colorFace = await sharp(facePng)
+        .removeAlpha()
+        .recomb([[rM,0,0],[0,gM,0],[0,0,bM]])
+        .modulate({ saturation: region.saturation ?? 0.72, brightness: region.brightness ?? 1.0 })
+        .png()
+        .toBuffer();
+    }
 
     // Force exact S x S after color operations (recomb can shift by 1px)
     const colorFaceExact = await sharp(colorFace)
@@ -511,8 +660,17 @@ export default async function handler(req, res) {
     // paintings at once), this only activates for figures explicitly
     // recalibrated with width in mind -- currently just the 3 couples
     // paintings, which is what this fix was actually built for.
+    // Whether the face-skin segmentation mask will be applied (see below). Decided
+    // up here because the width fit and the three-quarter polygon depend on it.
+    const devSkin = process.env.NODE_ENV === 'development' ? req.body.debugSkinMask : undefined;
+    const wantSkinMask = devSkin ? devSkin === 'on' : (region.skinMask !== false);
+    const skinMaskComing = wantSkinMask && !!req.body.faceSkinMaskUrl;
+
     let widthStretch = 1.0;
-    if (region.widthCalibrated && landmarks && landmarks.length >= 468 && !isProfile) {
+    // Angled faces with segmentation get their width fitted after masking
+    // instead (fitMaskedWidth below): the landmark jaw width undercounts the far
+    // side of a turned face, which over-stretched it.
+    if (region.widthCalibrated && landmarks && landmarks.length >= 468 && !isProfile && !(skinMaskComing && !isFront)) {
       const lmPxRaw = (lm) => (lm.x * FW - cropX) / cropSize * pasteS;
       const jawXs = JAW_INDICES.map(i => lmPxRaw(landmarks[i]));
       const naturalJawWidth = Math.max(...jawXs) - Math.min(...jawXs);
@@ -522,9 +680,12 @@ export default async function handler(req, res) {
       }
     }
 
-    if (Math.abs(widthStretch - 1) > 0.02) {
+    // Same horizontal stretch around ovalCx for the face and (below) its
+    // face-skin mask, so the two stay pixel-aligned.
+    const applyWidthStretch = async (buf, label) => {
+      if (Math.abs(widthStretch - 1) <= 0.02) return buf;
       const stretchedW = Math.max(1, Math.round(pasteS * widthStretch));
-      const stretchedBuf = await sharp(pasteFace)
+      const stretchedBuf = await sharp(buf)
         .resize(stretchedW, pasteS, { fit: 'fill' })
         .png()
         .toBuffer();
@@ -534,26 +695,29 @@ export default async function handler(req, res) {
         // composite() refuses an overlay larger than its base, so extract the
         // pasteS-wide window that keeps ovalCx fixed in place instead.
         const cropFromStretched = Math.max(0, Math.min(-pasteLeft, stretchedW - pasteS));
-        pasteFace = await sharp(stretchedBuf)
+        if (label) console.log(`[composite:${figureId}] width-stretch (widen): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} cropFromStretched=${cropFromStretched}`);
+        return sharp(stretchedBuf)
           .extract({ left: cropFromStretched, top: 0, width: pasteS, height: pasteS })
           .png()
           .toBuffer();
-        console.log(`[composite:${figureId}] width-stretch (widen): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} cropFromStretched=${cropFromStretched}`);
-      } else {
-        // Narrowing: stretched buffer is smaller than the canvas, pad with
-        // transparent margins on a fresh canvas.
-        pasteFace = await sharp({
-          create: { width: pasteS, height: pasteS, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
-        })
-          .composite([{ input: stretchedBuf, left: Math.max(0, pasteLeft), top: 0 }])
-          .png()
-          .toBuffer();
-        console.log(`[composite:${figureId}] width-stretch (narrow): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} pasteLeft=${pasteLeft}`);
       }
-    }
+      // Narrowing: stretched buffer is smaller than the canvas, pad with
+      // transparent margins on a fresh canvas.
+      if (label) console.log(`[composite:${figureId}] width-stretch (narrow): factor=${widthStretch.toFixed(3)} stretchedW=${stretchedW} pasteLeft=${pasteLeft}`);
+      return sharp({
+        create: { width: pasteS, height: pasteS, channels: 4, background: { r:0, g:0, b:0, alpha:0 } }
+      })
+        .composite([{ input: stretchedBuf, left: Math.max(0, pasteLeft), top: 0 }])
+        .png()
+        .toBuffer();
+    };
+    pasteFace = await applyWidthStretch(pasteFace, 'face');
+
+    await dbg('2_face_colour_stretch', pasteFace);
 
     // Plain sharp polygon mask with forehead points lifted to hairlineY.
     let ovalMask;
+    let outlineDebugSvg = '';
 
     if (landmarks && landmarks.length >= 468) {
       try {
@@ -584,6 +748,27 @@ export default async function handler(req, res) {
           }).join(' ');
           svgContent = `<polygon points="${points}" fill="white"/>`;
           console.log(`[composite:${figureId}] mask: raw polygon (hat covers top)`);
+        } else if (!isFront) {
+          // Three-quarter face: the bezier arc below is symmetric about the oval
+          // centre and scoops up the portrait's own hair on a turned head, while
+          // the raw FACE_OVAL stops at lm[10] (upper forehead) -- leaving the face
+          // ~15% shorter than the calibrated hairline-to-chin box. Follow the real
+          // (turned) contour, but lift every point above the brow line so the top
+          // reaches the estimated hairline (same estimate as detectFaceClient:
+          // hairline = lm10 - (brow - lm10), i.e. forehead height doubled).
+          const browY = (lmPy(landmarks[105]) + lmPy(landmarks[334])) / 2;
+          const lm10Y = lmPy(landmarks[10]);
+          const lift = (browY - lm10Y) > 1 ? 2.0 : 1.0;
+          const lifted = FACE_OVAL.map(i => {
+            const l = landmarks[i];
+            let y = lmPy(l);
+            if (y < browY) y = browY - (browY - y) * lift;
+            return [lmPx(l), y];
+          });
+          const points = lifted.map(([x, y]) => `${x.toFixed(1)},${y.toFixed(1)}`).join(' ');
+          svgContent = `<polygon points="${points}" fill="white"/>`;
+
+          console.log(`[composite:${figureId}] mask: contour lifted to hairline (three-quarter)`);
         } else {
           // Visible forehead: cubic bezier arc from lm[21]→lm[251] with vertical tangents.
           // cpY computed so arc peaks exactly at ovalCy-ovalRy (oval top), regardless of pasteS size.
@@ -596,6 +781,60 @@ export default async function handler(req, res) {
           ].join(' ');
           svgContent = `<path d="${pathD}" fill="white"/>`;
           console.log(`[composite:${figureId}] mask: bezier arc hairline`);
+        }
+
+        // Far side of a turned face: MediaPipe's FACE_OVAL points there sit on
+        // the hidden back of the cheek, so they project INSIDE the visible
+        // silhouette (and the hairline lift leaves a corner + notch at the
+        // temple) -- the cut edge comes out concave even though the face is
+        // convex. When face-skin segmentation is coming, let it define the
+        // far-side edge: open the polygon across the whole far half (face
+        // midline → canvas edge, top of the mask → chin). The near side keeps the landmark
+        // contour, which also keeps the ear out. Hat figures keep the raw top
+        // (under the brim); others use the lifted hairline top.
+        if (!isFront && skinMaskComing) {
+          const noseX = lmPx(landmarks[1]);
+          const midX = (lmPx(landmarks[234]) + lmPx(landmarks[454])) / 2;
+          const farIsLeft = noseX < midX;
+          const rawTop = Math.min(...FACE_OVAL.map(i => lmPy(landmarks[i])));
+          const browY = (lmPy(landmarks[105]) + lmPy(landmarks[334])) / 2;
+          const topY = region.foreheadClip ? rawTop : browY - (browY - rawTop) * 2;
+          const chinY = lmPy(landmarks[152]);
+          // Open up to the face midline, not just the nose tip: on a strongly
+          // turned face the nose sticks out past the landmark contour, and a
+          // nose-wide box left a transparent crack between it and the contour.
+          // A half-ellipse rather than a rect: the rect's flat top and bottom
+          // met the forehead contour in a step at the midline and cut the
+          // far-side jaw at a sharp corner. The ellipse is generous (0.8x face
+          // width) so segmentation still decides the far cheek's edge.
+          // It starts and ends where the near-side contour crosses the midline
+          // (on a turned face lm10 and the chin sit towards the nose, so the
+          // contour crosses lower than topY / higher than chinY), so the two
+          // shapes join without a step.
+          const faceW = Math.abs(lmPx(landmarks[454]) - lmPx(landmarks[234]));
+          const contour = FACE_OVAL.map(i => {
+            const l = landmarks[i]; let y = lmPy(l);
+            if (!region.foreheadClip && y < browY) y = browY - (browY - y) * 2;
+            return [lmPx(l), y];
+          });
+          const cross = [];
+          for (let k = 0; k < contour.length; k++) {
+            const [x0, y0] = contour[k], [x1, y1] = contour[(k + 1) % contour.length];
+            if ((x0 - midX) * (x1 - midX) <= 0 && x0 !== x1) cross.push(y0 + (y1 - y0) * (midX - x0) / (x1 - x0));
+          }
+          const eTop = cross.length >= 2 ? Math.min(...cross) : topY;
+          const eBot = cross.length >= 2 ? Math.max(...cross) : chinY;
+          const erx = Math.max(faceW * 0.8, 1), ery = Math.max((eBot - eTop) / 2, 1);
+          svgContent += `<path d="M ${midX.toFixed(1)} ${eTop.toFixed(1)} A ${erx.toFixed(1)} ${ery.toFixed(1)} 0 0 ${farIsLeft ? 0 : 1} ${midX.toFixed(1)} ${eBot.toFixed(1)} Z" fill="white"/>`;
+          console.log(`[composite:${figureId}] mask: far side (${farIsLeft ? 'left' : 'right'}) from segmentation`);
+        }
+
+        if (debugSteps) {
+          const raw = FACE_OVAL.map(i => `${lmPx(landmarks[i]).toFixed(1)},${lmPy(landmarks[i]).toFixed(1)}`).join(' ');
+          const dots = FACE_OVAL.map(i => `<circle cx="${lmPx(landmarks[i]).toFixed(1)}" cy="${lmPy(landmarks[i]).toFixed(1)}" r="0.9" fill="#ff2020"/>`).join('');
+          outlineDebugSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">` +
+            svgContent.replaceAll('fill="white"', 'fill="#ffd400" fill-opacity="0.25" stroke="#ffd400" stroke-width="0.8"') +
+            `<polygon points="${raw}" fill="none" stroke="#ff2020" stroke-width="0.8"/>${dots}</svg>`;
         }
 
         const polygonSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
@@ -614,6 +853,13 @@ export default async function handler(req, res) {
       }
     }
 
+    if (!ovalMask && isProfile && skinMaskComing) {
+      // Profile from segmentation: no landmark polygon -- the face-skin mask
+      // (applied below) is the outline, so start from a fully open mask.
+      ovalMask = await sharp({ create: { width: pasteS, height: pasteS, channels: 3, background: '#ffffff' } })
+        .greyscale().png().toBuffer();
+      console.log(`[composite:${figureId}] mask: open (profile, segmentation defines outline)`);
+    }
     if (!ovalMask) {
       // Fallback: gradient ellipse (no landmarks available)
       const maskSvg = `<svg width="${pasteS}" height="${pasteS}" xmlns="http://www.w3.org/2000/svg">
@@ -634,14 +880,226 @@ export default async function handler(req, res) {
     }
     // \u2500\u2500 Step 4: Paste onto painting \u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500\u2500
     // Apply oval gradient mask while face is upright (correct oval cut)
+    if (debugSteps && outlineDebugSvg) {
+      await dbg('3_landmark_outline', await sharp(pasteFace).ensureAlpha()
+        .composite([{ input: Buffer.from(outlineDebugSvg) }]).png().toBuffer());
+    }
+    await dbg('4_polygon_mask', ovalMask);
     let masked = await sharp(pasteFace)
       .ensureAlpha()
       .composite([{ input: ovalMask, blend: 'dest-in' }])
       .png().toBuffer();
 
+    // Three-quarter faces: the hairline-lifted mask can catch the portrait's own
+    // hair at the far temple. Gongbi skin is light and hair is near-black, so key
+    // out dark pixels above the brows and let the painting's hair show through.
+    // Dev-only override for before/after comparisons: 'off' | 'on' | 'show' (paints keyed pixels red).
+    // Face-skin segmentation mask (client MediaPipe selfie_multiclass, sent as
+    // faceSkinMaskUrl in the portrait's own frame). Mapped through the exact
+    // crop → resize → stretch the face went through, then intersected with the
+    // polygon mask: the portrait's hair drops out wherever it is -- temple,
+    // hair edge, down the cheeks -- while eyes/brows stay (they're face skin).
+    // On for every figure (front too: no fringe from the portrait, the painted
+    // hairstyle shows); region.skinMask === false opts a figure out.
+    // Dev override: debugSkinMask 'on' | 'off'.
+    let skinMasked = false;
+    if (wantSkinMask && req.body.faceSkinMaskUrl) {
+      try {
+        let sm = await sharp(await fetchBuf(req.body.faceSkinMaskUrl))
+          .removeAlpha().extractChannel(0)
+          .resize(FW, FH, { fit: 'fill' })
+          .png().toBuffer();
+        if (cropSize && cropSize > 0) {
+          sm = await sharp(sm).extract({ left: cropX, top: cropY, width: cropSize, height: cropSize }).png().toBuffer();
+        }
+        sm = await sharp(sm).resize(targetSize, targetSize, { fit: 'cover', position: 'centre' }).png().toBuffer();
+        sm = await applyWidthStretch(
+          await sharp(sm).toColourspace('srgb').ensureAlpha().png().toBuffer(), null);
+        const smAlpha = await sharp(sm).extractChannel(0).blur(0.8).raw().toBuffer();
+        const smLayer = await sharp({ create: { width: pasteS, height: pasteS, channels: 3, background: '#ffffff' } })
+          .joinChannel(smAlpha, { raw: { width: pasteS, height: pasteS, channels: 1 } })
+          .png().toBuffer();
+        await dbg('5_skin_mask', await sharp(smAlpha, { raw: { width: pasteS, height: pasteS, channels: 1 } }).png().toBuffer());
+        masked = await sharp(masked).composite([{ input: smLayer, blend: 'dest-in' }]).png().toBuffer();
+        skinMasked = true;
+        console.log(`[composite:${figureId}] face-skin mask applied`);
+      } catch (e) {
+        console.warn(`[composite:${figureId}] face-skin mask skipped:`, e.message);
+      }
+    }
+
+    // Profile: segmentation labels the ear as face skin, so the portrait's ear
+    // landed on the painted figure's hair. Keep only the calibrated face width
+    // measured back from the front edge (nose/lips); everything further back --
+    // the ear -- fades out over a few pixels.
+    if (skinMasked && isProfile) {
+      const facesRight = region.faceAngle === 'profile_right';
+      const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+      let front = facesRight ? -1 : mi.width;
+      for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++)
+        if (md[(y * mi.width + x) * mi.channels + 3] > 128)
+          front = facesRight ? Math.max(front, x) : Math.min(front, x);
+      if (front >= 0 && front < mi.width) {
+        // Rough pass only (the ear); the exact back edge is set after the box
+        // fit, once the face is at its final scale.
+        const keep = Math.round(targetW * 1.5), feather = Math.max(2, Math.round(targetW * 0.08));
+        let cut = 0;
+        for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++) {
+          const depth = facesRight ? front - x : x - front; // distance back from the front edge
+          if (depth <= keep - feather) continue;
+          const i = (y * mi.width + x) * mi.channels + 3;
+          const k = depth >= keep ? 0 : (keep - depth) / feather;
+          if (md[i]) { md[i] = Math.round(md[i] * k); cut++; }
+        }
+        masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+        console.log(`[composite:${figureId}] profile back clip: front=${front} keep=${keep}px cut=${cut}px`);
+      }
+    }
+
+    // Fit angled faces to the calibrated box: scale the VISIBLE cut-out (alpha
+    // bbox) to the box's width and height, then centre it on the canvas, which
+    // is pasted centred on the box. Width/height used to be handled separately
+    // and the canvas (not the face) was centred, so faces came out too
+    // wide/narrow or sat high with the painted chin showing below
+    // (韩熙载 men), and profiles landed shifted forward.
+    // region.widthCalibrated:false keeps the natural width.
+    if (skinMasked && !isFront) {
+      const { data: ad, info: ai } = await sharp(masked).extractChannel(3).raw().toBuffer({ resolveWithObject: true });
+      let bx0 = ai.width, bx1 = -1, by0 = ai.height, by1 = -1;
+      for (let y = 0; y < ai.height; y++) for (let x = 0; x < ai.width; x++)
+        if (ad[y * ai.width + x] > 128) { if (x < bx0) bx0 = x; if (x > bx1) bx1 = x; if (y < by0) by0 = y; if (y > by1) by1 = y; }
+      if (bx1 > bx0 && by1 > by0) {
+        const visW = bx1 - bx0 + 1, visH = by1 - by0 + 1;
+        // Hat figures (foreheadClip): the box is hairline-to-chin, as for front
+        // faces, but the cut-out stops at lm10 under the hat. Size the whole
+        // (hairline-to-chin) face to the box and keep the clipped top short, so
+        // the painted hat brim stays visible instead of being covered.
+        const lm = faceBounds?.landmarks;
+        let hatR = 1;
+        if (region.foreheadClip && lm?.[10] && faceBounds.foreheadY != null && faceBounds.chinY != null) {
+          const r = (faceBounds.chinY - faceBounds.foreheadY) / (faceBounds.chinY - lm[10].y);
+          if (r > 1 && r < 1.6) hatR = r;
+        }
+        // One uniform scale ("contain"): stretching width and height
+        // separately made faces look swollen. Whichever of width/height hits
+        // the box first sets it, and the chin is anchored to the box bottom;
+        // any gap left at the top falls under the painted hair/hat.
+        // Profiles are sized by height: their width is set by the back clip below.
+        const fW = (region.widthCalibrated === false || isProfile) ? Infinity : targetW / visW;
+        const fH = targetH / (visH * hatR);
+        const f = Math.max(0.70, Math.min(1.35, fW, fH));
+        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * f)));
+        const newH = Math.min(pasteS, Math.max(1, Math.round(visH * f)));
+        const boxBot = Math.round((pasteS + targetH) / 2);
+        // Anchor the nose side too: the painted profile edge is on that side
+        // of the box, and centring left a strip of painted face showing there
+        // (宫乐图 maid). Any gap goes to the back of the head, under the hair.
+        const noseRight = /_right$/.test(region.faceAngle || '');
+        const boxL = Math.round((pasteS - targetW) / 2), boxR = boxL + targetW;
+        const left = Math.max(0, Math.min(pasteS - newW, noseRight ? boxR - newW : boxL));
+        const piece = await sharp(masked).extract({ left: bx0, top: by0, width: visW, height: visH })
+          .resize(newW, newH, { fit: 'fill' }).png().toBuffer();
+        masked = await sharp({ create: { width: pasteS, height: pasteS, channels: 4, background: { r: 0, g: 0, b: 0, alpha: 0 } } })
+          .composite([{ input: piece, left, top: Math.max(0, Math.min(pasteS - newH, boxBot - newH)) }]).png().toBuffer();
+        // Profile back edge: keep the box width (+8%, to reach the painted
+        // hairline just outside the oval) measured back from the box's front
+        // edge. Cut before the fit, the kept strip shrank with the face and the
+        // painted cheek showed behind it (宫乐图 maid, 韩熙载 dancer).
+        if (isProfile) {
+          const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+          const keep = targetW * 1.08, feather = Math.max(2, Math.round(targetW * 0.08));
+          for (let y = 0; y < mi.height; y++) for (let x = 0; x < mi.width; x++) {
+            const depth = noseRight ? boxR - x : x - boxL;
+            if (depth <= keep - feather) continue;
+            const i = (y * mi.width + x) * mi.channels + 3;
+            md[i] = depth >= keep ? 0 : Math.round(md[i] * (keep - depth) / feather);
+          }
+          masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+        }
+        // Profile forehead fill: painted profiles have a near-vertical
+        // forehead, while the portrait's slopes back towards the hairline, so
+        // a strip of painted forehead showed in front of the face (宫乐图
+        // maid, 韩熙载 dancer). On the forehead rows only (top 35% of the box,
+        // above the brow), extend each row's front-edge colour forward by up
+        // to 7% of the box width (not past the oval), tapering to zero at the
+        // brow and fading at the end. Nose, lips and chin untouched.
+        if (isProfile) {
+          const { data: md, info: mi } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+          const C = mi.channels, ocx = pasteS / 2, ocy = pasteS / 2, orx = targetW / 2, ory = targetH / 2;
+          const boxTop = Math.round((pasteS - targetH) / 2), rowsEnd = boxTop + Math.round(targetH * 0.35);
+          const fade = Math.max(2, Math.round(targetW * 0.06));
+          let filled = 0;
+          for (let y = Math.max(0, boxTop); y < Math.min(mi.height, rowsEnd); y++) {
+            const dy = (y + 0.5 - ocy) / ory; if (Math.abs(dy) >= 1) continue;
+            const half = orx * Math.sqrt(1 - dy * dy);
+            const ovalFront = Math.round(noseRight ? ocx + half : ocx - half);
+            let edge = -1;
+            if (noseRight) { for (let x = mi.width - 1; x >= 0; x--) if (md[(y * mi.width + x) * C + 3] > 200) { edge = x; break; } }
+            else { for (let x = 0; x < mi.width; x++) if (md[(y * mi.width + x) * C + 3] > 200) { edge = x; break; } }
+            if (edge < 0) continue;
+            // a few px at most, tapering to nothing at the brow so the profile
+            // line stays continuous
+            const taper = 1 - (y - boxTop) / (rowsEnd - boxTop);
+            const span = Math.min(noseRight ? ovalFront - edge : edge - ovalFront, Math.round(targetW * 0.07 * taper));
+            if (span <= 0) continue;
+            let r = 0, g = 0, b = 0, n = 0;
+            for (let k = 1; k <= 3; k++) {
+              const x = noseRight ? edge - k : edge + k; if (x < 0 || x >= mi.width) break;
+              const i = (y * mi.width + x) * C; if (md[i + 3] > 200) { r += md[i]; g += md[i + 1]; b += md[i + 2]; n++; }
+            }
+            if (!n) continue;
+            for (let d = 1; d <= span; d++) {
+              const x = noseRight ? edge + d : edge - d; if (x < 0 || x >= mi.width) break;
+              const i = (y * mi.width + x) * C;
+              const al = d > span - fade ? Math.round(255 * (span - d) / fade) : 255;
+              if (al <= md[i + 3]) continue;
+              md[i] = r / n; md[i + 1] = g / n; md[i + 2] = b / n; md[i + 3] = al; filled++;
+            }
+          }
+          masked = await sharp(md, { raw: { width: mi.width, height: mi.height, channels: mi.channels } }).png().toBuffer();
+          console.log(`[composite:${figureId}] profile forehead fill: ${filled}px`);
+        }
+        console.log(`[composite:${figureId}] box fit: visible=${visW}x${visH} -> ${newW}x${newH} hatR=${hatR.toFixed(2)} (box ${targetW}x${targetH})`);
+      }
+    }
+
+    const hairKeyMode = (process.env.NODE_ENV === 'development' && req.body.debugHairKey)
+      || (isFront || skinMasked ? 'off' : 'on');
+    if (hairKeyMode !== 'off') {
+      const { data, info } = await sharp(masked).raw().toBuffer({ resolveWithObject: true });
+      const { width: mw, height: mh, channels: mc } = info;
+      const lum = (i) => 0.299 * data[i] + 0.587 * data[i + 1] + 0.114 * data[i + 2];
+      const skin = [];
+      for (let y = Math.round(mh * 0.45); y < Math.round(mh * 0.65); y++)
+        for (let x = Math.round(mw * 0.35); x < Math.round(mw * 0.65); x++) {
+          const i = (y * mw + x) * mc;
+          if (data[i + 3] > 200) skin.push(lum(i));
+        }
+      if (skin.length > 20) {
+        skin.sort((a, b) => a - b);
+        const cut = skin[skin.length >> 1] * 0.55;
+        let keyed = 0;
+        // Top ~30% only (above the brows) -- any lower and pupils/brows get keyed.
+        for (let y = 0; y < mh * 0.30; y++)
+          for (let x = 0; x < mw; x++) {
+            const i = (y * mw + x) * mc;
+            if (data[i + 3] && lum(i) < cut) {
+              if (hairKeyMode === 'show') { data[i] = 255; data[i + 1] = 0; data[i + 2] = 0; }
+              else data[i + 3] = 0;
+              keyed++;
+            }
+          }
+        masked = await sharp(data, { raw: { width: mw, height: mh, channels: mc } })
+          .blur(0.6)
+          .png().toBuffer();
+        console.log(`[composite:${figureId}] hair key: cut=${cut.toFixed(0)} keyed=${keyed}px`);
+      }
+    }
+
     // Then rotate the masked face to match the painting character's head tilt.
     // Sharp.rotate(+angle) = clockwise. region.angle convention: positive = CW tilt in painting.
     // Sharp expands canvas on rotation \u2014 track new size for correct paste centering.
+    await dbg('6_masked', masked);
     let maskedSize = pasteS;
     if (region.angle && region.angle !== 0) {
       masked = await sharp(masked)
@@ -665,9 +1123,46 @@ export default async function handler(req, res) {
       ? masked
       : await sharp(masked).extract({ left:0, top:0, width:cW, height:cH }).png().toBuffer();
     // Composite at full painting resolution first (needed for accurate profile crop)
+    const layers = [];
+
+    layers.push({ input: pasteBuf, left: px, top: py, blend: 'over' });
+
+    // Optional: lay the painting's original head back over the new face at
+    // partial opacity, feathered at the edge (e.g. the 骷髅幻戏图 skeleton --
+    // the user's face shows through a translucent skull).
+    if (region.overlayOriginal > 0) {
+      const oW = Math.min(maskedSize, PW - px), oH = Math.min(maskedSize, PH - py);
+      const op = region.overlayOriginal;
+      const fade = Buffer.from(`<svg width="${oW}" height="${oH}"><defs><radialGradient id="g"><stop offset="65%" stop-color="#fff" stop-opacity="${op}"/><stop offset="100%" stop-color="#fff" stop-opacity="0"/></radialGradient></defs><ellipse cx="${oW/2}" cy="${oH/2}" rx="${oW/2}" ry="${oH/2}" fill="url(#g)"/></svg>`);
+      // Raw single-channel buffer: joining an encoded 1-channel PNG silently
+      // drops the alpha and the overlay comes out fully opaque.
+      const fadeAlpha = await sharp(fade).ensureAlpha().extractChannel(3).raw().toBuffer();
+      const original = await sharp(paintingBuf)
+        .extract({ left: px, top: py, width: oW, height: oH })
+        // No removeAlpha() here: sharp runs it after joinChannel regardless of
+        // call order, which would strip the alpha we just added.
+        .joinChannel(fadeAlpha, { raw: { width: oW, height: oH, channels: 1 } })
+        .png().toBuffer();
+      layers.push({ input: original, left: px, top: py, blend: 'over' });
+    }
+
     const compositedFull = await sharp(paintingBuf)
-      .composite([{ input: pasteBuf, left: px, top: py, blend: 'over' }])
+      .composite(layers)
       .png().toBuffer();
+    if (debugSteps) {
+      await dbg('7_rotated', masked);
+      const pad = Math.round(maskedSize * 0.4);
+      const dx = Math.max(0, px - pad), dy = Math.max(0, py - pad);
+      const dw = Math.min(PW - dx, maskedSize + 2 * pad), dh = Math.min(PH - dy, maskedSize + 2 * pad);
+      await dbg('8_result', await sharp(compositedFull).extract({ left: dx, top: dy, width: dw, height: dh }).toBuffer());
+      await dbg('0_original', await sharp(paintingBuf).extract({ left: dx, top: dy, width: dw, height: dh }).toBuffer());
+      // Calibration overlay: the region box as an ellipse, rotated like the figure.
+      const ecx = targetX + targetW / 2 - dx, ecy = targetY + targetH / 2 - dy;
+      const ell = Buffer.from(`<svg width="${dw}" height="${dh}"><ellipse cx="${ecx}" cy="${ecy}" rx="${targetW / 2}" ry="${targetH / 2}" ` +
+        `transform="rotate(${region.angle || 0} ${ecx} ${ecy})" fill="none" stroke="#ffd400" stroke-width="${Math.max(1, Math.round(dw / 150))}"/></svg>`);
+      await dbg('0_calibration', await sharp(paintingBuf).extract({ left: dx, top: dy, width: dw, height: dh })
+        .composite([{ input: ell }]).toBuffer());
+    }
 
     // ── Step 5: Profile crop (from full-res composited) ───────────────────────
     // Pad around the pasted face for a nicer avatar crop. Previously this
@@ -688,36 +1183,26 @@ export default async function handler(req, res) {
     // comparable, reasonable proportion of their canvas.
     const rawPad = Math.round(targetH * 1.5);
     const pad = Math.min(rawPad, Math.round(Math.min(PW, PH) * 0.20));
-    let profX = Math.max(0, px - pad);
-    let profY = Math.max(0, py - pad);
-    let profW = Math.min(PW - profX, S + pad * 2);
-    let profH = Math.min(PH - profY, S + pad * 2);
-
-    // Belt-and-suspenders: also constrain against any sibling figure's
-    // actual calibrated region in this same painting, so the crop can never
-    // cross into it even in a layout the canvas-fraction cap above doesn't
-    // fully anticipate.
-    const siblingMargin = Math.round(targetH * 0.3);
+    // Avatar crop: a SQUARE centred on the pasted face. If another figure's
+    // face falls inside, shrink the square evenly (never below 1.3x the face)
+    // until it's out; at the canvas edge, shift instead of shrink. The old
+    // version only cut the WIDTH for neighbours, so in crowded paintings
+    // (韩熙载夜宴图, 7 figures) the crop became a thin strip and the 400x400
+    // cover-resize showed only the chin.
+    const fcx = px + maskedSize / 2, fcy = py + maskedSize / 2;
+    let side = Math.min(S + pad * 2, PW, PH);
+    const minSide = Math.min(Math.round(S * 1.3), PW, PH);
     for (const [otherId, otherRegion] of Object.entries(FACE_REGIONS[paintingId] || {})) {
       if (otherId === figureId || otherRegion.disabled) continue;
-      const oX = otherRegion.x * PW;
-      const oCenterX = oX + (otherRegion.w * PW) / 2;
-
-      if (oCenterX >= cx) {
-        // Sibling is to the right — cap the crop's right edge short of it.
-        const maxRight = oX - siblingMargin;
-        if (profX + profW > maxRight) profW = Math.max(S, Math.round(maxRight - profX));
-      } else {
-        // Sibling is to the left — cap the crop's left edge past it.
-        const minLeft = oX + otherRegion.w * PW + siblingMargin;
-        if (profX < minLeft) { profW -= Math.round(minLeft - profX); profX = Math.round(minLeft); }
-      }
-      // Note: only handles horizontal (side-by-side) layouts, the only kind
-      // in use currently. A future vertically-stacked painting would need
-      // the same treatment against oCenterY vs cy.
+      const ocx = (otherRegion.x + otherRegion.w / 2) * PW, ocy = (otherRegion.y + otherRegion.h / 2) * PH;
+      // keep the other face's centre outside the square
+      const need = 2 * Math.max(Math.abs(ocx - fcx), Math.abs(ocy - fcy)) - otherRegion.h * PH * 0.5;
+      if (need < side) side = Math.max(minSide, Math.round(need));
     }
-    profW = Math.max(1, profW);
-    profH = Math.max(1, profH);
+    side = Math.max(1, Math.round(side));
+    let profX = Math.round(Math.max(0, Math.min(PW - side, fcx - side / 2)));
+    let profY = Math.round(Math.max(0, Math.min(PH - side, fcy - side / 2)));
+    let profW = side, profH = side;
 
     console.log(`[composite:${figureId} profile] pad=${pad} profX=${profX} profY=${profY} profW=${profW} profH=${profH} (canvas ${PW}x${PH})`);
 
@@ -727,8 +1212,11 @@ export default async function handler(req, res) {
       .jpeg({ quality: 90 })
       .toBuffer();
 
-    // Downscale full painting before returning — full 4000px JPEG exceeds 4MB API route limit.
-    const paintingScale = Math.min(1, 2400 / Math.max(PW, PH));
+    // Downscale full painting before returning — full-size JPEGs can exceed the
+    // 4MB API route limit. Budget by total pixels (~4.5MP, ~1.4MB JPEG), not the
+    // longest side: a 2400px cap shrank long scrolls (捣练图 6819px, 挥扇仕女图
+    // 8695px) to 28-35%, leaving faces ~40px wide and visibly blurry.
+    const paintingScale = Math.min(1, Math.sqrt(4.5e6 / (PW * PH)));
     const outW = Math.round(PW * paintingScale);
     const outH = Math.round(PH * paintingScale);
     const composited = await sharp(compositedFull)
@@ -784,6 +1272,7 @@ export default async function handler(req, res) {
       portraitCropUrl: `data:image/jpeg;base64,${portraitCropDebug.toString('base64')}`,
       cropBox: faceCropBox,
       faceBoundsBox: faceBounds || null,
+      ...(debugSteps ? { debugSteps } : {}),
       // Debug: painting sample region as fractions of painting dimensions
       paintSampleBox: {
         x: sampleX / PW,

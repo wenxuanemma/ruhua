@@ -31,3 +31,6 @@ face-crops/
 rejected-paintings/
 dataset/
 .vercel
+
+# Dev-only cache of generated angle portraits (generate-angles.js)
+.dev-cache/

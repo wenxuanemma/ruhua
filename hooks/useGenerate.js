@@ -4,7 +4,7 @@
 //   Stage 1 — InstantID style transfer  → styledFaceUrl (cached per selfie)
 //   Stage 2 — Sharp composite           → outputUrl + profileUrl
 import { FACE_REGIONS } from '../lib/faceRegions';
-import { detectSelfie } from '../lib/detectFaceClient';
+import { detectSelfie, getFaceSkinMask } from '../lib/detectFaceClient';
 import { getAppUserID } from '../lib/purchases';
 //
 // Caching: if the same selfie is reused (switching painting/figure),
@@ -161,6 +161,7 @@ export function useGenerate() {
             paintingId:    painting.id,
             figureId:      figure.id,
             gender:        gender || 'woman',
+            look:          figure?.look || null,
             styleImageUrl,
             dynasty:       painting.dynasty,
             faceBounds,
@@ -203,6 +204,18 @@ export function useGenerate() {
     }
   }, [pollUntilDone]);
 
+  // Which way a face turns in image space: 'left' if the nose tip sits left of
+  // the cheek midpoint (lm 234/454), 'right' otherwise. Null when the turn is
+  // too slight to call or landmarks are missing.
+  function facingDirection(landmarks) {
+    if (!landmarks || landmarks.length < 455) return null;
+    const mid = (landmarks[234].x + landmarks[454].x) / 2;
+    const span = Math.abs(landmarks[454].x - landmarks[234].x) || 1;
+    const offset = (landmarks[1].x - mid) / span;
+    if (Math.abs(offset) < 0.05) return null;
+    return offset < 0 ? 'left' : 'right';
+  }
+
   // Map faceAngle to the correct portrait from the angle set.
   // Kontext naturally produces one direction; _b variants are flopped mirrors.
   // Calibration determines which direction _a corresponds to for each figure.
@@ -220,6 +233,73 @@ export function useGenerate() {
     }
   }
 
+  // Pick the angle-matched portrait and detect its face with client MediaPipe.
+  // Runs for front AND three-quarter figures: the server-side detector used
+  // for angled faces (LOCAL_INFERENCE_URL) is a LAN-only dev box that Vercel
+  // can't reach, so client MediaPipe is the only detection available in prod.
+  async function pickAndDetectPortrait(portraitSet, faceAngle, fallbackUrl, painting, figure) {
+    let selectedPortrait = selectPortrait(portraitSet, faceAngle) || fallbackUrl;
+    console.log(`[composite] faceAngle=${faceAngle} → portrait selected from set`);
+    const region = FACE_REGIONS[painting.id]?.[figure.id];
+    if (region?.faceAngle?.includes('profile')) {
+      // Landmarks are unreliable on a full side view; the face-skin segmentation
+      // isn't. Its bounding box drives the crop and its mask cuts the face.
+      let seg = await getFaceSkinMask(selectedPortrait);
+      // Kontext picks the turn direction at random and nothing in production
+      // checked profiles: a face pointing the wrong way had its FACE clipped
+      // off by the back-of-head clip (韩熙载 dancer, device test). Swap to the
+      // mirrored profile when the hair says the face points the other way.
+      const want = faceAngle === 'profile_right' ? 'right' : 'left';
+      if (seg?.facing && seg.facing !== want && portraitSet && typeof portraitSet === 'object') {
+        const mirrored = selectedPortrait === portraitSet.profile_a ? portraitSet.profile_b : portraitSet.profile_a;
+        if (mirrored) {
+          console.log(`[composite] profile faces ${seg.facing}, figure needs ${want} -- using mirrored variant`);
+          selectedPortrait = mirrored;
+          seg = await getFaceSkinMask(selectedPortrait);
+        }
+      }
+      if (!seg) return { selectedPortrait, portraitFaceBounds: null };
+      const b = seg.bbox;
+      return {
+        selectedPortrait,
+        portraitFaceBounds: {
+          ...b, foreheadY: b.y, chinY: b.y + b.h, centerX: b.x + b.w / 2, centerY: b.y + b.h / 2,
+          fromSegmentation: true, skinMaskUrl: seg.url,
+        },
+      };
+    }
+
+    let portraitFaceBounds = await detectSelfie(selectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
+
+    // Kontext picks its own turn direction and the server-side direction
+    // check can't run in prod either -- verify here and swap to the
+    // mirrored variant if the face turns the wrong way.
+    const wantDir = faceAngle === 'three_quarter_left' ? 'left'
+                  : faceAngle === 'three_quarter_right' ? 'right' : null;
+    const gotDir = facingDirection(portraitFaceBounds?.landmarks);
+    if (wantDir && gotDir && gotDir !== wantDir && portraitSet && typeof portraitSet === 'object') {
+      const mirrored = wantDir === 'left' ? portraitSet.three_quarter_b : portraitSet.three_quarter_a;
+      if (mirrored) {
+        console.log(`[composite] portrait faces ${gotDir}, figure needs ${wantDir} -- using mirrored variant`);
+        selectedPortrait = mirrored;
+        portraitFaceBounds = await detectSelfie(selectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
+      }
+    }
+    if (portraitFaceBounds) {
+      console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
+      if (portraitFaceBounds.fromLandmarks) setPortraitLandmarks(portraitFaceBounds);
+      // Face-skin segmentation so composite can drop the portrait's own hair
+      // (edges and sides included) instead of guessing by brightness, letting
+      // the painted figure's own hairstyle show. All figures unless
+      // region.skinMask === false.
+      if (region?.skinMask !== false) {
+        portraitFaceBounds.skinMaskUrl = (await getFaceSkinMask(selectedPortrait))?.url ?? null;
+      }
+    }
+    else console.log('[portrait] face detection failed, using fallback');
+    return { selectedPortrait, portraitFaceBounds };
+  }
+
   const runComposite = useCallback(async ({ styledFaceUrl, painting, figure, paintingImageUrl, faceBounds, idempotencyKey }) => {
     const appUserID = await getAppUserID();
     const res = await fetch('/api/composite', {
@@ -233,6 +313,7 @@ export function useGenerate() {
         dynasty:         painting.dynasty,
         faceBounds,
         landmarks:       faceBounds?.landmarks ?? null,
+        faceSkinMaskUrl: faceBounds?.skinMaskUrl ?? null,
         appUserID,
         idempotencyKey,
       }),
@@ -264,7 +345,13 @@ export function useGenerate() {
 
     const selfieHash = quickHash(selfie);
     // styleKey covers all angles — one Seedream call generates all 5 angle portraits
-    const styleKey = `${selfieHash}_${gender || 'woman'}`;
+    // figure.look (e.g. 'bearded') changes the Seedream portrait, so it gets its
+    // own cache slot; figures without a look keep the original `${hash}_${gender}` key.
+    // Suffix = portrait pipeline version; bump it whenever the Seedream prompt or
+    // fallback chain changes so stale portraits regenerate. 'p3': hair up,
+    // no glasses, plain background, no InstantID fallback (an InstantID
+    // portrait cached under the old key kept showing on the test iPhone).
+    const styleKey = `${selfieHash}_${gender || 'woman'}${figure?.look ? `_${figure.look}` : ''}_p3`;
     const resultKey = `${selfieHash}_${painting.id}_${figure.id}`;
 
     // Check result cache — styled face cached, skip generation, just re-composite
@@ -276,15 +363,10 @@ export function useGenerate() {
       // Select correct angle portrait from cached set
       const cachedFaceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
       const cachedPortraitSet = styledCache.current[styleKey];
-      const cachedSelectedPortrait = selectPortrait(cachedPortraitSet, cachedFaceAngle) || cachedResult.styledUrl;
-      setStyledUrl(cachedSelectedPortrait); // show angle-selected portrait in debug panel
       try {
-        const cachedRegion = FACE_REGIONS[painting.id]?.[figure.id];
-        const cachedIsFront = !cachedRegion?.faceAngle || cachedRegion?.faceAngle === 'front';
-        let cachedPortraitFaceBounds = null;
-        if (cachedIsFront) {
-          cachedPortraitFaceBounds = await detectSelfie(cachedSelectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
-        }
+        const { selectedPortrait: cachedSelectedPortrait, portraitFaceBounds: cachedPortraitFaceBounds } =
+          await pickAndDetectPortrait(cachedPortraitSet, cachedFaceAngle, cachedResult.styledUrl, painting, figure);
+        setStyledUrl(cachedSelectedPortrait); // show angle-selected portrait in debug panel
         const composite = await runComposite({
           styledFaceUrl:    cachedSelectedPortrait,
           painting,
@@ -321,9 +403,12 @@ export function useGenerate() {
         styled = (cachedPortraitSet?.front) || cachedStyled;
         setStyledUrl(styled);
 
-        // If cached value is just a front URL string (loaded from localStorage after reload),
-        // regenerate angle portraits via Kontext now (no Seedream needed)
-        if (needAngles && !cachedPortraitSet && styled) {
+        // Regenerate angle portraits via Kontext (no Seedream needed) when the
+        // cache only has the front: either a front URL string loaded from
+        // localStorage after a reload, or a { front } set cached by a painting
+        // with only front figures earlier this session -- without the second
+        // check, angled figures silently got the front portrait.
+        if (needAngles && !cachedPortraitSet?.three_quarter_a && styled) {
           console.log('[angles] Cache hit but no angle portraits — regenerating via Kontext...');
           try {
             const anglesRes = await fetch('/api/generate-angles', {
@@ -407,22 +492,9 @@ export function useGenerate() {
       // Select the right angled portrait for this figure
       const faceAngle = FACE_REGIONS[painting.id]?.[figure.id]?.faceAngle || 'front';
       const portraitSet = styledCache.current[styleKey];
-      const selectedPortrait = selectPortrait(portraitSet, faceAngle) || styled;
-      console.log(`[composite] faceAngle=${faceAngle} → portrait selected from set`);
+      const { selectedPortrait, portraitFaceBounds } =
+        await pickAndDetectPortrait(portraitSet, faceAngle, styled, painting, figure);
       setStyledUrl(selectedPortrait); // show angle-selected portrait in debug panel
-
-      // Detect face in portrait directly — stable across runs, no selfie correlation.
-      const region = FACE_REGIONS[painting.id]?.[figure.id];
-      const isFrontFacing = !region?.faceAngle || region?.faceAngle === 'front';
-      let portraitFaceBounds = null;
-      if (isFrontFacing) {
-        portraitFaceBounds = await detectSelfie(selectedPortrait, { maxW: 0.90, maxH: 0.90, pad: 0 });
-        if (portraitFaceBounds) {
-          console.log('[portrait] face detected:', JSON.stringify(portraitFaceBounds));
-          if (portraitFaceBounds.fromLandmarks) setPortraitLandmarks(portraitFaceBounds);
-        }
-        else console.log('[portrait] face detection failed, using fallback');
-      }
       const composite = await runComposite({
         styledFaceUrl:    selectedPortrait,
         painting,
