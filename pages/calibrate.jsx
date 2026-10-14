@@ -98,7 +98,41 @@ export default function Calibrate() {
 
   useEffect(() => { valsRef.current = vals; }, [vals]);
 
+  // Live preview (dev): composite the saved test portrait with the box as it
+  // is on screen, ~0.5s after a figure's box stops changing.
+  const [previews, setPreviews] = useState({}); // {key: {url} | {loading} | {error}}
+  const previewedRef = useRef({});              // key -> JSON of the box last previewed
+  const runPreview = useCallback(async (paintingId, figId) => {
+    const key = `${paintingId}_${figId}`;
+    const v = valsRef.current[key];
+    if (!v) return;
+    const { _original, ...region } = v;
+    previewedRef.current[key] = JSON.stringify(region);
+    setPreviews(p => ({ ...p, [key]: { ...p[key], loading: true } }));
+    try {
+      const r = await fetch('/api/dev-preview', { method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ paintingId, figureId: figId, region }) });
+      const j = await r.json();
+      setPreviews(p => ({ ...p, [key]: r.ok ? { url: j.url } : { error: j.error || r.status } }));
+    } catch (e) {
+      setPreviews(p => ({ ...p, [key]: { error: e.message } }));
+    }
+  }, []);
+
   const painting = PAINTINGS[pIdx];
+
+  useEffect(() => {
+    if (dragging) return;
+    const t = setTimeout(() => {
+      for (const f of painting.figures) {
+        const key = `${painting.id}_${f.id}`;
+        const v = vals[key]; if (!v) continue;
+        const { _original, ...region } = v;
+        if (previewedRef.current[key] !== JSON.stringify(region)) runPreview(painting.id, f.id);
+      }
+    }, 500);
+    return () => clearTimeout(t);
+  }, [vals, dragging, painting, runPreview]);
 
   // Load saved FACE_REGIONS from composite.js via API
   useEffect(() => {
@@ -334,6 +368,26 @@ export default function Calibrate() {
           <button key={z} style={B(z===zoom)} onClick={()=>setZoom(z)}>{z}×</button>
         ))}
         {zoom>1 && <span>scroll inside the frame to pan</span>}
+      </div>
+
+      {/* Live preview with the test selfie (dev) */}
+      <div style={{display:'flex',gap:10,flexWrap:'wrap',marginBottom:10}}>
+        {painting.figures.map((f, fi) => {
+          const pv = previews[`${painting.id}_${f.id}`] || {};
+          return (
+            <div key={f.id} style={{width:180,fontSize:11,color:C.dim}}>
+              <div style={{display:'flex',justifyContent:'space-between',marginBottom:3}}>
+                <span style={{color:FIG_COLORS[fi % FIG_COLORS.length]}}>{f.name}</span>
+                <span>{pv.loading ? '⏳' : ''}
+                  <button style={{...B(false),padding:'0 6px',fontSize:10,marginLeft:4}} onClick={()=>runPreview(painting.id, f.id)}>↻</button></span>
+              </div>
+              {pv.url
+                ? <img src={pv.url} alt={f.name} style={{width:180,height:180,objectFit:'contain',background:'#18110a',opacity:pv.loading?0.5:1,border:'1px solid rgba(201,168,76,0.2)'}}/>
+                : <div style={{width:180,height:180,background:'#18110a',display:'flex',alignItems:'center',justifyContent:'center',textAlign:'center',padding:8,boxSizing:'border-box'}}>
+                    {pv.error ? `⚠ ${pv.error}` : 'preview…'}</div>}
+            </div>
+          );
+        })}
       </div>
 
       {/* Image + boxes */}

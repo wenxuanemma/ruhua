@@ -132,7 +132,11 @@ export default async function handler(req, res) {
   if (!styledFaceUrl || !paintingImageUrl || !paintingId || !figureId)
     return res.status(400).json({ error: 'Missing required fields' });
 
-  const region = FACE_REGIONS[paintingId]?.[figureId];
+  // Dev-only: debugRegion overrides the saved calibration for this request
+  // (the /calibrate live preview sends the box as it is on screen).
+  const region = process.env.NODE_ENV === 'development' && req.body.debugRegion && FACE_REGIONS[paintingId]?.[figureId]
+    ? { ...FACE_REGIONS[paintingId][figureId], ...req.body.debugRegion }
+    : FACE_REGIONS[paintingId]?.[figureId];
 
   // Dev-only: debugSteps:true returns every intermediate image in the response
   // (debugSteps: { name: dataURL }) for side-by-side inspection.
