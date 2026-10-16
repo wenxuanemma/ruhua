@@ -82,6 +82,9 @@ const PAINTINGS = [
   {
     id: 'hanxizai',
     wikiTitle: 'The_Night_Revels_of_Han_Xizai',
+    // Hosted locally: the Wikipedia lead image could be swapped by any editor,
+    // which would silently misalign every calibrated face box.
+    directImageUrl: '/paintings/hanxizai.jpg',
     title: '韩熙载夜宴图',
     sub: 'Night Revels of Han Xizai',
     subZh: '五代顾闳中绘，描绘韩熙载夜宴场景',
@@ -375,6 +378,21 @@ const PAINTINGS = [
 
 // ─── Shared Components ───────────────────────────────────────────────────────
 
+// Tablet layout: the app was laid out for phones only (a 430px column), so on
+// an iPad it sat in a narrow strip with empty sides. At iPad widths, widen the
+// column and use more grid columns; phones are unchanged.
+const WIDE_MIN = 744;
+function useWide() {
+  const [wide, setWide] = useState(false);
+  useEffect(() => {
+    const update = () => setWide(window.innerWidth >= WIDE_MIN);
+    update();
+    window.addEventListener('resize', update);
+    return () => window.removeEventListener('resize', update);
+  }, []);
+  return wide;
+}
+
 function Seal({ text = '入画', size = 52 }) {
   return (
     <div className="stamp-a" style={{
@@ -504,8 +522,9 @@ function HomeScreen({ onBegin }) {
 // ─── Gallery Screen ──────────────────────────────────────────────────────────
 
 function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
+  const wide = useWide();
   return (
-    <div style={{ minHeight:'100vh', background:C.bg, padding:'20px 18px 32px' }}>
+    <div style={{ minHeight:'100vh', background:C.bg, padding: wide ? '40px 36px 48px' : '20px 18px 32px' }}>
       <div className="r0"><BackBtn onClick={onBack} /></div>
       <div className="r0" style={{ marginBottom:2 }}>
         <div style={{ fontFamily:F.brush, fontSize:34, color:C.silk }}>选择画作</div>
@@ -514,7 +533,7 @@ function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
         Choose Your Painting
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns:'1fr 1fr', gap:13 }}>
+      <div style={{ display:'grid', gridTemplateColumns: wide ? 'repeat(3, 1fr)' : '1fr 1fr', gap: wide ? 18 : 13 }}>
         {paintings.map((p, i) => (
           <div key={p.id} className={`card-h r${Math.min(i + 2, 6)}`} onClick={() => onSelect(p)}
             style={{
@@ -648,6 +667,7 @@ function PaintingBackground({ painting }) {
 
 // ─── Figure Screen ────────────────────────────────────────────────────────────
 function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
+  const wide = useWide();
   if (!painting) return null;
   const imgUrl = imgs?.[painting.id];
   const [showBg, setShowBg] = useState(false);
@@ -656,7 +676,7 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
       {/* Hero — centered on first recommended figure if image available */}
       <div style={{
         background: imgUrl ? `url(${imgUrl}) ${painting?.bgPosition || "center"}/cover` : painting.grad,
-        padding:'52px 22px 28px', position:'relative', overflow:'hidden',
+        padding: wide ? '120px 36px 40px' : '52px 22px 28px', position:'relative', overflow:'hidden',
         transition:'background .4s ease',
       }}>
         <div style={{ position:'absolute', inset:0,
@@ -699,7 +719,7 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
         ))}
       </div>
 
-      <div style={{ padding:'24px 20px' }}>
+      <div style={{ padding: wide ? '32px 36px' : '24px 20px' }}>
         {!showBg ? (<>
           <div className="r3" style={{ fontFamily:F.brush, fontSize:26, color:C.silk, marginBottom:3 }}>
             选择角色
@@ -708,7 +728,9 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
             Choose your figure in the painting
           </div>
 
-          <div style={{ display:'flex', flexDirection:'column', gap:11 }}>
+          <div style={wide
+            ? { display:'grid', gridTemplateColumns:'1fr 1fr', gap:14 }
+            : { display:'flex', flexDirection:'column', gap:11 }}>
             {painting.figures.map((fig, i) => {
               const figRegion = FACE_REGIONS[painting.id]?.[fig.id];
               if (fig.disabled || figRegion?.disabled) return null;
@@ -757,6 +779,8 @@ function FigureScreen({ painting, imgs, hasCachedSelfie, onSelect, onBack }) {
 // ─── Selfie Screen ───────────────────────────────────────────────────────────
 
 function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, onCaptured, onRetake, onBack }) {
+  const wide = useWide();
+  const colW = wide ? 420 : 300;
   const lastSelfie = loadLastSelfie();
   const [camState, setCamState] = useState(lastSelfie ? 'done' : 'starting');
   const [count, setCount] = useState(3);
@@ -939,7 +963,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
       {/* Viewfinder */}
       <div style={{ flex:1, display:'flex', flexDirection:'column', alignItems:'center', padding:'0 20px 24px' }}>
         <div style={{
-          width:'100%', maxWidth:300, aspectRatio:'3/4',
+          width:'100%', maxWidth:colW, aspectRatio:'3/4',
           background:'#000',
           border:`2px solid ${viewfinderBorder}`,
           borderRadius:8, position:'relative', overflow:'hidden',
@@ -1063,7 +1087,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
         </div>
 
         {/* Pose hint */}
-        <div style={{ width:'100%', maxWidth:300, marginTop:11 }}>
+        <div style={{ width:'100%', maxWidth:colW, marginTop:11 }}>
           {camState === 'done' && faceBlocked ? (
             <div style={{ fontFamily:F.serif, fontSize:12, color:C.vermillion, lineHeight:1.65 }}>
               {faceCheck === 'small'
@@ -1081,7 +1105,7 @@ function SelfieScreen({ painting, figure, imgs, onConfirm, onConfirmWithSelfie, 
         </div>
 
         {/* Buttons */}
-        <div style={{ width:'100%', maxWidth:300, marginTop:20, display:'flex', flexDirection:'column', gap:10 }}>
+        <div style={{ width:'100%', maxWidth:colW, marginTop:20, display:'flex', flexDirection:'column', gap:10 }}>
           {camState !== 'done' ? (
             <>
 
@@ -1195,6 +1219,7 @@ const STEPS = [
 ];
 
 function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
+  const wide = useWide();
   const imgUrl = styledUrl || imgs?.[painting?.id];
   return (
     <div style={{
@@ -1234,7 +1259,7 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
         }} />
       ))}
 
-      {!error && <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth:320, textAlign:'center' }}>
+      {!error && <div style={{ position:'relative', zIndex:1, width:'100%', maxWidth: wide ? 440 : 320, textAlign:'center' }}>
         <div style={{ fontFamily:F.brush, fontSize:30, color:C.silk, marginBottom:3 }}>
           {painting?.title}
         </div>
@@ -1305,6 +1330,8 @@ function ProcessingScreen({ step, painting, imgs, styledUrl, error, onRetry }) {
 // ─── Result Screen ───────────────────────────────────────────────────────────
 
 function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, selfie, onReset, onNew, onChangeFigure }) {
+  const wide = useWide();
+  const circleSz = wide ? 280 : 196, squareSz = wide ? 260 : 180;
   const [tab, setTab] = useState('scene');
   const [showDebug, setShowDebug] = useState(false);
   const [naturalDims, setNaturalDims] = useState(null);
@@ -1551,8 +1578,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 
             {/* Circle crop — server-side cropped to face */}
             <div style={{
-              width:196, height:196, borderRadius:'50%',
-              ...profileBg(196),
+              width:circleSz, height:circleSz, borderRadius:'50%',
+              ...profileBg(circleSz),
               border:`3px solid ${C.gold}`,
               marginBottom:12, overflow:'hidden', position:'relative',
               boxShadow:`0 0 48px rgba(201,168,76,.22)`,
@@ -1603,8 +1630,8 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 
             {/* Square crop — server-side cropped to face */}
             <div style={{
-              width:180, height:180,
-              ...profileBg(180),
+              width:squareSz, height:squareSz,
+              ...profileBg(squareSz),
               border:`2px solid ${C.border}`,
               position:'relative', overflow:'hidden', marginBottom:8,
               flexShrink:0,
@@ -1983,6 +2010,7 @@ function ResultScreen({ painting, figure, imgs, generatedUrl, profileUrl, styled
 // ─── Root ────────────────────────────────────────────────────────────────────
 
 export default function RuHua() {
+  const wide = useWide();
   const [screen, setScreen] = useState('home');
   const [painting, setPainting] = useState(null);
   const [showConsentModal, setShowConsentModal] = useState(false);
@@ -2304,7 +2332,7 @@ export default function RuHua() {
   return (
     <div style={{ background:C.bg, minHeight:'100vh', display:'flex', justifyContent:'center' }}>
       <style>{STYLES}</style>
-      <div style={{ width:'100%', maxWidth:430, minHeight:'100vh', position:'relative', overflow:'hidden' }}>
+      <div style={{ width:'100%', maxWidth: wide ? 900 : 430, minHeight:'100vh', position:'relative', overflow:'hidden' }}>
         {purchasesReady && (
           <div
             onClick={() => setShowPaywallModal(true)}

@@ -12,7 +12,7 @@ const C = {
 };
 
 const PAINTINGS = [
-  { id:'hanxizai', title:'韩熙载夜宴图', wikiTitle:'The_Night_Revels_of_Han_Xizai',
+  { id:'hanxizai', title:'韩熙载夜宴图', directImageUrl:'/paintings/hanxizai.jpg',
     figures:[
       {id:'guest',  name:'宾客'},
       {id:'host',   name:'韩熙载'},
