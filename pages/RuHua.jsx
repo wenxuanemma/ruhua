@@ -2468,10 +2468,11 @@ export default function RuHua() {
               <div style={{ marginTop:10 }}>
                 <span style={{ color:C.silk }}>发送内容：</span>您的自拍照片<br/>
                 <span style={{ color:C.silk }}>发送至：</span>aimlapi.com（AI图像生成服务）<br/>
-                <span style={{ color:C.silk }}>用途：</span>生成肖像，处理后即删除
+                <span style={{ color:C.silk }}>用途：</span>仅用于生成肖像<br/>
+                <span style={{ color:C.silk }}>保留：</span>服务商保留最长2个月，仅供调取结果，不人工查看；我们的服务器不保存
               </div>
               <div style={{ marginTop:10, color:C.silkFaint, fontSize:12 }}>
-                Your selfie is sent to aimlapi.com to generate a portrait. It is processed transiently and not stored.
+                Your selfie is sent to aimlapi.com to generate a portrait. The provider keeps request data for up to 2 months for retrieval only and does not view it; our servers do not store it.
               </div>
             </div>
             <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
