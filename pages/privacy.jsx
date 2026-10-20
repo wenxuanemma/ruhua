@@ -10,7 +10,7 @@ export default function Privacy() {
           隐私政策 · Privacy Policy
         </h1>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: '#888' }}>
-          RuHua · 入画 &nbsp;·&nbsp; Last updated: October 14, 2026
+          RuHua · 入画 &nbsp;·&nbsp; Last updated: October 20, 2026
         </p>
       </div>
 
@@ -42,8 +42,11 @@ export default function Privacy() {
         </ul>
         <p><strong>Third-Party AI Services</strong></p>
         <ul>
-          <li>Portrait generation uses a third-party AI API, aimlapi.com (hosting the Seedream model). Your selfie image is transmitted to this service solely to generate the stylized portrait.</li>
-          <li>Generated portraits are hosted temporarily on this service's infrastructure and retrieved via secure URLs; we do not maintain a separate copy on our own servers.</li>
+          <li>Portrait generation uses a third-party AI API, aimlapi.com, which runs the Seedream (ByteDance) and Flux Kontext (Black Forest Labs) image models. Your selfie image is transmitted to this service solely to generate the stylized portrait and its side-view variants.</li>
+          <li>aimlapi.com retains request inputs (your selfie) and generated outputs for up to 2 months, solely so that results can be retrieved by request ID. According to aimlapi.com, this data is not viewed or manually accessed by their staff. There is currently no way to request earlier deletion from that service.</li>
+          <li>Under aimlapi.com's agreements with them, the model providers (ByteDance and Black Forest Labs) do not retain your requests or use them to train their models.</li>
+          <li><strong>International transfer:</strong> requests to the Seedream model (ByteDance) are processed in China. By using portrait generation, your selfie is transferred to and processed in China for that purpose.</li>
+          <li>We do not maintain a separate copy of your selfie or generated portraits on our own servers.</li>
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data We Do NOT Collect</h3>
@@ -56,7 +59,8 @@ export default function Privacy() {
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data Retention</h3>
         <ul>
-          <li><strong>Servers:</strong> Your selfie and any generated portrait are processed in real time and are not retained on our servers or by our AI processing partners beyond the time needed to generate and return your result.</li>
+          <li><strong>Our servers:</strong> Your selfie and any generated portrait are processed in real time and are not retained on our servers beyond the time needed to generate and return your result.</li>
+          <li><strong>AI service provider:</strong> aimlapi.com retains request inputs and outputs for up to 2 months (see "Third-Party AI Services" above), after which they are deleted.</li>
           <li><strong>Your device:</strong> Your most recent selfie and a small number of recently generated portraits are cached in the app's local storage on your device, so you can revisit different paintings without retaking your selfie. This cache is replaced each time you take a new selfie, and is fully cleared when you delete the app.</li>
           <li><strong>Facial landmark data</strong> is not retained anywhere — it is calculated fresh from your selfie each time and discarded immediately after use.</li>
         </ul>
@@ -99,8 +103,11 @@ export default function Privacy() {
         </ul>
         <p><strong>第三方AI服务</strong></p>
         <ul>
-          <li>肖像生成使用第三方AI接口aimlapi.com（托管Seedream模型）。您的自拍图像仅为生成风格化肖像而被发送至该服务。</li>
-          <li>生成的肖像临时托管在该服务的基础设施中，并通过安全链接获取；我们不会在自有服务器上另行保留副本。</li>
+          <li>肖像生成使用第三方AI接口aimlapi.com，该服务运行Seedream（字节跳动）与Flux Kontext（Black Forest Labs）图像模型。您的自拍图像仅为生成风格化肖像及其侧面版本而被发送至该服务。</li>
+          <li>aimlapi.com会将请求输入（您的自拍）及生成结果保留最长2个月，仅用于通过请求编号调取结果。据aimlapi.com说明，其工作人员不会查看或人工访问这些数据。目前该服务不支持提前删除。</li>
+          <li>根据aimlapi.com与模型提供方的协议，字节跳动与Black Forest Labs不会保留您的请求，也不会将其用于训练模型。</li>
+          <li><strong>跨境传输：</strong>发送至Seedream模型（字节跳动）的请求在中国境内处理。使用肖像生成功能即表示您的自拍将为此目的被传输至中国并在中国处理。</li>
+          <li>我们不会在自有服务器上另行保留您的自拍或生成肖像的副本。</li>
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>我们不收集的数据</h3>
@@ -113,7 +120,8 @@ export default function Privacy() {
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>数据保留</h3>
         <ul>
-          <li><strong>服务器端：</strong>您的自拍及生成的肖像均为实时处理，处理完成后不会在我们的服务器或AI处理合作方处保留。</li>
+          <li><strong>我们的服务器：</strong>您的自拍及生成的肖像均为实时处理，处理完成后不会在我们的服务器上保留。</li>
+          <li><strong>AI服务提供方：</strong>aimlapi.com会将请求输入及生成结果保留最长2个月（详见上方"第三方AI服务"），之后删除。</li>
           <li><strong>设备端：</strong>您最近一次的自拍及少量近期生成的肖像会缓存在应用的设备本地存储中，以便您无需重新拍摄即可查看不同画作效果。该缓存会在您拍摄新自拍时被替换，并在您删除应用时被完全清除。</li>
           <li><strong>面部关键点数据</strong>不会在任何位置被保留——每次均基于您的自拍即时计算，使用后立即丢弃。</li>
         </ul>
