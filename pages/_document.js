@@ -1,8 +1,10 @@
 import { Html, Head, Main, NextScript } from "next/document";
 
-export default function Document() {
+export default function Document({ __NEXT_DATA__ }) {
+  // The Chinese painting pages live under /zh; everything else is English.
+  const lang = __NEXT_DATA__?.page?.startsWith('/zh') ? 'zh-Hans' : 'en';
   return (
-    <Html lang="en">
+    <Html lang={lang}>
       <Head>
         {/* viewport-fit=cover is required for env(safe-area-inset-*) to
             resolve to real values instead of silently defaulting to 0 --
