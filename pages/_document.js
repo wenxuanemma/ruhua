@@ -12,6 +12,8 @@ export default function Document({ __NEXT_DATA__ }) {
             (see pages/RuHua.jsx) has no real inset to work with, since the
             WebView isn't rendering edge-to-edge in the first place. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+        {/* Google Search Console ownership check for https://ruhua.vercel.app */}
+        <meta name="google-site-verification" content="2Cf7GYcKx9vqraaAnRVBjYV-FJtNETyTnNhjs1aj82s" />
       </Head>
       <body>
         <Main />
