@@ -40,7 +40,8 @@ const CONTENT = {
     faqTitle: 'Questions',
     faq: [
       ['How does it work?', <>
-        <p>You take one selfie facing the camera and pick a figure in one of the paintings. RuHua turns your face into a gongbi-style (fine-brush) portrait and puts it in that figure's place. This runs in the cloud and usually takes about 20–30 seconds.</p>
+        <p>You take one selfie facing the camera and pick a figure in one of the paintings. RuHua turns your face into a gongbi-style (fine-brush) portrait and puts it in that figure's place. This runs in the cloud.</p>
+        <p>The first portrait from a new selfie takes the longest, about 20–30 seconds. After that, putting the same selfie into other paintings or figures is much quicker, because the portrait is kept and reused. Figures shown from the side or at an angle need one extra turned version, and switching between a man's and a woman's figure makes a new portrait.</p>
       </>],
       ['Is it free?', <>
         <p>New users get 3 free portraits, and there's no account to sign up for. After that you buy credits in packs of 5, 20 or 60. Each portrait uses one credit. The app shows the prices in your local currency.</p>
@@ -83,7 +84,8 @@ const CONTENT = {
     faqTitle: '常见问题',
     faq: [
       ['怎么用？', <>
-        <p>正对镜头拍一张自拍，再在画里选一个人物。入画会把你的脸画成工笔风格的肖像，放到这个人物的位置上。生成在云端进行，一般要 20–30 秒左右。</p>
+        <p>正对镜头拍一张自拍，再在画里选一个人物。入画会把你的脸画成工笔风格的肖像，放到这个人物的位置上。生成在云端进行。</p>
+        <p>新自拍的第一张最慢，大约 20–30 秒。之后用同一张自拍换别的画或人物会快很多，因为肖像会保留下来重复使用。侧脸或半侧脸的人物需要额外生成一个转过角度的版本；在男性和女性人物之间切换，也会重新生成肖像。</p>
       </>],
       ['免费吗？', <>
         <p>新用户有 3 次免费机会，不用注册账号。之后可以买点数，有 5、20、60 点三种。每生成一张用 1 点，价格以应用里显示的当地货币为准。</p>
