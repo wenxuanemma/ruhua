@@ -3,7 +3,7 @@
 import { SITE_URL, getPaintingPages } from '../lib/paintingPages';
 
 function sitemap() {
-  const paths = ['/', '/privacy', '/paintings', '/zh/paintings'];
+  const paths = ['/', '/privacy', '/support', '/zh/support', '/paintings', '/zh/paintings'];
   for (const p of getPaintingPages()) {
     paths.push(`/paintings/${p.slug}`, `/zh/paintings/${p.slug}`);
   }
