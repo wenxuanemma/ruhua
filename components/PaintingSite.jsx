@@ -60,7 +60,7 @@ function alternates(enPath, zhPath) {
   );
 }
 
-function Nav({ lang, otherPath, showAll }) {
+export function Nav({ lang, otherPath, showAll }) {
   const t = T[lang];
   return (
     <nav className={s.nav}>
@@ -73,10 +73,10 @@ function Nav({ lang, otherPath, showAll }) {
   );
 }
 
-function Footer() {
+export function Footer() {
   return (
     <footer className={s.footer}>
-      <a href={APP_STORE_URL}>App Store</a> · <Link href="/privacy">Privacy · 隐私政策</Link>
+      <a href={APP_STORE_URL}>App Store</a> · <Link href="/support">Support · 帮助</Link> · <Link href="/privacy">Privacy · 隐私政策</Link>
       <br />© 2026 RuHua · 入画
     </footer>
   );

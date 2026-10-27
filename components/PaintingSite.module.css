@@ -91,6 +91,11 @@
   padding-bottom: 6px;
 }
 
+.content h3 {
+  font-size: 17px;
+  margin: 24px 0 8px;
+}
+
 .content p {
   margin: 0 0 14px;
 }
