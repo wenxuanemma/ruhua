@@ -4,6 +4,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
+import { Analytics } from '@vercel/analytics/next';
 import { SITE_URL, APP_STORE_URL } from '../lib/paintingPages';
 import s from './PaintingSite.module.css';
 
@@ -57,6 +58,20 @@ function alternates(enPath, zhPath) {
       <link rel="alternate" hrefLang="zh-Hans" href={SITE_URL + zhPath} />
       <link rel="alternate" hrefLang="x-default" href={SITE_URL + enPath} />
     </>
+  );
+}
+
+// Anonymous, cookieless page-view counts (Vercel Web Analytics) for the
+// public content pages only. The app itself (/, which the iOS app loads) has
+// no analytics, as the privacy policy says, so anything outside these paths
+// is dropped even after a client-side navigation.
+const TRACKED = /^\/(zh\/)?(paintings|support)(\/|$)/;
+
+export function SiteAnalytics() {
+  return (
+    <Analytics
+      beforeSend={event => (TRACKED.test(new URL(event.url).pathname) ? event : null)}
+    />
   );
 }
 
@@ -175,6 +190,7 @@ export function PaintingDetail({ lang, painting: p }) {
         </div>
         <Footer />
       </div>
+      <SiteAnalytics />
     </div>
   );
 }
@@ -223,6 +239,7 @@ export function PaintingIndex({ lang, paintings }) {
         </ul>
         <Footer />
       </div>
+      <SiteAnalytics />
     </div>
   );
 }

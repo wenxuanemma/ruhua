@@ -14,7 +14,7 @@
 import Head from 'next/head';
 import Link from 'next/link';
 import { SITE_URL, APP_STORE_URL } from '../lib/paintingPages';
-import { Nav, Footer } from './PaintingSite';
+import { Nav, Footer, SiteAnalytics } from './PaintingSite';
 import s from './PaintingSite.module.css';
 
 const EMAIL = 'ruhua.contact@gmail.com';
@@ -153,6 +153,7 @@ export default function SupportPage({ lang }) {
         </div>
         <Footer />
       </div>
+      <SiteAnalytics />
     </div>
   );
 }

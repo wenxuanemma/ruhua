@@ -10,7 +10,7 @@ export default function Privacy() {
           隐私政策 · Privacy Policy
         </h1>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: '#888' }}>
-          RuHua · 入画 &nbsp;·&nbsp; Last updated: October 20, 2026
+          RuHua · 入画 &nbsp;·&nbsp; Last updated: October 29, 2026
         </p>
       </div>
 
@@ -37,7 +37,7 @@ export default function Privacy() {
         </ul>
         <p><strong>Usage Data</strong></p>
         <ul>
-          <li>We do not collect analytics, crash reports, or behavioral tracking data.</li>
+          <li>The app does not collect analytics, crash reports, or behavioral tracking data.</li>
           <li>We do not use third-party advertising SDKs.</li>
         </ul>
         <p><strong>Third-Party AI Services</strong></p>
@@ -49,11 +49,14 @@ export default function Privacy() {
           <li>We do not maintain a separate copy of your selfie or generated portraits on our own servers.</li>
         </ul>
 
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>This Website</h3>
+        <p>The painting and support pages on this website (ruhua.vercel.app/paintings, /support and their Chinese versions under /zh) use Vercel Web Analytics to count page views. It does not use cookies and does not identify individual visitors. For each page view it records the page, the referring site, an approximate location (country, region, city), and the device type, operating system and browser. Visitors are told apart by a hash of the request that is discarded after 24 hours. The app itself does not use this or any other analytics.</p>
+
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data We Do NOT Collect</h3>
         <ul>
           <li>We do not collect your name, email address, phone number, or any personally identifiable information.</li>
           <li>We do not create user accounts.</li>
-          <li>We do not track your location.</li>
+          <li>The app does not track your location.</li>
           <li>We do not sell, rent, or share your data with third parties for marketing purposes.</li>
         </ul>
 
@@ -98,7 +101,7 @@ export default function Privacy() {
         </ul>
         <p><strong>使用数据</strong></p>
         <ul>
-          <li>我们不收集数据分析、崩溃报告或行为追踪数据。</li>
+          <li>本应用不收集数据分析、崩溃报告或行为追踪数据。</li>
           <li>我们不使用任何第三方广告SDK。</li>
         </ul>
         <p><strong>第三方AI服务</strong></p>
@@ -110,11 +113,14 @@ export default function Privacy() {
           <li>我们不会在自有服务器上另行保留您的自拍或生成肖像的副本。</li>
         </ul>
 
+        <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>本网站</h3>
+        <p>本网站的画作介绍页和帮助页（ruhua.vercel.app/paintings、/support 及 /zh 下的中文版本）使用 Vercel Web Analytics 统计页面浏览量。它不使用 Cookie，也不识别具体访客。每次浏览会记录所访问的页面、来源网站、大致位置（国家、地区、城市），以及设备类型、操作系统和浏览器。访客通过对请求计算的哈希值区分，该值在24小时后丢弃。应用本身不使用这一或任何其他数据分析服务。</p>
+
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>我们不收集的数据</h3>
         <ul>
           <li>我们不收集您的姓名、邮箱、手机号或任何个人身份信息。</li>
           <li>我们不创建用户账户。</li>
-          <li>我们不追踪您的地理位置。</li>
+          <li>本应用不追踪您的地理位置。</li>
           <li>我们不将您的数据出售、出租或共享给第三方用于营销目的。</li>
         </ul>
 
