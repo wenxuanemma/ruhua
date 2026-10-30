@@ -216,7 +216,7 @@ function HomeScreen({ onBegin }) {
       {/* Small footnote */}
       <div style={{ marginTop:18, display:'flex', gap:16, alignItems:'center', opacity:.35 }}>
         {/* Dynasties in the collection, oldest first (derived, so it stays current). */}
-        {['唐','五代','北宋','南宋','元','明','清'].filter(d => PAINTINGS.some(p => p.dynasty === d)).map(d => (
+        {['唐','五代','宋','北宋','南宋','元','明','清'].filter(d => PAINTINGS.some(p => p.dynasty === d)).map(d => (
           <div key={d} style={{ fontFamily:F.serif, fontSize:10, color:C.silk }}>{d}</div>
         ))}
       </div>
