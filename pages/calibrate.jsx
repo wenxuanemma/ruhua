@@ -81,6 +81,26 @@ const PAINTINGS = [
     ]},
   { id:'zhongkui_fangxun', title:'方薰·钟馗像', directImageUrl:'/paintings/zhongkui_fangxun.jpg',
     figures:[ {id:'zhongkui', name:'钟馗'} ]},
+  { id:'hongli_xuejing', title:'弘历雪景行乐图', directImageUrl:'/paintings/hongli_xuejing.jpg',
+    figures:[
+      {id:'qianlong', name:'乾隆'},
+      {id:'consort', name:'侍立后妃'},
+      {id:'consort2', name:'侧首后妃'},
+      {id:'prince', name:'执戟皇子'},
+      {id:'waving', name:'招手皇子'},
+      {id:'fruit', name:'捧果皇子'},
+    ]},
+  { id:'dongri_yingxi', title:'冬日婴戏图', directImageUrl:'/paintings/dongri_yingxi.jpg',
+    figures:[
+      {id:'sister', name:'姐姐'},
+      {id:'brother', name:'弟弟'},
+    ]},
+  { id:'xueye_fangpu', title:'雪夜访普图', directImageUrl:'/paintings/xueye_fangpu.jpg',
+    figures:[
+      {id:'taizu', name:'宋太祖'},
+      {id:'zhaopu', name:'赵普'},
+      {id:'wife', name:'赵普之妻'},
+    ]},
 ];
 // Figure colors so each role is visually distinct
 const FIG_COLORS = ['#e24b4a','#c9a84c','#4ab4e2','#4ae27a','#e24ab4','#b44ae2'];

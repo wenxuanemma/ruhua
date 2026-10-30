@@ -163,6 +163,7 @@ export function PaintingDetail({ lang, painting: p }) {
             sizes="(max-width: 760px) 100vw, 720px"
             priority
           />
+          {(en ? p.creditEn : p.creditZh) && <figcaption>{en ? p.creditEn : p.creditZh}</figcaption>}
         </figure>
 
         <div className={s.content}>
