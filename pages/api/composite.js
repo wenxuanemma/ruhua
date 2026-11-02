@@ -676,7 +676,7 @@ export default async function handler(req, res) {
       const naturalJawWidth = Math.max(...jawXs) - Math.min(...jawXs);
       if (naturalJawWidth > 1) {
         // targetW is already in the same S-space scale as pasteS (S === targetSize).
-        widthStretch = Math.max(0.80, Math.min(1.60, targetW / naturalJawWidth));
+        widthStretch = Math.max(0.65, Math.min(1.60, targetW / naturalJawWidth));
       }
     }
 
@@ -988,7 +988,11 @@ export default async function handler(req, res) {
         const fW = (region.widthCalibrated === false || isProfile) ? Infinity : targetW / visW;
         const fH = targetH / (visH * hatR);
         const f = Math.max(0.70, Math.min(1.35, fW, fH));
-        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * f)));
+        // region.widthFill: children's round faces (冬日婴戏图) are wider than
+        // any adult portrait, so "contain" leaves the painted cheeks showing.
+        // Let width scale on its own, up to widthFill times the uniform scale.
+        const fx = region.widthFill > 1 && isFinite(fW) ? Math.max(f, Math.min(fW, f * region.widthFill)) : f;
+        const newW = Math.min(pasteS, Math.max(1, Math.round(visW * fx)));
         const newH = Math.min(pasteS, Math.max(1, Math.round(visH * f)));
         const boxBot = Math.round((pasteS + targetH) / 2);
         // Anchor the nose side too: the painted profile edge is on that side
@@ -1094,6 +1098,29 @@ export default async function handler(req, res) {
           .png().toBuffer();
         console.log(`[composite:${figureId}] hair key: cut=${cut.toFixed(0)} keyed=${keyed}px`);
       }
+    }
+
+    // Optional soft forehead edge (region.topFeather, fraction of the face
+    // height). Painted Qing faces run a smooth forehead up to a sharp hairline;
+    // the mask's arc stops short of it, and even after the Lab transfer the
+    // hard edge reads as a seam across the forehead (弘历雪景行乐图 consorts).
+    // Fading alpha in down each column from the mask's top edge blends the
+    // portrait's forehead into the painted one instead.
+    if (region.topFeather > 0) {
+      const { data, info } = await sharp(masked).ensureAlpha().raw().toBuffer({ resolveWithObject: true });
+      const { width: mw, height: mh, channels: mc } = info;
+      const F = Math.max(2, Math.round(targetH * region.topFeather));
+      for (let x = 0; x < mw; x++) {
+        let top = -1;
+        for (let y = 0; y < mh; y++) if (data[(y * mw + x) * mc + 3] > 8) { top = y; break; }
+        if (top < 0) continue;
+        for (let y = top; y < Math.min(mh, top + F); y++) {
+          const i = (y * mw + x) * mc + 3;
+          data[i] = Math.round(data[i] * (y - top + 1) / F);
+        }
+      }
+      masked = await sharp(data, { raw: { width: mw, height: mh, channels: mc } }).png().toBuffer();
+      console.log(`[composite:${figureId}] top feather: ${F}px`);
     }
 
     // Then rotate the masked face to match the painting character's head tilt.
