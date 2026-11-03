@@ -5,7 +5,7 @@ import { checkSelfieFace } from '../lib/detectFaceClient';
 import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
-import { PAINTINGS } from '../lib/paintings';
+import { PAINTINGS, CATEGORIES, featuredPaintings } from '../lib/paintings';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -71,6 +71,10 @@ const STYLES = `
 
 .tab-btn{cursor:pointer;border:none;background:none;transition:all .18s ease;outline:none}
 .tab-btn:hover{background:rgba(201,168,76,.05)!important}
+
+.hscroll{overflow-x:auto;overflow-y:hidden;-webkit-overflow-scrolling:touch;scroll-snap-type:x proximity;scrollbar-width:none}
+.hscroll::-webkit-scrollbar{display:none}
+.hscroll>*{scroll-snap-align:start;flex-shrink:0}
 
 ::-webkit-scrollbar{width:3px}
 ::-webkit-scrollbar-track{background:transparent}
@@ -222,10 +226,114 @@ function HomeScreen({ onBegin }) {
 
 // ─── Gallery Screen ──────────────────────────────────────────────────────────
 
+// "?today=2026-12-15" previews the gallery on another date (season / new row).
+function galleryToday() {
+  const q = new URLSearchParams(window.location.search).get('today');
+  const d = q && new Date(q + 'T00:00:00');
+  return d && !isNaN(d) ? d : new Date();
+}
+
+function PaintingCard({ p, img, badge, badgeHot, onSelect, className = '', style }) {
+  const n = p.figures.length;
+  return (
+    <div className={`card-h ${className}`} onClick={() => onSelect(p)}
+      style={{
+        borderRadius:5, overflow:'hidden',
+        border:`1px solid ${C.border}`,
+        background: img ? `url(${img}) center/cover` : p.grad,
+        aspectRatio:'3/4',
+        position:'relative',
+        display:'flex', flexDirection:'column', justifyContent:'flex-end',
+        transition:'background .4s ease',
+        ...style,
+      }}>
+      {/* Dim overlay */}
+      <div style={{ position:'absolute', inset:0,
+        background:'linear-gradient(to top, rgba(12,9,4,.88) 0%, rgba(12,9,4,.1) 55%, transparent 100%)' }} />
+
+      {/* Ink texture lines */}
+      <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:.06 }} viewBox="0 0 100 134">
+        <path d="M10,20 Q50,10 90,25" fill="none" stroke="#f2e2c0" strokeWidth=".8"/>
+        <path d="M5,60 Q55,48 95,65" fill="none" stroke="#f2e2c0" strokeWidth=".5"/>
+        <path d="M15,100 Q45,88 88,105" fill="none" stroke="#f2e2c0" strokeWidth=".6"/>
+        <circle cx="50" cy="67" r="22" fill="none" stroke="#f2e2c0" strokeWidth=".4"/>
+      </svg>
+
+      {/* Tag badge */}
+      <div style={{ position:'absolute', top:9, left:9 }}>
+        <div style={{
+          background: badgeHot ? C.vermillion : 'rgba(12,9,4,.72)',
+          border:`1px solid ${badgeHot ? 'rgba(255,255,255,.12)' : C.border}`,
+          color: badgeHot ? '#f5e8c4' : C.gold,
+          fontFamily:F.serif, fontSize:9,
+          padding:'2px 7px', letterSpacing:'.08em',
+        }}>
+          {badge}
+        </div>
+      </div>
+
+      {/* Info */}
+      <div style={{ position:'relative', padding:'10px 10px 9px' }}>
+        <div style={{ fontFamily:F.brush, fontSize:19, color:C.silk, lineHeight:1.15, marginBottom:3 }}>
+          {p.title}
+        </div>
+        <div style={{ fontFamily:F.latin, fontSize:9, color:C.silkDim, letterSpacing:'.04em', marginBottom:5,
+          whiteSpace:'nowrap', overflow:'hidden', textOverflow:'ellipsis' }}>
+          {p.sub}
+        </div>
+        <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, fontWeight:300 }}>
+          {p.dynasty} · {p.artist}
+        </div>
+        <div style={{ fontFamily:F.serif, fontSize:9, color:C.silkDim, fontWeight:300, marginTop:2 }}>
+          {n} 个角色 · {n} {n === 1 ? 'figure' : 'figures'}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function SectionLabel({ zh, en, count }) {
+  return (
+    <div style={{ display:'flex', alignItems:'baseline', gap:8, marginBottom:11 }}>
+      <div style={{ fontFamily:F.brush, fontSize:19, color:C.silk }}>{zh}</div>
+      <div style={{ fontFamily:F.latin, fontSize:10, color:C.silkFaint, letterSpacing:'.16em' }}>{en}</div>
+      {count != null && (
+        <div style={{ marginLeft:'auto', fontFamily:F.serif, fontSize:10, color:C.silkFaint }}>{count}</div>
+      )}
+    </div>
+  );
+}
+
 function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
   const wide = useWide();
+  const [cat, setCat] = useState('all');
+  const [{ season, items: featured }] = useState(() => featuredPaintings(paintings, galleryToday()));
+  // Only offer categories that have paintings.
+  const cats = CATEGORIES.filter(c => paintings.some(p => p.categories?.includes(c.id)));
+  const shown = cat === 'all' ? paintings : paintings.filter(p => p.categories?.includes(cat));
+  const activeCat = CATEGORIES.find(c => c.id === cat);
+  const pad = wide ? 36 : 18;
+  const hasNew = featured.some(p => p.season !== season?.id);
+  const rowZh = season ? (hasNew ? `${season.zh} · 新上` : season.zh) : '新上';
+  const rowEn = season ? (hasNew ? `${season.en} & New` : season.en) : 'New';
+
+  const chip = (id, zh, en) => {
+    const on = cat === id;
+    return (
+      <button key={id} className="tab-btn" onClick={() => setCat(id)} style={{
+        padding:'6px 13px 5px', borderRadius:3,
+        border:`1px solid ${on ? 'rgba(201,168,76,.6)' : C.border}`,
+        background: on ? C.goldMid : 'transparent',
+        textAlign:'center', lineHeight:1.2,
+      }}>
+        <div style={{ fontFamily:F.serif, fontSize:13, color: on ? C.silk : C.silkDim, whiteSpace:'nowrap' }}>{zh}</div>
+        <div style={{ fontFamily:F.latin, fontSize:8.5, color: on ? C.gold : C.silkFaint, letterSpacing:'.06em', whiteSpace:'nowrap' }}>{en}</div>
+      </button>
+    );
+  };
+
   return (
-    <div style={{ minHeight:'100vh', background:C.bg, padding: wide ? '40px 36px 48px' : '20px 18px 32px' }}>
+    <div style={{ minHeight:'100vh', background:C.bg, padding: wide ? '40px 36px 48px' : '20px 18px 32px', overflowX:'hidden' }}>
       <div className="r0"><BackBtn onClick={onBack} /></div>
       <div className="r0" style={{ marginBottom:2 }}>
         <div style={{ fontFamily:F.brush, fontSize:34, color:C.silk }}>选择画作</div>
@@ -234,56 +342,46 @@ function GalleryScreen({ paintings, imgs, onSelect, onBack }) {
         Choose Your Painting
       </div>
 
-      <div style={{ display:'grid', gridTemplateColumns: wide ? 'repeat(3, 1fr)' : '1fr 1fr', gap: wide ? 18 : 13 }}>
-        {paintings.map((p, i) => (
-          <div key={p.id} className={`card-h r${Math.min(i + 2, 6)}`} onClick={() => onSelect(p)}
-            style={{
-              borderRadius:5, overflow:'hidden',
-              border:`1px solid ${C.border}`,
-              background: imgs[p.id] ? `url(${imgs[p.id]}) center/cover` : p.grad,
-              aspectRatio:'3/4',
-              position:'relative',
-              display:'flex', flexDirection:'column', justifyContent:'flex-end',
-              transition:'background .4s ease',
-            }}>
-            {/* Dim overlay */}
-            <div style={{ position:'absolute', inset:0,
-              background:'linear-gradient(to top, rgba(12,9,4,.88) 0%, rgba(12,9,4,.1) 55%, transparent 100%)' }} />
-
-            {/* Ink texture lines */}
-            <svg style={{ position:'absolute', inset:0, width:'100%', height:'100%', opacity:.06 }} viewBox="0 0 100 134">
-              <path d="M10,20 Q50,10 90,25" fill="none" stroke="#f2e2c0" strokeWidth=".8"/>
-              <path d="M5,60 Q55,48 95,65" fill="none" stroke="#f2e2c0" strokeWidth=".5"/>
-              <path d="M15,100 Q45,88 88,105" fill="none" stroke="#f2e2c0" strokeWidth=".6"/>
-              <circle cx="50" cy="67" r="22" fill="none" stroke="#f2e2c0" strokeWidth=".4"/>
-            </svg>
-
-            {/* Tag badge */}
-            <div style={{ position:'absolute', top:9, left:9 }}>
-              <div style={{
-                background:'rgba(12,9,4,.72)',
-                border:`1px solid ${C.border}`,
-                color:C.gold,
-                fontFamily:F.serif, fontSize:9,
-                padding:'2px 7px', letterSpacing:'.08em',
-              }}>
-                {p.tagEn}
-              </div>
-            </div>
-
-            {/* Info */}
-            <div style={{ position:'relative', padding:'10px 10px 9px' }}>
-              <div style={{ fontFamily:F.brush, fontSize:19, color:C.silk, lineHeight:1.15, marginBottom:3 }}>
-                {p.title}
-              </div>
-              <div style={{ fontFamily:F.latin, fontSize:9, color:C.silkDim, letterSpacing:'.04em', marginBottom:5 }}>
-                {p.sub.length > 26 ? p.sub.slice(0,26)+'…' : p.sub}
-              </div>
-              <div style={{ fontFamily:F.serif, fontSize:10, color:C.gold, fontWeight:300 }}>
-                {p.dynasty} · {p.artist}
-              </div>
-            </div>
+      {/* 当季 / 新上: this season's specials and recent arrivals; hidden when empty */}
+      {featured.length > 0 && (
+        <div className="r1" style={{ marginBottom:24 }}>
+          <SectionLabel zh={rowZh} en={rowEn} />
+          <div className="hscroll" style={{
+            display:'flex', gap: wide ? 16 : 12,
+            margin:`0 -${pad}px`, padding:`2px ${pad}px 8px`, scrollPaddingLeft:pad,
+          }}>
+            {featured.map(p => {
+              const seasonal = season && p.season === season.id;
+              return (
+                <PaintingCard key={p.id} p={p} img={imgs[p.id]} onSelect={onSelect}
+                  badge={seasonal ? `${season.zh} · ${season.en}` : '新上 · New'} badgeHot
+                  style={{ width: wide ? 230 : 'min(46vw, 180px)' }} />
+              );
+            })}
           </div>
+        </div>
+      )}
+
+      {/* Category chips */}
+      <div className="r2 hscroll" style={{
+        display:'flex', gap:8,
+        margin:`0 -${pad}px 18px`, padding:`0 ${pad}px`, scrollPaddingLeft:pad,
+      }}>
+        {chip('all', '全部', 'All')}
+        {cats.map(c => chip(c.id, c.zh, c.en))}
+      </div>
+
+      <div className="r2">
+        <SectionLabel
+          zh={activeCat ? activeCat.zh : '全部画作'}
+          en={activeCat ? activeCat.en : 'All Paintings'}
+          count={`${shown.length} 幅 · ${shown.length} ${shown.length === 1 ? 'painting' : 'paintings'}`} />
+      </div>
+
+      <div style={{ display:'grid', gridTemplateColumns: wide ? 'repeat(3, 1fr)' : '1fr 1fr', gap: wide ? 18 : 13 }}>
+        {shown.map((p, i) => (
+          <PaintingCard key={`${cat}-${p.id}`} p={p} img={imgs[p.id]} onSelect={onSelect}
+            badge={p.tagEn} className={`r${Math.min(i + 2, 6)}`} />
         ))}
       </div>
 
