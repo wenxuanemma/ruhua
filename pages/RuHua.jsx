@@ -6,6 +6,7 @@ import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
 import { PAINTINGS, CATEGORIES, featuredPaintings } from '../lib/paintings';
+import { recordSuccessAndMaybePromptReview } from '../lib/reviewPrompt';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -2103,6 +2104,9 @@ export default function RuHua() {
       // from the real one until something else happens to trigger a
       // refetch (e.g. relaunching the app).
       refreshCredits();
+      // Native iOS only: counts successes and asks for an App Store rating
+      // on the 2nd one, once per app version. No-op on the web.
+      recordSuccessAndMaybePromptReview();
     }
     // On failure: stay on processing screen where error message is shown
     // Don't bounce back to selfie — confusing and loses context

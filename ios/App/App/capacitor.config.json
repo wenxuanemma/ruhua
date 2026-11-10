@@ -8,6 +8,8 @@
 	},
 	"packageClassList": [
 		"SecureStorage",
+		"InAppReviewPlugin",
+		"AppPlugin",
 		"PurchasesPlugin"
 	]
 }
