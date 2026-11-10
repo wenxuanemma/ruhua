@@ -81,6 +81,15 @@ const PAINTINGS = [
     ]},
   { id:'zhongkui_fangxun', title:'方薰·钟馗像', directImageUrl:'/paintings/zhongkui_fangxun.jpg',
     figures:[ {id:'zhongkui', name:'钟馗'} ]},
+  { id:'guoguo', title:'虢国夫人游春图', directImageUrl:'/paintings/guoguo.jpg',
+    figures:[
+      {id:'guoguo', name:'虢国夫人'},
+      {id:'hanguo', name:'韩国夫人'},
+      {id:'rider', name:'白衣从骑'},
+      {id:'leader', name:'前导从骑'},
+      {id:'maid', name:'红衣侍女'},
+      {id:'girl', name:'双鬟少女'},
+    ]},
   { id:'hongli_xuejing', title:'弘历雪景行乐图', directImageUrl:'/paintings/hongli_xuejing.jpg',
     figures:[
       {id:'qianlong', name:'乾隆'},
