@@ -1173,6 +1173,50 @@ export default async function handler(req, res) {
       layers.push({ input: original, left: px, top: py, blend: 'over' });
     }
 
+    // Optional: put the painted cap back over the new forehead
+    // (region.hatRestore = how far down the box to look, as a fraction of its
+    // height). 虢国夫人游春图's riders wear a gauze futou whose band is
+    // half-transparent over the forehead; a face sized to reach the cap covers
+    // it. Within the top of the box, any original pixel clearly darker than the
+    // painted skin (gauze band, hair) is laid back over the face, fading out
+    // toward the bottom edge so the painted brows lower down never come back.
+    if (region.hatRestore > 0) {
+      const x0 = Math.max(0, Math.round(targetX - targetW * 0.3));
+      const x1 = Math.min(PW, Math.round(targetX + targetW * 1.3));
+      const y0 = Math.max(0, Math.round(targetY - targetH * 0.3));
+      const y1 = Math.min(PH, Math.round(targetY + targetH * region.hatRestore));
+      const hw = x1 - x0, hh = y1 - y0;
+      if (hw > 1 && hh > 1) {
+        const lum = (r, g, b) => rgbToLab(r, g, b)[0];
+        // Painted skin lightness: mean over the skinSample patch.
+        const sr = Math.max(2, Math.round((region.skinSample?.r ?? 0.004) * Math.min(PW, PH)));
+        const scx = Math.round((region.skinSample?.cx ?? region.x + region.w / 2) * PW);
+        const scy = Math.round((region.skinSample?.cy ?? region.y + region.h / 2) * PH);
+        const sx0 = Math.max(0, scx - sr), sy0 = Math.max(0, scy - sr);
+        const skin = await sharp(paintingBuf).extract({ left: sx0, top: sy0,
+          width: Math.min(2 * sr, PW - sx0), height: Math.min(2 * sr, PH - sy0) }).removeAlpha().raw().toBuffer();
+        let skinL = 0;
+        for (let i = 0; i < skin.length; i += 3) skinL += lum(skin[i], skin[i + 1], skin[i + 2]);
+        skinL /= skin.length / 3;
+        const orig = await sharp(paintingBuf).extract({ left: x0, top: y0, width: hw, height: hh }).removeAlpha().raw().toBuffer();
+        const out = Buffer.alloc(hw * hh * 4);
+        const d0 = region.hatDarkMin ?? 6, d1 = region.hatDarkMax ?? 16; // Lab L below the skin
+        const fadeStart = targetY + targetH * region.hatRestore * 0.6;
+        for (let y = 0; y < hh; y++) {
+          const vy = y0 + y;
+          const vFade = vy <= fadeStart ? 1 : Math.max(0, 1 - (vy - fadeStart) / Math.max(1, y1 - fadeStart));
+          for (let x = 0; x < hw; x++) {
+            const i = (y * hw + x) * 3, o = (y * hw + x) * 4;
+            const d = skinL - lum(orig[i], orig[i + 1], orig[i + 2]);
+            const a = Math.max(0, Math.min(1, (d - d0) / (d1 - d0))) * vFade;
+            out[o] = orig[i]; out[o + 1] = orig[i + 1]; out[o + 2] = orig[i + 2]; out[o + 3] = Math.round(a * 255);
+          }
+        }
+        layers.push({ input: await sharp(out, { raw: { width: hw, height: hh, channels: 4 } }).png().toBuffer(), left: x0, top: y0, blend: 'over' });
+        console.log(`[composite:${figureId}] hat restore: skinL=${skinL.toFixed(1)} area=${hw}x${hh}`);
+      }
+    }
+
     const compositedFull = await sharp(paintingBuf)
       .composite(layers)
       .png().toBuffer();

@@ -64,7 +64,7 @@ const CONTENT = {
         <p>Not yet. RuHua is on iPhone and iPad only.</p>
       </>],
     ],
-    paintings: <>The paintings in the app, and who's in them: <Link href="/paintings">see all eleven</Link>.</>,
+    paintings: <>The paintings in the app, and who's in them: <Link href="/paintings">see all fifteen</Link>.</>,
     button: 'RuHua on the App Store',
   },
   zh: {
@@ -108,7 +108,7 @@ const CONTENT = {
         <p>暂时没有，目前只支持 iPhone 和 iPad。</p>
       </>],
     ],
-    paintings: <>应用里有哪些画、画中都是谁：<Link href="/zh/paintings">看全部十一幅</Link>。</>,
+    paintings: <>应用里有哪些画、画中都是谁：<Link href="/zh/paintings">看全部十五幅</Link>。</>,
     button: '在 App Store 下载入画',
   },
 };
