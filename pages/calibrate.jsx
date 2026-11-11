@@ -279,10 +279,17 @@ export default function Calibrate() {
         } : (() => {
           let {x,y,w,h} = ob;
           const c = drag.corner;
-          if (c==='br') { w=Math.max(0.01,ob.w+dx); h=Math.max(0.01,ob.h+dy); }
-          if (c==='bl') { x=ob.x+dx; w=Math.max(0.01,ob.w-dx); h=Math.max(0.01,ob.h+dy); }
-          if (c==='tr') { y=ob.y+dy; w=Math.max(0.01,ob.w+dx); h=Math.max(0.01,ob.h-dy); }
-          if (c==='tl') { x=ob.x+dx; y=ob.y+dy; w=Math.max(0.01,ob.w-dx); h=Math.max(0.01,ob.h-dy); }
+          // Minimum size is 6 source pixels, not a fixed fraction: on long
+          // scrolls (虢国夫人游春图) faces are under 1% of the width, so the old
+          // 0.01 floor stopped boxes from narrowing. When the floor is hit on a
+          // left/top corner, pin the opposite edge instead of sliding the box.
+          const nat = imgRef.current;
+          const minW = 6 / (nat.naturalWidth || 1000), minH = 6 / (nat.naturalHeight || 1000);
+          const right = ob.x + ob.w, bottom = ob.y + ob.h;
+          if (c==='br') { w=Math.max(minW,ob.w+dx); h=Math.max(minH,ob.h+dy); }
+          if (c==='bl') { w=Math.max(minW,ob.w-dx); x=right-w; h=Math.max(minH,ob.h+dy); }
+          if (c==='tr') { h=Math.max(minH,ob.h-dy); y=bottom-h; w=Math.max(minW,ob.w+dx); }
+          if (c==='tl') { w=Math.max(minW,ob.w-dx); x=right-w; h=Math.max(minH,ob.h-dy); y=bottom-h; }
           return { x:Math.max(0,x), y:Math.max(0,y), w:Math.min(1,w), h:Math.min(1,h), angle:ob.angle||0 };
         })();
         return { ...prev, [key]: { ...prev[key], ...b } };
@@ -525,7 +532,7 @@ export default function Calibrate() {
                 <span style={{color,marginRight:4}}>■</span>
                 <span style={{color:C.text}}>{fig.name}</span>
                 <span style={{marginLeft:8,color:C.dim,fontSize:10}}>
-                  x:{v.x?.toFixed(3)} y:{v.y?.toFixed(3)} w:{v.w?.toFixed(3)} h:{v.h?.toFixed(3)}
+                  x:{v.x?.toFixed(4)} y:{v.y?.toFixed(4)} w:{v.w?.toFixed(4)} h:{v.h?.toFixed(4)}
                 </span>
                 {v.skinSample
                   ? <span style={{marginLeft:8,color:'#00ff88',fontSize:10}}>
