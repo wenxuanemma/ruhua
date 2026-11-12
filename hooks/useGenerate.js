@@ -14,8 +14,6 @@ import { getAppUserID } from '../lib/purchases';
 
 import { useState, useRef, useCallback } from 'react';
 
-const POLL_INTERVAL_MS = 2000;
-const MAX_POLLS = 150; // 150 × 2s = 5 minutes max
 
 // Compress selfie to max 1200px and 0.85 JPEG quality before sending
 function compressSelfie(b64, maxPx = 1200, quality = 0.85) {
@@ -119,34 +117,6 @@ export function useGenerate() {
   const resultCache = useRef(loadResultCache());
   const currentSelfieHash = useRef(null);
 
-  const pollRef   = useRef(null);
-  const pollCount = useRef(0);
-
-  const stopPolling = () => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
-  };
-
-  const pollUntilDone = useCallback((predictionId) => new Promise((resolve, reject) => {
-    pollCount.current = 0;
-    pollRef.current = setInterval(async () => {
-      pollCount.current += 1;
-      if (pollCount.current > MAX_POLLS) {
-        stopPolling();
-        reject(new Error('Generation timed out. Please try again.'));
-        return;
-      }
-      try {
-        const res = await fetch(`/api/status?id=${predictionId}`);
-        const data = await res.json();
-        if (data.status === 'succeeded') { stopPolling(); resolve(data.outputUrl); }
-        if (data.status === 'failed')    { stopPolling(); reject(new Error(data.error || 'Generation failed')); }
-      } catch (e) {
-        console.warn('Poll error (will retry):', e.message);
-        // Don't count network errors against MAX_POLLS
-        pollCount.current--;
-      }
-    }, POLL_INTERVAL_MS);
-  }), []);
 
   const runStyleTransfer = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
     const appUserID = await getAppUserID();
@@ -175,7 +145,8 @@ export function useGenerate() {
           if (data.error === 'insufficient_credits') err.code = 'insufficient_credits';
           throw err;
         }
-        const instantIdUrl = data.outputUrl || await pollUntilDone(data.predictionId);
+        if (!data.outputUrl) throw new Error('Style transfer failed');
+        const instantIdUrl = data.outputUrl;
         const detectedBounds = data.selfieFaceBounds || null;
 
         // Stage 2: LoRA refinement
@@ -202,7 +173,7 @@ export function useGenerate() {
         throw e;
       }
     }
-  }, [pollUntilDone]);
+  }, []);
 
   // Which way a face turns in image space: 'left' if the nose tip sits left of
   // the cheek midpoint (lm 234/454), 'right' otherwise. Null when the turn is
@@ -331,13 +302,12 @@ export function useGenerate() {
     if (data.portraitCropUrl) setPortraitCropUrl(data.portraitCropUrl);
     if (data.faceBoundsBox) setFaceBoundsBox(data.faceBoundsBox);
     if (data.cropBox) setCropBox(data.cropBox);
-    if (data.outputUrl) return data.outputUrl;
-    return pollUntilDone(data.predictionId);
-  }, [pollUntilDone]);
+    if (!data.outputUrl) throw new Error('Compositing failed');
+    return data.outputUrl;
+  }, []);
 
   const generate = useCallback(async ({ selfie, painting, figure, gender, styleImageUrl, faceBounds }) => {
     const needAngles = Object.values(FACE_REGIONS[painting.id] || {}).some(f => !f.disabled && f.faceAngle && f.faceAngle !== 'front');
-    stopPolling();
     setOutputUrl(null);
     setProfileUrl(null);
     setError(null);
@@ -550,7 +520,6 @@ export function useGenerate() {
   }, []);
 
   const reset = useCallback(() => {
-    stopPolling();
     setStatus('idle');
     setOutputUrl(null);
     setStyledUrl(null);

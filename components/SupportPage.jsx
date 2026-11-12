@@ -56,7 +56,7 @@ const CONTENT = {
         <p>Your hairstyle doesn't matter. The portrait has the hair pulled back, and the figure keeps the hairstyle from the painting.</p>
       </>],
       ['What happens to my selfie?', <>
-        <p>Your selfie is sent to a third-party AI service, aimlapi.com, to generate the portrait. aimlapi.com retains request inputs (your selfie) and generated outputs for up to 2 months, solely so that results can be retrieved by request ID. Requests to the Seedream model (ByteDance) are processed in China.</p>
+        <p>Your selfie is sent to a third-party AI service, aimlapi.com, where the Seedream model (ByteDance) paints the portrait; the generated portrait, not your selfie, then goes to Flux Kontext Pro (Black Forest Labs) for side views. aimlapi.com keeps the selfie and generated portraits for 2 months, solely so that results can be retrieved by request ID, and they cannot be deleted earlier. ByteDance and Black Forest Labs do not keep them or train on them. Requests to Seedream are processed in China.</p>
         <p>We do not maintain a separate copy of your selfie or generated portraits on our own servers. Your most recent selfie is cached on your device until you take a new one or delete the app.</p>
         <p>The full details are in the <Privacy>privacy policy</Privacy>.</p>
       </>],
@@ -100,7 +100,7 @@ const CONTENT = {
         <p>发型无所谓。肖像里头发会梳到后面，人物保留原画里的发型。</p>
       </>],
       ['我的自拍会怎么处理？', <>
-        <p>您的自拍图像将被发送至第三方AI服务aimlapi.com，以生成肖像。aimlapi.com会将请求输入（您的自拍）及生成结果保留最长2个月，仅用于通过请求编号调取结果。发送至Seedream模型（字节跳动）的请求在中国境内处理。</p>
+        <p>您的自拍会发送至第三方AI服务aimlapi.com，由Seedream模型（字节跳动）生成肖像；生成的肖像（不是自拍）再发给Flux Kontext Pro（Black Forest Labs）生成侧脸版本。aimlapi.com会将自拍和生成的肖像保留2个月，仅用于通过请求编号调取结果，无法提前删除。字节跳动和Black Forest Labs不保留、不用于训练。发送至Seedream的请求在中国境内处理。</p>
         <p>我们不会在自有服务器上另行保留您的自拍或生成肖像的副本。您最近一次的自拍会缓存在设备本地，直到您拍摄新的自拍或删除应用。</p>
         <p>完整说明见<Privacy>隐私政策</Privacy>。</p>
       </>],
