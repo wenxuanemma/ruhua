@@ -92,7 +92,7 @@ export function Footer() {
   return (
     <footer className={s.footer}>
       <a href={APP_STORE_URL}>App Store</a> · <Link href="/support">Support · 帮助</Link> · <Link href="/privacy">Privacy · 隐私政策</Link>
-      <br />© 2026 RuHua · 入画
+      <br />© 2026 RuHua · 入画 · <a href="https://emma-builds.vercel.app">More apps by Emma</a>
     </footer>
   );
 }
