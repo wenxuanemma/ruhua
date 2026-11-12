@@ -2262,6 +2262,9 @@ export default function RuHua() {
           <div style={{
             background:'#1a1208', border:`1px solid ${C.gold}`,
             borderRadius:12, padding:'28px 24px', maxWidth:380, width:'100%',
+            // The notice is long; on short phones it scrolls instead of
+            // pushing the agree button off screen.
+            maxHeight:'100%', overflowY:'auto', WebkitOverflowScrolling:'touch',
           }}>
             <div style={{ fontFamily:F.brush, fontSize:22, color:C.silk, marginBottom:14, textAlign:'center', letterSpacing:'.1em' }}>
               数据使用说明
@@ -2269,14 +2272,14 @@ export default function RuHua() {
             <div style={{ fontFamily:F.serif, fontSize:13, color:C.silkDim, lineHeight:2, marginBottom:16 }}>
               <div>入画将使用您的自拍照片生成古典画风肖像。</div>
               <div style={{ marginTop:10 }}>
-                <span style={{ color:C.silk }}>发送内容：</span>您的自拍照片<br/>
+                <span style={{ color:C.silk }}>发送内容：</span>自拍发给 Seedream（字节跳动）生成肖像；生成的肖像（不是自拍）再发给 Flux Kontext Pro（Black Forest Labs）生成侧脸版本<br/>
                 <span style={{ color:C.silk }}>发送至：</span>aimlapi.com（AI图像生成服务）<br/>
                 <span style={{ color:C.silk }}>用途：</span>仅用于生成肖像<br/>
-                <span style={{ color:C.silk }}>保留：</span>服务商保留最长2个月，仅供调取结果，不人工查看，不用于训练；我们的服务器不保存<br/>
-                <span style={{ color:C.silk }}>处理地：</span>部分请求（Seedream 模型）在中国境内处理
+                <span style={{ color:C.silk }}>保留：</span>服务商保留自拍和生成的肖像 2 个月，仅供调取结果，不人工查看，无法提前删除；字节跳动和 Black Forest Labs 不保留、不用于训练；我们的服务器不保存<br/>
+                <span style={{ color:C.silk }}>处理地：</span>Seedream 请求在中国境内处理
               </div>
               <div style={{ marginTop:10, color:C.silkFaint, fontSize:12 }}>
-                Your selfie is sent to aimlapi.com to generate a portrait. The provider keeps request data for up to 2 months for retrieval only; it is not viewed or used for training, and our servers do not store it. Some requests (the Seedream model) are processed in China.
+                Your selfie is sent through aimlapi.com to Seedream (ByteDance), which paints your portrait; the generated portrait, not your selfie, then goes to Flux Kontext Pro (Black Forest Labs) for side views. aimlapi.com keeps the selfie and generated portraits for 2 months, for retrieval only, not viewed by staff, and they cannot be deleted earlier. ByteDance and Black Forest Labs do not keep them or train on them, and our servers do not store them. Seedream requests are processed in China.
               </div>
             </div>
             <div style={{ fontFamily:F.serif, fontSize:11, color:C.silkFaint, marginBottom:18 }}>
