@@ -10,7 +10,7 @@ export default function Privacy() {
           隐私政策 · Privacy Policy
         </h1>
         <p style={{ margin: '8px 0 0', fontSize: 14, color: '#888' }}>
-          RuHua · 入画 &nbsp;·&nbsp; Last updated: November 11, 2026
+          RuHua · 入画 &nbsp;·&nbsp; Last updated: November 13, 2026
         </p>
       </div>
 
@@ -37,7 +37,8 @@ export default function Privacy() {
         </ul>
         <p><strong>Usage Data</strong></p>
         <ul>
-          <li>The app does not collect analytics, crash reports, or behavioral tracking data.</li>
+          <li>After your first portrait, the app asks once, optionally, "How did you find RuHua?" If you tap an answer (for example YouTube or A friend), or close the question, that one answer is stored with the app's anonymous purchase ID in RevenueCat, the service that handles in-app purchases. We use it only to learn which channels bring people to RuHua. It is not used for advertising and is not linked to your selfie or portraits.</li>
+          <li>Apart from that optional answer, the app does not collect analytics, crash reports, or behavioral tracking data.</li>
           <li>We do not use third-party advertising SDKs.</li>
         </ul>
         <p><strong>Third-Party AI Services</strong></p>
@@ -50,7 +51,7 @@ export default function Privacy() {
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>This Website</h3>
-        <p>The painting and support pages on this website (ruhua.vercel.app/paintings, /support and their Chinese versions under /zh) use Vercel Web Analytics to count page views. It does not use cookies and does not identify individual visitors. For each page view it records the page, the referring site, an approximate location (country, region, city), and the device type, operating system and browser. Visitors are told apart by a hash of the request that is discarded after 24 hours. The app itself does not use this or any other analytics.</p>
+        <p>The painting and support pages on this website (ruhua.vercel.app/paintings, /support and their Chinese versions under /zh) use Vercel Web Analytics to count page views. It does not use cookies and does not identify individual visitors. For each page view it records the page, the referring site, an approximate location (country, region, city), and the device type, operating system and browser. Visitors are told apart by a hash of the request that is discarded after 24 hours. The app itself does not use this analytics service.</p>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>Data We Do NOT Collect</h3>
         <ul>
@@ -101,7 +102,8 @@ export default function Privacy() {
         </ul>
         <p><strong>使用数据</strong></p>
         <ul>
-          <li>本应用不收集数据分析、崩溃报告或行为追踪数据。</li>
+          <li>在您完成第一张肖像后，应用会询问一次“你是怎么知道入画的？”，回答与否由您决定。如果您点选一个答案（例如 YouTube 或朋友推荐）或关闭这个问题，这一个答案会与应用的匿名购买编号一起保存在 RevenueCat（处理应用内购买的服务）中。我们只用它了解大家是通过哪些渠道知道入画的，不用于广告，也不与您的自拍或肖像关联。</li>
+          <li>除这一选填答案外，本应用不收集数据分析、崩溃报告或行为追踪数据。</li>
           <li>我们不使用任何第三方广告SDK。</li>
         </ul>
         <p><strong>第三方AI服务</strong></p>
@@ -114,7 +116,7 @@ export default function Privacy() {
         </ul>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>本网站</h3>
-        <p>本网站的画作介绍页和帮助页（ruhua.vercel.app/paintings、/support 及 /zh 下的中文版本）使用 Vercel Web Analytics 统计页面浏览量。它不使用 Cookie，也不识别具体访客。每次浏览会记录所访问的页面、来源网站、大致位置（国家、地区、城市），以及设备类型、操作系统和浏览器。访客通过对请求计算的哈希值区分，该值在24小时后丢弃。应用本身不使用这一或任何其他数据分析服务。</p>
+        <p>本网站的画作介绍页和帮助页（ruhua.vercel.app/paintings、/support 及 /zh 下的中文版本）使用 Vercel Web Analytics 统计页面浏览量。它不使用 Cookie，也不识别具体访客。每次浏览会记录所访问的页面、来源网站、大致位置（国家、地区、城市），以及设备类型、操作系统和浏览器。访客通过对请求计算的哈希值区分，该值在24小时后丢弃。应用本身不使用这一数据分析服务。</p>
 
         <h3 style={{ fontSize: 16, fontWeight: 700, marginTop: 32 }}>我们不收集的数据</h3>
         <ul>
