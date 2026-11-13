@@ -6,7 +6,9 @@ import PaywallModal from '../components/PaywallModal';
 import { configurePurchases, getCreditsBalance, getCreditProducts, getAppUserID, invalidateCreditsCache, grantFreeCredits } from '../lib/purchases';
 import { hasClaimedFreeCredits, markFreeCreditsClaimed, resetFreeCreditsFlag, getLastKnownAppUserID, setLastKnownAppUserID } from '../lib/deviceStorage';
 import { PAINTINGS, CATEGORIES, featuredPaintings } from '../lib/paintings';
-import { recordSuccessAndMaybePromptReview } from '../lib/reviewPrompt';
+import { recordSuccessAndMaybePromptReview, getSuccessCount } from '../lib/reviewPrompt';
+import { shouldAskFoundVia, markFoundViaAsked, recordFoundVia } from '../lib/foundVia';
+import FoundViaSheet from '../components/FoundViaSheet';
 
 // ─── Design Tokens ──────────────────────────────────────────────────────────
 
@@ -31,6 +33,9 @@ const F = {
   serif: "'Noto Serif SC', 'Noto Serif', serif",
   latin: "'IM Fell English SC', serif",
 };
+
+// Let the finished portrait land before the found-via card slides up.
+const FOUND_VIA_DELAY_MS = 2500;
 
 const STYLES = `
 @import url('https://fonts.googleapis.com/css2?family=Ma+Shan+Zheng&family=Noto+Serif+SC:wght@300;400;600&family=IM+Fell+English+SC&display=swap');
@@ -2053,6 +2058,9 @@ export default function RuHua() {
   const [skipSelfie, setSkipSelfie] = useState(false);
   const [imgs, setImgs] = useState({});
 
+  const [showFoundVia, setShowFoundVia] = useState(false);
+  const foundViaTimer = useRef(null);
+
   const { generate, status, outputUrl, styledUrl, cropBox, paintSampleBox, maskedFaceUrl, portraitCropUrl, faceBoundsBox, portraitLandmarks, profileUrl, error, errorCode, reset: resetGen, fullReset, clearSelfieCache, clearStyledCache, hasCachedSelfie } = useGenerate();
 
   // Map status → processing step index (1-based, matches STEPS array)
@@ -2104,6 +2112,18 @@ export default function RuHua() {
       // from the real one until something else happens to trigger a
       // refetch (e.g. relaunching the app).
       refreshCredits();
+      // One-time "How did you find RuHua?" card, a moment after the result
+      // shows (native iOS only; see lib/foundVia.js). Must be checked before
+      // recordSuccessAndMaybePromptReview() so it can tell whether the
+      // rating prompt might fire on this same success, and skip it if so.
+      shouldAskFoundVia(getSuccessCount() + 1).then(ok => {
+        if (!ok) return;
+        clearTimeout(foundViaTimer.current);
+        foundViaTimer.current = setTimeout(() => {
+          markFoundViaAsked();
+          setShowFoundVia(true);
+        }, FOUND_VIA_DELAY_MS);
+      });
       // Native iOS only: counts successes and asks for an App Store rating
       // on the 2nd one, once per app version. No-op on the web.
       recordSuccessAndMaybePromptReview();
@@ -2111,6 +2131,15 @@ export default function RuHua() {
     // On failure: stay on processing screen where error message is shown
     // Don't bounce back to selfie — confusing and loses context
   }, [status]);
+
+  // Leaving the result screen before the card appears cancels it (it will
+  // be asked after a later success); an open card is closed, unanswered.
+  useEffect(() => {
+    if (screen !== 'result') {
+      clearTimeout(foundViaTimer.current);
+      setShowFoundVia(false);
+    }
+  }, [screen]);
 
   // Server rejected for insufficient credits (the real gate — see
   // pages/api/composite.js) — surface the paywall directly rather than
@@ -2242,6 +2271,12 @@ export default function RuHua() {
                                         setFigure(null);
                                         setScreen('gallery');
                                       }} />}
+      {showFoundVia && screen === 'result' && (
+        <FoundViaSheet onAnswer={source => {
+          setShowFoundVia(false);
+          recordFoundVia(source);
+        }} />
+      )}
       {showConsentNudge && (
         <div style={{
           position:'fixed', bottom:100, left:'50%', transform:'translateX(-50%)',
