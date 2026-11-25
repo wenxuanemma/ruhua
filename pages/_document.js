@@ -13,6 +13,9 @@ export default function Document({ __NEXT_DATA__ }) {
             WebView isn't rendering edge-to-edge in the first place. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
         {/* Google Search Console ownership check for https://ruhua.vercel.app */}
+        {/* Safari's "Open in App Store" banner on iPhone/iPad. It doesn't show
+            inside the iOS app's own WebView. */}
+        <meta name="apple-itunes-app" content="app-id=6788152543" />
         <meta name="google-site-verification" content="2Cf7GYcKx9vqraaAnRVBjYV-FJtNETyTnNhjs1aj82s" />
       </Head>
       <body>

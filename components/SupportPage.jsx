@@ -13,7 +13,7 @@
 
 import Head from 'next/head';
 import Link from 'next/link';
-import { SITE_URL, APP_STORE_URL } from '../lib/paintingPages';
+import { SITE_URL, APP_STORE_URL, OG_IMAGE } from '../lib/paintingPages';
 import { Nav, Footer, SiteAnalytics } from './PaintingSite';
 import s from './PaintingSite.module.css';
 
@@ -113,9 +113,29 @@ const CONTENT = {
   },
 };
 
+// Plain text of a FAQ answer (strings, arrays and JSX elements such as <Link>),
+// for the FAQPage structured data. Keeps it identical to what's on the page.
+function textOf(node) {
+  if (node == null || typeof node === 'boolean') return '';
+  if (typeof node === 'string' || typeof node === 'number') return String(node);
+  if (Array.isArray(node)) return node.map(textOf).join('');
+  if (node.props) return textOf(node.props.children);
+  return '';
+}
+
 export default function SupportPage({ lang }) {
   const c = CONTENT[lang];
   const en = lang === 'en';
+  const faqJsonLd = {
+    '@context': 'https://schema.org',
+    '@type': 'FAQPage',
+    inLanguage: en ? 'en' : 'zh-Hans',
+    mainEntity: c.faq.map(([q, a]) => ({
+      '@type': 'Question',
+      name: textOf(q),
+      acceptedAnswer: { '@type': 'Answer', text: textOf(a).replace(/\s+/g, ' ').trim() },
+    })),
+  };
 
   return (
     <div className={s.page} lang={en ? 'en' : 'zh-Hans'}>
@@ -130,6 +150,9 @@ export default function SupportPage({ lang }) {
         <meta property="og:description" content={c.description} />
         <meta property="og:url" content={SITE_URL + c.path} />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content={OG_IMAGE} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(faqJsonLd) }} />
       </Head>
       <div className={s.inner}>
         <Nav lang={lang} otherPath={c.otherPath} />

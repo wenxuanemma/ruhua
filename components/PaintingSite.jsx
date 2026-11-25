@@ -5,7 +5,7 @@ import Head from 'next/head';
 import Link from 'next/link';
 import Image from 'next/image';
 import { Analytics } from '@vercel/analytics/next';
-import { SITE_URL, APP_STORE_URL } from '../lib/paintingPages';
+import { SITE_URL, APP_STORE_URL, OG_IMAGE, APP_JSON_LD } from '../lib/paintingPages';
 import s from './PaintingSite.module.css';
 
 const T = {
@@ -211,6 +211,9 @@ export function PaintingIndex({ lang, paintings }) {
         <meta property="og:description" content={t.indexDesc} />
         <meta property="og:url" content={SITE_URL + t.base} />
         <meta property="og:type" content="website" />
+        <meta property="og:image" content={OG_IMAGE} />
+        <meta name="twitter:card" content="summary_large_image" />
+        <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(APP_JSON_LD) }} />
       </Head>
       <div className={s.inner}>
         <Nav lang={lang} otherPath={t.otherBase} />
